@@ -1092,50 +1092,251 @@ function AddVendorModal({ onClose, onSaved }) {
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal-card vendor-modal-card vendor-form-card" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="modal-header"><div><span className="drawer-kicker">VENDOR MASTER</span><h2>Add vendor</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><Icon name="close" size={19} /></button></div>
-        {error && <div className="form-error" role="alert"><Icon name="alert" size={17} /><div><strong>Could not save vendor</strong><span>{error}</span></div></div>}
+      <div className="modal-card vendor-modal-card" onMouseDown={(e) => e.stopPropagation()}>
 
-        <form className="client-form vendor-form" onSubmit={handleSubmit}>
+        <div className="modal-header">
+          <div>
+            <span className="drawer-kicker">VENDOR MASTER</span>
+            <h2>Add vendor</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close">
+            <Icon name="close" size={19} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="form-error" role="alert">
+            <Icon name="alert" size={17} />
+            <div><strong>Could not save vendor</strong><span>{error}</span></div>
+          </div>
+        )}
+
+        <form className="vendor-form" onSubmit={handleSubmit}>
+
+          {/* ── Basic Information ───────────────────────────────── */}
           <div className="form-section-title field-wide">Basic Information</div>
-          <div className="field"><label>Alias</label><input value={form.alias} onChange={(e) => update('alias', e.target.value)} /></div>
-          <div className="field"><label>Contact Person</label><input value={form.contact_person} onChange={(e) => update('contact_person', e.target.value)} /></div>
-          <div className="field field-wide"><label>Company Name *</label><input value={form.company_name} onChange={(e) => update('company_name', e.target.value)} required /></div>
-          <div className="field field-wide"><label>Vendor Type *</label><div className="choice-cards"><label className={`choice-card ${form.vendor_type === 'Individual' ? 'selected' : ''}`}><input type="radio" name="vendor-type" value="Individual" checked={form.vendor_type === 'Individual'} onChange={(e) => update('vendor_type', e.target.value)} /><span><strong>Individual</strong><small>Single person / proprietor</small></span></label><label className={`choice-card ${form.vendor_type === 'Organization' ? 'selected' : ''}`}><input type="radio" name="vendor-type" value="Organization" checked={form.vendor_type === 'Organization'} onChange={(e) => update('vendor_type', e.target.value)} /><span><strong>Organization</strong><small>Company / agency / business</small></span></label></div></div>
-          <div className="field"><label>Email</label><input type="email" value={form.email} onChange={(e) => update('email', e.target.value)} /></div>
-          <div className="field field-phone"><label>Contact No.</label><div className="phone-control"><div className="dial-code-display">{form.country_dialcode || '+91'}</div><input type="tel" inputMode="numeric" value={form.contact} onChange={(e) => update('contact', e.target.value.replace(/\D/g, ''))} placeholder="98765 43210" /></div></div>
 
-          <div className="form-section-title field-wide">Classification & Payment</div>
-          <SearchableSelect label="Media" required value={form.media_id} onChange={(v) => { update('media_id', v); update('sub_media_id', '') }} options={mediaSimple} placeholder={loadingMedia ? 'Loading media...' : 'Select media'} disabled={loadingMedia} searchPlaceholder="Search media..." />
-          <SearchableSelect label="Sub Media" required value={form.sub_media_id} onChange={(v) => update('sub_media_id', v)} options={subMediaSimple} placeholder={!form.media_id ? 'Select media first' : loadingSubMedia ? 'Loading sub media...' : 'Select sub media'} disabled={!form.media_id || loadingSubMedia} searchPlaceholder="Search sub media..." />
-          <div className="field field-wide"><label>Payment Term</label><div className="segmented-control"><button type="button" className={form.payment_term_type === 'Invoice Date' ? 'active' : ''} onClick={() => update('payment_term_type', 'Invoice Date')}>Invoice Date</button><button type="button" className={form.payment_term_type === 'Campaign End Date' ? 'active' : ''} onClick={() => update('payment_term_type', 'Campaign End Date')}>Campaign End Date</button></div></div>
-          <div className="field"><label>Payment Term Date</label><input type="date" value={form.payment_term_invoice_date} onChange={(e) => update('payment_term_invoice_date', e.target.value)} /></div>
-          <div className="field"><label>Payment Term (In Days)</label><input type="number" min="0" step="1" value={form.payment_term_value} onChange={(e) => update('payment_term_value', e.target.value)} placeholder="e.g. 30" /></div>
-          <div className="field"><label>Status</label><select value={form.status} onChange={(e) => update('status', e.target.value)}><option value="1">Active</option><option value="0">Inactive</option></select></div>
+          <div className="field field-wide">
+            <label htmlFor="vf-company">Company Name *</label>
+            <input id="vf-company" value={form.company_name} onChange={(e) => update('company_name', e.target.value)} required />
+          </div>
 
+          <div className="field field-wide">
+            <label>Vendor Type *</label>
+            <div className="choice-cards">
+              <label className={`choice-card ${form.vendor_type === 'Individual' ? 'selected' : ''}`}>
+                <input type="radio" name="vendor-type" value="Individual" checked={form.vendor_type === 'Individual'} onChange={(e) => update('vendor_type', e.target.value)} />
+                <span><strong>Individual</strong><small>Single person / proprietor</small></span>
+              </label>
+              <label className={`choice-card ${form.vendor_type === 'Organization' ? 'selected' : ''}`}>
+                <input type="radio" name="vendor-type" value="Organization" checked={form.vendor_type === 'Organization'} onChange={(e) => update('vendor_type', e.target.value)} />
+                <span><strong>Organization</strong><small>Company / agency / business</small></span>
+              </label>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-alias">Alias</label>
+            <input id="vf-alias" value={form.alias} onChange={(e) => update('alias', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-contact-person">Contact Person</label>
+            <input id="vf-contact-person" value={form.contact_person} onChange={(e) => update('contact_person', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-status">Status</label>
+            <select id="vf-status" value={form.status} onChange={(e) => update('status', e.target.value)}>
+              <option value="1">Active</option>
+              <option value="0">Inactive</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-email">Email</label>
+            <input id="vf-email" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} />
+          </div>
+
+          <div className="field field-phone">
+            <label htmlFor="vf-contact">Contact No.</label>
+            <div className="phone-control">
+              <div className="dial-code-display">{form.country_dialcode || '+91'}</div>
+              <input id="vf-contact" type="tel" inputMode="numeric" value={form.contact} onChange={(e) => update('contact', e.target.value.replace(/\D/g, ''))} placeholder="98765 43210" />
+            </div>
+          </div>
+
+          {/* ── Classification & Payment ─────────────────────────── */}
+          <div className="form-section-title field-wide">Classification &amp; Payment</div>
+
+          <div className="field">
+            <label htmlFor="vf-media">Media *</label>
+            <select id="vf-media" value={form.media_id} onChange={(e) => { update('media_id', e.target.value); update('sub_media_id', '') }} required disabled={loadingMedia}>
+              <option value="">{loadingMedia ? 'Loading media...' : 'Select media'}</option>
+              {mediaSimple.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-sub-media">Sub Media *</label>
+            <select id="vf-sub-media" value={form.sub_media_id} onChange={(e) => update('sub_media_id', e.target.value)} required disabled={!form.media_id || loadingSubMedia}>
+              <option value="">{!form.media_id ? 'Select media first' : loadingSubMedia ? 'Loading...' : 'Select sub media'}</option>
+              {subMediaSimple.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-pt-days">Payment Term (In Days)</label>
+            <input id="vf-pt-days" type="number" min="0" step="1" value={form.payment_term_value} onChange={(e) => update('payment_term_value', e.target.value)} placeholder="e.g. 30" />
+          </div>
+
+          <div className="field field-wide">
+            <label>Payment Term Type</label>
+            <div className="segmented-control">
+              <button type="button" className={form.payment_term_type === 'Invoice Date' ? 'active' : ''} onClick={() => update('payment_term_type', 'Invoice Date')}>Invoice Date</button>
+              <button type="button" className={form.payment_term_type === 'Campaign End Date' ? 'active' : ''} onClick={() => update('payment_term_type', 'Campaign End Date')}>Campaign End Date</button>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-pt-date">Payment Term Date</label>
+            <input id="vf-pt-date" type="date" value={form.payment_term_invoice_date} onChange={(e) => update('payment_term_invoice_date', e.target.value)} />
+          </div>
+
+          {/* ── Tax Information ──────────────────────────────────── */}
           <div className="form-section-title field-wide">Tax Information</div>
-          <div className="field"><label>Registration</label><select value={form.registration} onChange={(e) => update('registration', e.target.value)}><option value="">Select registration</option><option value="Registered">Registered</option><option value="Unregistered">Unregistered</option><option value="Composition">Composition</option><option value="Other">Other</option></select></div>
-          <div className="field"><label>GSTIN</label><input value={form.gstin} onChange={(e) => update('gstin', e.target.value.toUpperCase())} placeholder="e.g. 27AABCU9603R1ZM" /></div>
-          <div className="field"><label>GSTIN Date</label><input type="date" value={form.gstin_date} onChange={(e) => update('gstin_date', e.target.value)} /></div>
-          <div className="field"><label>PAN Number</label><input value={form.pan_number} onChange={(e) => update('pan_number', e.target.value.toUpperCase())} /></div>
-          <div className="field"><label>Opening Balance</label><input type="number" step="0.01" value={form.opening_balance} onChange={(e) => update('opening_balance', e.target.value)} /></div>
-          <div className="field"><label>TDS Percentage</label><div className="input-with-suffix"><input type="number" min="0" max="100" step="0.01" value={form.tds_percentage} onChange={(e) => update('tds_percentage', e.target.value)} /><span>%</span></div></div>
-          <div className="field"><label>TDS Section</label><input value={form.tds_section} onChange={(e) => update('tds_section', e.target.value)} placeholder="e.g. 194C" /></div>
 
+          <div className="field">
+            <label htmlFor="vf-registration">Registration</label>
+            <select id="vf-registration" value={form.registration} onChange={(e) => update('registration', e.target.value)}>
+              <option value="">Select registration</option>
+              <option value="Registered">Registered</option>
+              <option value="Unregistered">Unregistered</option>
+              <option value="Composition">Composition</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-gstin">GSTIN</label>
+            <input id="vf-gstin" value={form.gstin} onChange={(e) => update('gstin', e.target.value.toUpperCase())} placeholder="e.g. 27AABCU9603R1ZM" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-gstin-date">GSTIN Date</label>
+            <input id="vf-gstin-date" type="date" value={form.gstin_date} onChange={(e) => update('gstin_date', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-pan">PAN Number</label>
+            <input id="vf-pan" value={form.pan_number} onChange={(e) => update('pan_number', e.target.value.toUpperCase())} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-tds-pct">TDS Percentage</label>
+            <div className="input-with-suffix">
+              <input id="vf-tds-pct" type="number" min="0" max="100" step="0.01" value={form.tds_percentage} onChange={(e) => update('tds_percentage', e.target.value)} />
+              <span>%</span>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-tds-section">TDS Section</label>
+            <input id="vf-tds-section" value={form.tds_section} onChange={(e) => update('tds_section', e.target.value)} placeholder="e.g. 194C" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-opening-bal">Opening Balance</label>
+            <input id="vf-opening-bal" type="number" step="0.01" value={form.opening_balance} onChange={(e) => update('opening_balance', e.target.value)} />
+          </div>
+
+          {/* ── Bank Details ─────────────────────────────────────── */}
           <div className="form-section-title field-wide">Bank Details</div>
-          <div className="field"><label>Bank Name</label><input value={form.vendor_bank_name} onChange={(e) => update('vendor_bank_name', e.target.value)} /></div>
-          <div className="field"><label>Bank IFSC Code</label><input value={form.vendor_ifsc_code} onChange={(e) => update('vendor_ifsc_code', e.target.value.toUpperCase())} /></div>
-          <div className="field"><label>Bank Account Number</label><input value={form.vendor_account_number} onChange={(e) => update('vendor_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" /></div>
-          <div className="field"><label>Confirm Bank Account Number</label><input value={form.vendor_confirm_account_number} onChange={(e) => update('vendor_confirm_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" /></div>
 
+          <div className="field">
+            <label htmlFor="vf-bank-name">Bank Name</label>
+            <input id="vf-bank-name" value={form.vendor_bank_name} onChange={(e) => update('vendor_bank_name', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-ifsc">Bank IFSC Code</label>
+            <input id="vf-ifsc" value={form.vendor_ifsc_code} onChange={(e) => update('vendor_ifsc_code', e.target.value.toUpperCase())} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-acc-num">Bank Account Number</label>
+            <input id="vf-acc-num" value={form.vendor_account_number} onChange={(e) => update('vendor_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="vf-acc-confirm">Confirm Account Number</label>
+            <input id="vf-acc-confirm" value={form.vendor_confirm_account_number} onChange={(e) => update('vendor_confirm_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
+          </div>
+
+          {/* ── Address ──────────────────────────────────────────── */}
           <div className="form-section-title field-wide">Address</div>
-          <SearchableSelect label="Country" required value={form.country_code} onChange={handleCountryChange} options={countryOptions} placeholder="Select country" searchPlaceholder="Search countries..." />
-          <SearchableSelect label="State" required value={form.state_code} onChange={handleStateChange} options={stateOptions} placeholder={states.length ? 'Select state' : 'Select country first'} disabled={!form.country_code || !states.length} searchPlaceholder="Search states..." />
-          <SearchableSelect label="City" required value={form.city} onChange={(v) => { update('city', v); setZipStatus(null) }} options={cityOptions} placeholder={!form.state_code ? 'Select state first' : cities.length ? 'Select city' : 'Select city'} disabled={!form.state_code || !cities.length} searchPlaceholder="Search cities..." />
-          <div className="field"><label>Zipcode / PIN</label><input value={form.zipcode} onChange={(e) => { const raw = e.target.value; const value = form.country_code === 'IN' ? raw.replace(/\D/g, '').slice(0, 6) : raw.replace(/[^a-zA-Z0-9 -]/g, '').slice(0, 10); update('zipcode', value); setZipStatus(null) }} onBlur={() => verifyIndianZip(form.zipcode)} inputMode={form.country_code === 'IN' ? 'numeric' : 'text'} placeholder={form.country_code === 'IN' ? '380001' : 'Postal code'} />{zipStatus && <div className={`zip-status ${zipStatus.type}`}>{zipStatus.message}</div>}</div>
-          <div className="field field-wide"><label>Address *</label><textarea value={form.address} onChange={(e) => update('address', e.target.value)} rows="3" placeholder="Street address, building, area, landmark" required /><small className="field-help">Please do not add State, City, Zipcode etc. in the Address field.</small></div>
 
+          <SearchableSelect
+            label="Country *"
+            value={form.country_code}
+            onChange={handleCountryChange}
+            options={countryOptions}
+            placeholder="Select country"
+            searchPlaceholder="Search countries..."
+            required
+          />
+
+          <SearchableSelect
+            label="State *"
+            value={form.state_code}
+            onChange={handleStateChange}
+            options={stateOptions}
+            placeholder={!form.country_code ? 'Select country first' : stateOptions.length ? 'Select state' : 'No states available'}
+            searchPlaceholder="Search states..."
+            disabled={!form.country_code || !states.length}
+            required
+          />
+
+          <SearchableSelect
+            label="City *"
+            value={form.city}
+            onChange={(val) => { update('city', val); setZipStatus(null) }}
+            options={cityOptions}
+            placeholder={!form.state_code ? 'Select state first' : cityOptions.length ? 'Select city' : 'No cities available'}
+            searchPlaceholder="Search cities..."
+            disabled={!form.state_code || !cities.length}
+            required
+          />
+
+          <div className="field">
+            <label htmlFor="vf-zip">Zipcode / PIN</label>
+            <input
+              id="vf-zip"
+              value={form.zipcode}
+              onChange={(e) => {
+                const raw = e.target.value
+                const value = form.country_code === 'IN'
+                  ? raw.replace(/\D/g, '').slice(0, 6)
+                  : raw.replace(/[^a-zA-Z0-9 -]/g, '').slice(0, 10)
+                update('zipcode', value)
+                setZipStatus(null)
+              }}
+              onBlur={() => verifyIndianZip(form.zipcode)}
+              inputMode={form.country_code === 'IN' ? 'numeric' : 'text'}
+              placeholder={form.country_code === 'IN' ? '380001' : 'Postal code'}
+            />
+            {zipStatus && <div className={`zip-status ${zipStatus.type}`}>{zipStatus.message}</div>}
+          </div>
+
+          <div className="field field-wide">
+            <label htmlFor="vf-address">Address *</label>
+            <textarea id="vf-address" value={form.address} onChange={(e) => update('address', e.target.value)} rows="3" placeholder="Street address, building, area, landmark" required />
+            <small className="field-help">Please do not add State, City, Zipcode etc. in the Address field.</small>
+          </div>
+
+          {/* ── Vendor Document ──────────────────────────────────── */}
           <div className="form-section-title field-wide">Vendor Document</div>
+
           <div className="field field-wide">
             <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="document-file-input" id="vendor-doc-input" onChange={(e) => { chooseDocumentFile(e.target.files?.[0]); e.target.value = '' }} />
             <div
@@ -1153,7 +1354,10 @@ function AddVendorModal({ onClose, onSaved }) {
               </div>
               {documentFile ? (
                 <div className="document-panel-actions">
-                  <label className="document-browse">Change<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={(e) => { chooseDocumentFile(e.target.files?.[0]); e.target.value = '' }} /></label>
+                  <label className="document-browse" style={{ position: 'relative' }}>
+                    Change
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={(e) => { chooseDocumentFile(e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
                   <button type="button" className="document-browse" onClick={(e) => { e.stopPropagation(); setDocumentFile(null) }}>Remove</button>
                 </div>
               ) : (
@@ -1162,7 +1366,11 @@ function AddVendorModal({ onClose, onSaved }) {
             </div>
           </div>
 
-          <div className="form-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving...' : 'Save Vendor'}</button></div>
+          <div className="form-actions field-wide">
+            <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving...' : 'Save Vendor'}</button>
+          </div>
+
         </form>
       </div>
     </div>
