@@ -44,28 +44,200 @@ function Icon({ name, size = 18, strokeWidth = 1.8 }) {
 }
 
 function Login({ onLogin }) {
+  const [step, setStep] = useState('email') // 'email' | 'otp'
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const otpRefs = useRef([])
 
-  async function handleLogin(e) {
+  // Resend countdown
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const id = setTimeout(() => setResendCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(id)
+  }, [resendCooldown])
+
+  async function handleSendOtp(e) {
     e.preventDefault()
     setLoading(true)
     setError('')
-
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      password,
+      options: { shouldCreateUser: false },
     })
-
     if (authError) {
       setError(authError.message)
     } else {
+      setStep('otp')
+      setResendCooldown(60)
+      setTimeout(() => otpRefs.current[0]?.focus(), 50)
+    }
+    setLoading(false)
+  }
+
+  async function handleVerifyOtpValues(values) {
+    const token = values.join('')
+    if (token.length !== 6) return
+    setLoading(true)
+    setError('')
+    const { data, error: authError } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    })
+    if (authError) {
+      setError(authError.message)
+      setOtp(['', '', '', '', '', ''])
+      setTimeout(() => otpRefs.current[0]?.focus(), 0)
+    } else {
+      checkDevice()
       onLogin(data.session)
     }
-
     setLoading(false)
+  }
+
+  function checkDevice() {
+    try {
+      let deviceId = localStorage.getItem('dikho_device_id')
+      if (!deviceId) {
+        deviceId = crypto.randomUUID()
+        localStorage.setItem('dikho_device_id', deviceId)
+      }
+      supabase.functions.invoke('device-check', { body: { device_id: deviceId } }).catch(() => {})
+    } catch {
+      // Never block login on device-check failure
+    }
+  }
+
+  function handleOtpChange(index, value) {
+    const digit = value.replace(/\D/g, '').slice(-1)
+    const next = otp.slice()
+    next[index] = digit
+    setOtp(next)
+    if (digit && index < 5) otpRefs.current[index + 1]?.focus()
+    if (digit && next.every((d) => d !== '')) handleVerifyOtpValues(next)
+  }
+
+  function handleOtpKeyDown(index, e) {
+    if (e.key === 'Backspace' && otp[index] === '' && index > 0) {
+      otpRefs.current[index - 1]?.focus()
+    }
+    if (e.key === 'ArrowLeft' && index > 0) otpRefs.current[index - 1]?.focus()
+    if (e.key === 'ArrowRight' && index < 5) otpRefs.current[index + 1]?.focus()
+  }
+
+  function handleOtpPaste(e) {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!text) return
+    const next = ['', '', '', '', '', '']
+    for (let i = 0; i < text.length; i++) next[i] = text[i]
+    setOtp(next)
+    otpRefs.current[Math.min(text.length, 5)]?.focus()
+    if (text.length === 6) handleVerifyOtpValues(next)
+  }
+
+  async function handleResend() {
+    setError('')
+    setOtp(['', '', '', '', '', ''])
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    })
+    if (authError) {
+      setError(authError.message)
+    } else {
+      setResendCooldown(60)
+      setTimeout(() => otpRefs.current[0]?.focus(), 50)
+    }
+  }
+
+  const rightPanel = (
+    <div className="login-right">
+      <div className="background-logo">dikho</div>
+      <div className="welcome-content">
+        <div className="orange-mark" />
+        <h2>Welcome to<br />Dikho</h2>
+        <p>Manage your clients, vendors and business operations in one place.</p>
+      </div>
+    </div>
+  )
+
+  if (step === 'otp') {
+    return (
+      <div className="login-page">
+        <div className="login-left">
+          <div className="login-box">
+            <img src="/dikho-logo.png" alt="Dikho" className="login-logo" />
+
+            <h1>Check your email</h1>
+            <p className="login-subtitle">
+              Enter the 6-digit code sent to <strong>{email}</strong>
+            </p>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtpValues(otp) }}>
+              <div className="otp-row" onPaste={handleOtpPaste}>
+                {otp.map((digit, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => { otpRefs.current[i] = el }}
+                    className="otp-input"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(i, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                    autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                    aria-label={`Digit ${i + 1} of 6`}
+                    disabled={loading}
+                  />
+                ))}
+              </div>
+
+              {error && (
+                <div className="auth-error" role="alert">
+                  <span className="auth-error-icon"><Icon name="alert" size={17} /></span>
+                  <div>
+                    <strong>Invalid code</strong>
+                    <p>{error}</p>
+                  </div>
+                </div>
+              )}
+
+              <button
+                className="primary-button login-button"
+                type="submit"
+                disabled={loading || otp.join('').length !== 6}
+              >
+                {loading ? 'Verifying…' : 'Verify code'}
+              </button>
+            </form>
+
+            <div className="otp-footer">
+              {resendCooldown > 0 ? (
+                <span className="otp-cooldown">Resend in {resendCooldown}s</span>
+              ) : (
+                <button type="button" className="otp-link" onClick={handleResend}>
+                  Resend code
+                </button>
+              )}
+              <span className="otp-sep">·</span>
+              <button
+                type="button"
+                className="otp-link"
+                onClick={() => { setStep('email'); setError(''); setOtp(['', '', '', '', '', '']) }}
+              >
+                Change email
+              </button>
+            </div>
+          </div>
+        </div>
+        {rightPanel}
+      </div>
+    )
   }
 
   return (
@@ -77,7 +249,7 @@ function Login({ onLogin }) {
           <h1>Sign in to your account</h1>
           <p className="login-subtitle">Access your Dikho SO-PO system</p>
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleSendOtp}>
             <label htmlFor="login-email">Email</label>
             <input
               id="login-email"
@@ -89,74 +261,193 @@ function Login({ onLogin }) {
               required
             />
 
-            <label htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              required
-            />
-
             {error && (
               <div className="auth-error" role="alert">
                 <span className="auth-error-icon"><Icon name="alert" size={17} /></span>
                 <div>
-                  <strong>Unable to sign in</strong>
+                  <strong>Unable to send code</strong>
                   <p>{error}</p>
                 </div>
               </div>
             )}
 
             <button className="primary-button login-button" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Sending…' : 'Send code'}
             </button>
           </form>
         </div>
       </div>
-
-      <div className="login-right">
-        <div className="background-logo">dikho</div>
-        <div className="welcome-content">
-          <div className="orange-mark" />
-          <h2>Welcome to<br />Dikho</h2>
-          <p>Manage your clients, vendors and business operations in one place.</p>
-        </div>
-      </div>
+      {rightPanel}
     </div>
   )
 }
 
-function Sidebar({ activePage, setActivePage }) {
+function SidebarIcon({ name, size = 20 }) {
+  const icons = {
+    dashboard: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+    clients: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-1.7a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V21" />
+        <circle cx="9" cy="7" r="3.2" />
+        <path d="M22 21v-1.6a4 4 0 0 0-3-3.85M16.5 4.3a3.2 3.2 0 0 1 0 6.2" />
+      </svg>
+    ),
+    vendors: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9.5 12 4l9 5.5" />
+        <path d="M5 10.5V20h14v-9.5" />
+        <path d="M8 20v-6h8v6" />
+      </svg>
+    ),
+
+    so: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
+        <path d="M14 2v4" />
+      </svg>
+    ),
+    po: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 8h5M8 12h8M8 16h6" />
+        <circle cx="17" cy="8" r="1" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+    combinedpo: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="13" height="16" rx="2" />
+        <rect x="9" y="3" width="13" height="16" rx="2" />
+        <path d="M13 8h5M13 12h5M13 16h3" />
+      </svg>
+    ),
+    invoice: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M10 21h4" />
+      </svg>
+    ),
+    paymentlink: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" />
+        <path d="M6 15h3M15 15h3" />
+      </svg>
+    ),
+    advance: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 12c0 1.66-.4 3.22-1.1 4.6" />
+        <path d="M3.51 8.83A9 9 0 1 0 21 12" />
+        <path d="M12 8v4l3 3" />
+        <path d="M15 3l2 2-2 2" />
+        <path d="M17 5H9" />
+      </svg>
+    ),
+    receipt: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
+      </svg>
+    ),
+    paymentrequest: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M9 9h.01" />
+        <path d="M9 12c0-1.66 1.34-3 3-3s3 1.34 3 3-1.34 3-3 3" />
+        <path d="M12 18v-3" />
+      </svg>
+    ),
+    courier: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 6h16M4 10h16M4 14h10" />
+        <path d="M14 17l3 3 5-5" />
+      </svg>
+    ),
+    chevron: (
+      <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+    ),
+  }
+  return icons[name] || null
+}
+
+function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick }) {
   const items = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'clients', label: 'Clients', icon: 'clients' },
     { id: 'vendors', label: 'Vendors', icon: 'vendors' },
+    { id: 'so', label: 'SO', icon: 'so' },
+    { id: 'po', label: 'PO', icon: 'po' },
+    { id: 'combinedpo', label: 'Combined PO', icon: 'combinedpo' },
+    { id: 'invoice', label: 'Invoice Notification', icon: 'invoice' },
+    { id: 'paymentlink', label: 'Payment Link', icon: 'paymentlink' },
+    { id: 'advance', label: 'Advance Payment Receipt', icon: 'advance' },
+    { id: 'receipt', label: 'Payment Receipt', icon: 'receipt' },
+    { id: 'paymentrequest', label: 'Payment Request', icon: 'paymentrequest' },
+    { id: 'courier', label: 'Document Courier', icon: 'courier' },
   ]
 
-  return (
-    <aside className="sidebar">
-      <div className="brand-lockup">
-        <div className="brand-title">SO-PO</div>
-        <div className="brand-subtitle">Dikho</div>
-      </div>
+  function handleNav(id) {
+    setActivePage(id)
+    if (onOverlayClick) onOverlayClick()
+  }
 
-      <nav className="sidebar-nav">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            onClick={() => setActivePage(item.id)}
-          >
-            <span className="nav-icon"><Icon name={item.icon} size={19} /></span>
-            <span>{item.label}</span>
-            {item.id === activePage && <span className="nav-chevron"><Icon name="chevron" size={16} /></span>}
-          </button>
-        ))}
-      </nav>
-    </aside>
+  return (
+    <>
+      {/* Mobile overlay backdrop */}
+      {!collapsed && onOverlayClick && (
+        <div className="sidebar-overlay" onClick={onOverlayClick} aria-hidden="true" />
+      )}
+
+      <aside className={`sidebar${collapsed ? ' sidebar-is-collapsed' : ''}`} aria-label="Main navigation">
+        {/* Logo area */}
+        <div className="sidebar-logo-area">
+          <div className="sidebar-logo-full">
+            <img src="/dikho-logo1.png" alt="Dikho" className="sidebar-logo-img" />
+          </div>
+          <div className="sidebar-logo-icon">
+            <img src="/fevicon.png" alt="Dikho" className="sidebar-favicon" />
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="sidebar-divider" />
+
+        {/* Navigation */}
+        <nav className="sidebar-nav">
+          {items.map((item) => {
+            const isActive = activePage === item.id
+            return (
+              <button
+                key={item.id}
+                className={`nav-item${isActive ? ' active' : ''}`}
+                onClick={() => handleNav(item.id)}
+                title={collapsed ? item.label : undefined}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span className="nav-icon">
+                  <SidebarIcon name={item.icon} size={20} />
+                </span>
+                <span className="nav-label">{item.label}</span>
+                {isActive && (
+                  <span className="nav-chevron">
+                    <SidebarIcon name="chevron" />
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+      </aside>
+    </>
   )
 }
 
@@ -842,7 +1133,7 @@ function VendorDetails({ vendor, address, onClose, mediaMap, subMediaMap }) {
         <div className="search-select-menu">
           <div className="search-select-search">
             <Icon name="search" size={15} />
-            <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} />
+            <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} name="search-dropdown" autoComplete="new-password" />
           </div>
           <div className="search-select-options">
             {filtered.length === 0 ? (
@@ -1624,22 +1915,100 @@ function PlaceholderPage({ title }) {
   )
 }
 
+// Session timing constants (module-level — stable, never in deps arrays)
+const MAX_SESSION_MS = 8 * 60 * 60 * 1000  // 8 hours absolute maximum
+const INACTIVITY_MS = 45 * 60 * 1000        // 45-minute inactivity timeout
+const WARN_BEFORE_MS = 5 * 60 * 1000        // show warning 5 min before inactivity logout
+
 function App() {
   const [session, setSession] = useState(undefined)
   const [activePage, setActivePage] = useState('clients')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+  const [showSessionWarning, setShowSessionWarning] = useState(false)
+  const [warnSecsLeft, setWarnSecsLeft] = useState(300)
+
+  const lastActiveRef = useRef(Date.now())
+  const sessionStartRef = useRef(null)
+  const showWarningRef = useRef(false)
+
+  useEffect(() => {
+    function onResize() {
+      const mobile = window.innerWidth <= 768
+      setIsMobile(mobile)
+      if (mobile) setSidebarOpen(false)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
+      if (data.session) sessionStartRef.current = Date.now()
     })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s)
+      if (s && !sessionStartRef.current) sessionStartRef.current = Date.now()
+      if (!s) sessionStartRef.current = null
     })
-
     return () => subscription.unsubscribe()
   }, [])
+
+  // Activity tracking + inactivity / max-session enforcement
+  useEffect(() => {
+    if (!session) return
+
+    function resetActivity() {
+      lastActiveRef.current = Date.now()
+    }
+
+    const events = ['mousemove', 'keydown', 'pointerdown', 'scroll']
+    events.forEach((ev) => window.addEventListener(ev, resetActivity, { passive: true }))
+
+    const tick = setInterval(() => {
+      const now = Date.now()
+      const idle = now - lastActiveRef.current
+      const sessionAge = sessionStartRef.current ? now - sessionStartRef.current : 0
+
+      // Hard max-session cap (security boundary is the Supabase JWT, this is UX defence)
+      if (sessionAge >= MAX_SESSION_MS) {
+        supabase.auth.signOut()
+        return
+      }
+
+      // Inactivity logout
+      if (idle >= INACTIVITY_MS) {
+        supabase.auth.signOut()
+        return
+      }
+
+      // 5-minute warning zone
+      const timeUntilLogout = INACTIVITY_MS - idle
+      if (timeUntilLogout <= WARN_BEFORE_MS) {
+        const secs = Math.max(1, Math.ceil(timeUntilLogout / 1000))
+        setWarnSecsLeft(secs)
+        if (!showWarningRef.current) {
+          showWarningRef.current = true
+          setShowSessionWarning(true)
+        }
+      } else if (showWarningRef.current) {
+        showWarningRef.current = false
+        setShowSessionWarning(false)
+      }
+    }, 1000)
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, resetActivity))
+      clearInterval(tick)
+    }
+  }, [session])
+
+  function staySignedIn() {
+    lastActiveRef.current = Date.now()
+    showWarningRef.current = false
+    setShowSessionWarning(false)
+  }
 
   async function logout() {
     await supabase.auth.signOut()
@@ -1648,37 +2017,68 @@ function App() {
   if (session === undefined) {
     return <div className="loading-screen">Loading...</div>
   }
-
   if (!session) {
     return <Login onLogin={setSession} />
   }
 
+  const collapsed = !sidebarOpen
+  const warnMins = Math.floor(warnSecsLeft / 60)
+  const warnSecs = String(warnSecsLeft % 60).padStart(2, '0')
+
   return (
-    <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-      <Sidebar activePage={activePage} setActivePage={setActivePage} />
+    <div className={`app-shell${collapsed ? ' sidebar-is-closed' : ''}`}>
+      <Sidebar
+        activePage={activePage}
+        setActivePage={setActivePage}
+        collapsed={collapsed}
+        onOverlayClick={isMobile ? () => setSidebarOpen(false) : null}
+      />
 
       <div className="app-main">
         <header className="app-header">
-          <button className="header-menu" onClick={() => setSidebarOpen((value) => !value)} aria-label="Toggle sidebar">
+          <button className="header-menu" onClick={() => setSidebarOpen((v) => !v)} aria-label="Toggle sidebar">
             <Icon name="menu" size={21} />
           </button>
-
-          <div className="header-spacer" />            <div className="header-right">
-              <button className="header-icon" aria-label="Full screen" onClick={() => {
-                if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()
-                else document.exitFullscreen?.()
-              }}><Icon name="expand" size={19} /></button>
-              <button className="header-icon" aria-label="Account"><Icon name="user" size={20} /></button>
-              <button className="logout-link" onClick={logout}>Logout</button>
-            </div>
+          <div className="header-spacer" />
+          <div className="header-right">
+            <button className="header-icon" aria-label="Full screen" onClick={() => {
+              if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()
+              else document.exitFullscreen?.()
+            }}><Icon name="expand" size={19} /></button>
+            <button className="header-icon" aria-label="Account"><Icon name="user" size={20} /></button>
+            <button className="logout-link" onClick={logout}>Logout</button>
+          </div>
         </header>
 
         <main className="workspace">
           {activePage === 'clients' && <ClientsPage />}
           {activePage === 'dashboard' && <PlaceholderPage title="Dashboard" />}
           {activePage === 'vendors' && <VendorsPage />}
+          {activePage === 'so' && <PlaceholderPage title="SO" />}
+          {activePage === 'po' && <PlaceholderPage title="PO" />}
+          {activePage === 'combinedpo' && <PlaceholderPage title="Combined PO" />}
+          {activePage === 'invoice' && <PlaceholderPage title="Invoice Notification" />}
+          {activePage === 'paymentlink' && <PlaceholderPage title="Payment Link" />}
+          {activePage === 'advance' && <PlaceholderPage title="Advance Payment Receipt" />}
+          {activePage === 'receipt' && <PlaceholderPage title="Payment Receipt" />}
+          {activePage === 'paymentrequest' && <PlaceholderPage title="Payment Request" />}
+          {activePage === 'courier' && <PlaceholderPage title="Document Courier" />}
         </main>
       </div>
+
+      {showSessionWarning && (
+        <div className="session-warning-overlay" role="dialog" aria-modal="true" aria-label="Session expiry warning">
+          <div className="session-warning-box">
+            <strong>Still there?</strong>
+            <p>
+              You'll be signed out in{' '}
+              <span className="session-warning-timer">{warnMins}:{warnSecs}</span>{' '}
+              due to inactivity.
+            </p>
+            <button className="primary-button" onClick={staySignedIn}>Stay signed in</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
