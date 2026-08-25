@@ -1,11 +1,49 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// Comma-separated list of origins allowed to call this function from a browser,
+// e.g. ALLOWED_ORIGINS="https://dikho.in,https://www.dikho.in".
+// Falls back to the local Vite dev server so `supabase functions serve` works
+// out of the box; production deployments must set this explicitly.
+const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173']
+
+const allowedOrigins = (() => {
+  const configured = Deno.env.get('ALLOWED_ORIGINS')
+  if (!configured) {
+    console.warn(
+      '[device-check] ALLOWED_ORIGINS not set — falling back to',
+      DEFAULT_ALLOWED_ORIGINS.join(', '),
+    )
+    return DEFAULT_ALLOWED_ORIGINS
+  }
+  return configured
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+})()
+
+/**
+ * Builds CORS headers for a request. An origin is only echoed back when it is
+ * on the allowlist; unknown origins get no CORS headers, so the browser blocks
+ * the response. Requests without an Origin header (curl, server-to-server) are
+ * not subject to CORS and simply get no extra headers.
+ */
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin')
+  if (!origin || !allowedOrigins.includes(origin)) return { Vary: 'Origin' }
+
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  }
 }
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = corsHeadersFor(req)
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -15,7 +53,7 @@ Deno.serve(async (req: Request) => {
     // 1. Verify caller identity via their JWT
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return json({ error: 'Unauthorized' }, 401)
+      return json({ error: 'Unauthorized' }, 401, corsHeaders)
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -33,7 +71,7 @@ Deno.serve(async (req: Request) => {
     } = await userClient.auth.getUser()
 
     if (userError || !user) {
-      return json({ error: 'Unauthorized' }, 401)
+      return json({ error: 'Unauthorized' }, 401, corsHeaders)
     }
 
     // 2. Validate device_id from request body
@@ -41,7 +79,7 @@ Deno.serve(async (req: Request) => {
     try {
       body = await req.json()
     } catch {
-      return json({ error: 'Invalid JSON body' }, 400)
+      return json({ error: 'Invalid JSON body' }, 400, corsHeaders)
     }
 
     const device_id = body.device_id
@@ -50,7 +88,7 @@ Deno.serve(async (req: Request) => {
       device_id.length === 0 ||
       device_id.length > 128
     ) {
-      return json({ error: 'Invalid device_id' }, 400)
+      return json({ error: 'Invalid device_id' }, 400, corsHeaders)
     }
 
     // 3. Check / register device using service role (bypasses RLS for writes)
@@ -84,19 +122,23 @@ Deno.serve(async (req: Request) => {
       is_new: isNew,
     })
 
-    return json({ known: !isNew })
+    return json({ known: !isNew }, 200, corsHeaders)
   } catch (err) {
     console.error(
       '[device-check] Unhandled error:',
       err instanceof Error ? err.message : err,
     )
-    return json({ error: 'Internal error' }, 500)
+    return json({ error: 'Internal error' }, 500, corsHeaders)
   }
 })
 
 // Helpers
 
-function json(data: unknown, status = 200): Response {
+function json(
+  data: unknown,
+  status = 200,
+  corsHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },

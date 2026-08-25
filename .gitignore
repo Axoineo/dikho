@@ -29,3 +29,10 @@ dist-ssr
 !.dev.vars.example
 .env*
 !.env.example
+
+# Claude Code — machine-local overrides only; shared config stays tracked
+.claude/settings.local.json
+
+# Supabase CLI local state
+supabase/.temp
+supabase/.branches

@@ -214,12 +214,48 @@ The application will then be available through the local Vite development server
 
 Dikho uses environment variables for external services and application configuration.
 
-Example:
+Copy the template and fill in your own values:
+
+```bash
+cp .env.example .env.local
+```
 
 ```env
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
 ```
+
+Only `VITE_`-prefixed variables are bundled into the browser. The publishable
+("anon") key is designed to be public — table access is enforced by Row Level
+Security, not by keeping the key secret.
+
+`.env.local` is gitignored. Do **not** commit production credentials, private
+keys, service-role keys, or other secrets to the repository.
+
+### Edge Function secrets
+
+The `device-check` Edge Function runs server-side and is configured separately
+from the frontend. These values must never appear in `.env.local` or any
+`VITE_`-prefixed variable.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | auto | Injected by Supabase at runtime. |
+| `SUPABASE_ANON_KEY` | auto | Injected by Supabase; used to validate the caller's JWT. |
+| `SUPABASE_SERVICE_ROLE_KEY` | auto | Injected by Supabase; bypasses RLS for device writes. |
+| `ALLOWED_ORIGINS` | **yes** | Comma-separated browser origins allowed to call the function. |
+| `BREVO_API_KEY` | no | Enables new-device alert emails. Alerts are skipped if unset. |
+| `BREVO_SENDER_EMAIL` | no | Sender address for alert emails. Defaults to `security@dikho.in`. |
+
+Set them with the Supabase CLI:
+
+```bash
+supabase secrets set ALLOWED_ORIGINS="https://dikho.in,https://www.dikho.in"
+```
+
+If `ALLOWED_ORIGINS` is unset, the function falls back to `http://localhost:5173`
+so local development works — which means browser calls from your production
+domain will be blocked by CORS until you set it.
 
 Do **not** commit production credentials, private keys, service-role keys, or other secrets to the repository.
 
@@ -263,6 +299,8 @@ Dikho handles business and operational data. Security should therefore be treate
 
 * Never commit secrets to Git.
 * Use environment variables for credentials.
+* Keep the service-role key server-side only — never in a `VITE_` variable.
+* Restrict Edge Function access with `ALLOWED_ORIGINS` rather than a wildcard.
 * Restrict database access through appropriate Supabase policies.
 * Use authentication for protected application areas.
 * Follow least-privilege access principles.
