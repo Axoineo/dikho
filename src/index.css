@@ -734,7 +734,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .search-select-trigger { width: 100%; height: 42px; border: 1px solid #d0d9e5; border-radius: 8px; padding: 0 12px; background: #fff; color: #2e3b50; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; }
 .search-select-trigger:hover, .search-select-trigger.open { border-color: #aebed2; box-shadow: 0 0 0 3px rgba(45,99,160,.07); }
 .search-select-trigger:disabled { opacity: .6; background: #f7f9fb; cursor: not-allowed; }
-.search-select-trigger .placeholder { color: #95a0b0; }
+.search-select-trigger .search-select-placeholder { color: #95a0b0; }
 .search-select-menu { position: absolute; z-index: 80; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid #d7e0ea; border-radius: 10px; box-shadow: 0 16px 38px rgba(26,42,64,.16); overflow: hidden; }
 .search-select-search { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid #edf0f4; color: #8190a6; }
 .search-select-search input { width: 100%; border: 0; outline: 0; background: transparent; font-size: 13px; color: #2e3b50; }

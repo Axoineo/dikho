@@ -1126,7 +1126,7 @@ function VendorDetails({ vendor, address, onClose, mediaMap, subMediaMap }) {
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
       >
-        <span className={selected ? '' : 'placeholder'}>{selected?.label || placeholder}</span>
+        <span className={selected ? '' : 'search-select-placeholder'}>{selected?.label || placeholder}</span>
         <Icon name="chevronDown" size={16} />
       </button>
       {open && (
@@ -1568,7 +1568,7 @@ function AddVendorModal({ onClose, onSaved }) {
           <div className="form-section-title field-wide">Address</div>
 
           <SearchableSelect
-            label="Country *"
+            label="Country"
             value={form.country_code}
             onChange={handleCountryChange}
             options={countryOptions}
@@ -1578,7 +1578,7 @@ function AddVendorModal({ onClose, onSaved }) {
           />
 
           <SearchableSelect
-            label="State *"
+            label="State"
             value={form.state_code}
             onChange={handleStateChange}
             options={stateOptions}
@@ -1589,7 +1589,7 @@ function AddVendorModal({ onClose, onSaved }) {
           />
 
           <SearchableSelect
-            label="City *"
+            label="City"
             value={form.city}
             onChange={(val) => { update('city', val); setZipStatus(null) }}
             options={cityOptions}
