@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import { downloadXlsx } from './xlsx'
 import { Country, State, City } from 'country-state-city'
 
 function Icon({ name, size = 18, strokeWidth = 1.8 }) {
@@ -24,6 +25,7 @@ function Icon({ name, size = 18, strokeWidth = 1.8 }) {
     file: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h5" /></>,
     eye: <><path d="M2.5 12s3.2-5 9.5-5 9.5 5 9.5 5-3.2 5-9.5 5-9.5-5-9.5-5Z" /><circle cx="12" cy="12" r="2.3" /></>,
     download: <><path d="M12 4v10" /><path d="m8 10 4 4 4-4" /><path d="M5 20h14" /></>,
+    filter: <><path d="M4 6h16M7 12h10M10 18h4" /></>,
   }
 
   return (
@@ -463,6 +465,112 @@ function getValue(row, keys) {
     }
   }
   return null
+}
+
+function isActiveStatus(value) {
+  return value === 1 || value === '1' || value === true || value === 'true' || value === 'active' || value === 'Active'
+}
+
+/* ============================================================
+   VENDOR FILTERING, SELECTION AND EXPORT
+   ============================================================ */
+
+const EMPTY_VENDOR_FILTERS = { media_id: '', sub_media_id: '', state: '', city: '', status: '' }
+
+// Checkbox, ID, Company, Media, Sub Media, State, City, Contact, Email, GSTIN,
+// Status, Actions — keep in step with the <thead> and the .vendors-page widths.
+const VENDOR_COLUMN_COUNT = 12
+
+// State and city live on vendor_addresses, so every vendor query embeds the
+// address rows. When a state or city filter is active the embed becomes an
+// inner join so non-matching vendors drop out of the result and the count.
+const VENDOR_ADDRESS_COLUMNS = 'address,country,state,city,zipcode,is_default'
+
+function vendorSelect(columns, filters) {
+  const join = filters.state || filters.city ? '!inner' : ''
+  return `${columns},vendor_addresses${join}(${VENDOR_ADDRESS_COLUMNS})`
+}
+
+function applyVendorFilters(request, query, filters) {
+  if (query) {
+    const safeQuery = query.replace(/[%_]/g, '').replace(/[(),]/g, ' ').trim()
+    if (safeQuery) {
+      request = request.or(`company_name.ilike.%${safeQuery}%,alias.ilike.%${safeQuery}%,contact_person.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,gstin.ilike.%${safeQuery}%,pan_number.ilike.%${safeQuery}%`)
+    }
+  }
+  if (filters.media_id) request = request.eq('media_id', Number(filters.media_id))
+  if (filters.sub_media_id) request = request.eq('sub_media_id', Number(filters.sub_media_id))
+  if (filters.status !== '') request = request.eq('status', Number(filters.status))
+  if (filters.state) request = request.eq('vendor_addresses.state', filters.state)
+  if (filters.city) request = request.eq('vendor_addresses.city', filters.city)
+  return request
+}
+
+function primaryAddress(vendor) {
+  const addresses = Array.isArray(vendor?.vendor_addresses) ? vendor.vendor_addresses : []
+  return addresses.find((item) => item.is_default) || addresses[0] || null
+}
+
+const FETCH_CHUNK = 1000
+const MAX_FETCH_ROWS = 50000
+
+// PostgREST caps rows per response, so anything that needs the *whole* result
+// set (select-all, export) pages until a request comes back empty rather than
+// trusting a single request to return everything.
+async function fetchAllPaged(buildRequest) {
+  const rows = []
+  for (;;) {
+    const { data, error } = await buildRequest(rows.length, rows.length + FETCH_CHUNK - 1)
+    if (error) throw error
+    if (!data || data.length === 0) return rows
+    rows.push(...data)
+    if (rows.length >= MAX_FETCH_ROWS) {
+      throw new Error(`This matches over ${MAX_FETCH_ROWS.toLocaleString()} vendors. Narrow the filters and try again.`)
+    }
+  }
+}
+
+const VENDOR_EXPORT_COLUMNS = [
+  ['ID', (vendor) => vendor.id],
+  ['Alias', (vendor) => vendor.alias],
+  ['Company Name', (vendor) => vendor.company_name],
+  ['Contact Person', (vendor) => vendor.contact_person],
+  ['Vendor Type', (vendor) => vendor.vendor_type],
+  ['Email', (vendor) => vendor.email],
+  ['Contact Number', (vendor) => (vendor.contact == null ? '' : `${vendor.country_dialcode || ''} ${vendor.contact}`.trim())],
+  ['Media', (vendor, maps) => maps.mediaMap[vendor.media_id] || ''],
+  ['Sub Media', (vendor, maps) => maps.subMediaMap[vendor.sub_media_id] || ''],
+  ['Status', (vendor) => (isActiveStatus(vendor.status) ? 'Active' : 'Inactive')],
+  ['Payment Term Type', (vendor) => vendor.payment_term_type],
+  ['Payment Term Date', (vendor) => vendor.payment_term_invoice_date],
+  ['Payment Term (In Days)', (vendor) => vendor.payment_term_value],
+  ['Registration', (vendor) => vendor.registration],
+  ['GSTIN', (vendor) => vendor.gstin],
+  ['GSTIN Date', (vendor) => vendor.gstin_date],
+  ['PAN Number', (vendor) => vendor.pan_number],
+  ['TDS Percentage', (vendor) => vendor.tds_percentage],
+  ['TDS Section', (vendor) => vendor.tds_section],
+  ['Opening Balance', (vendor) => vendor.opening_balance],
+  ['Bank Name', (vendor) => vendor.vendor_bank_name],
+  ['Bank IFSC Code', (vendor) => vendor.vendor_ifsc_code],
+  ['Account Number', (vendor) => vendor.vendor_account_number],
+  ['Country', (vendor) => primaryAddress(vendor)?.country],
+  ['State', (vendor) => primaryAddress(vendor)?.state],
+  ['City', (vendor) => primaryAddress(vendor)?.city],
+  ['Zipcode', (vendor) => primaryAddress(vendor)?.zipcode],
+  ['Address', (vendor) => primaryAddress(vendor)?.address],
+  ['Document', (vendor) => vendor.vendor_document_file_name],
+]
+
+function vendorExportWorkbook(vendors, maps) {
+  return {
+    sheetName: 'Vendors',
+    headers: VENDOR_EXPORT_COLUMNS.map(([header]) => header),
+    rows: vendors.map((vendor) => VENDOR_EXPORT_COLUMNS.map(([, read]) => {
+      const value = read(vendor, maps)
+      return value === null || value === undefined ? '' : value
+    })),
+  }
 }
 
 function ClientDetails({ client, onClose }) {
@@ -944,7 +1052,7 @@ function VendorDetails({ vendor, address, onClose, mediaMap, subMediaMap }) {
   if (!vendor) return null
 
   const statusValue = getValue(vendor, ['status'])
-  const isActive = statusValue === 1 || statusValue === '1' || statusValue === true || statusValue === 'true' || statusValue === 'active' || statusValue === 'Active'
+  const isActive = isActiveStatus(statusValue)
   const mediaName = mediaMap?.[vendor.media_id] || getValue(vendor, ['media'])
   const subMediaName = subMediaMap?.[vendor.sub_media_id] || getValue(vendor, ['sub_media'])
 
@@ -1683,6 +1791,11 @@ function VendorsPage() {
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [selectedVendorAddress, setSelectedVendorAddress] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
+  const [filters, setFilters] = useState(EMPTY_VENDOR_FILTERS)
+  const [addressFacets, setAddressFacets] = useState([])
+  const [selectingAll, setSelectingAll] = useState(false)
+  const [exporting, setExporting] = useState('')
+  const [actionError, setActionError] = useState('')
   useEffect(() => {
     let cancelled = false
 
@@ -1730,6 +1843,28 @@ function VendorsPage() {
     loadMedia()
   }, [])
 
+  // State and city filter options come from the addresses that actually exist,
+  // so the dropdowns never offer a value that would return zero vendors.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadAddressFacets() {
+      try {
+        const rows = await fetchAllPaged((from, to) => supabase
+          .from('vendor_addresses')
+          .select('state,city')
+          .order('id', { ascending: true })
+          .range(from, to))
+        if (!cancelled) setAddressFacets(rows)
+      } catch {
+        if (!cancelled) setAddressFacets([])
+      }
+    }
+
+    loadAddressFacets()
+    return () => { cancelled = true }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
 
@@ -1742,16 +1877,11 @@ function VendorsPage() {
 
       let request = supabase
         .from('vendors')
-        .select('*', { count: 'exact' })
+        .select(vendorSelect('*', filters), { count: 'exact' })
         .order('id', { ascending: false })
         .range(from, to)
 
-      if (query) {
-        const safeQuery = query.replace(/[%_]/g, '').replace(/[(),]/g, ' ').trim()
-        if (safeQuery) {
-          request = request.or(`company_name.ilike.%${safeQuery}%,alias.ilike.%${safeQuery}%,contact_person.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,gstin.ilike.%${safeQuery}%,pan_number.ilike.%${safeQuery}%`)
-        }
-      }
+      request = applyVendorFilters(request, query, filters)
 
       const { data, count, error: fetchError } = await request
       if (cancelled) return
@@ -1769,7 +1899,7 @@ function VendorsPage() {
 
     loadVendors()
     return () => { cancelled = true }
-  }, [page, pageSize, query])
+  }, [page, pageSize, query, filters])
 
   const mediaMap = useMemo(() => Object.fromEntries(mediaOptions.map((item) => [item.id, item.name])), [mediaOptions])
   const subMediaMap = useMemo(() => Object.fromEntries(subMediaOptions.map((item) => [item.id, item.name])), [subMediaOptions])
@@ -1781,12 +1911,69 @@ function VendorsPage() {
     return [current - 2, current - 1, current, current + 1, current + 2].filter((n) => n >= 1 && n <= totalPages)
   }, [page, totalPages])
 
+  const mediaFilterOptions = useMemo(() => [
+    { value: '', label: 'All media' },
+    ...mediaOptions.map((item) => ({ value: String(item.id), label: item.name })),
+  ], [mediaOptions])
+
+  const subMediaFilterOptions = useMemo(() => [
+    { value: '', label: 'All sub media' },
+    ...subMediaOptions
+      .filter((item) => !filters.media_id || String(item.media_id) === String(filters.media_id))
+      .map((item) => ({ value: String(item.id), label: item.name })),
+  ], [subMediaOptions, filters.media_id])
+
+  const stateFilterOptions = useMemo(() => {
+    const states = [...new Set(addressFacets.map((item) => item.state).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+    return [{ value: '', label: 'All states' }, ...states.map((state) => ({ value: state, label: state }))]
+  }, [addressFacets])
+
+  const cityFilterOptions = useMemo(() => {
+    const cities = [...new Set(addressFacets
+      .filter((item) => !filters.state || item.state === filters.state)
+      .map((item) => item.city)
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b))
+    return [{ value: '', label: 'All cities' }, ...cities.map((city) => ({ value: city, label: city }))]
+  }, [addressFacets, filters.state])
+
+  const activeFilterCount = Object.values(filters).filter((value) => value !== '').length
+  const hasActiveFilters = activeFilterCount > 0 || Boolean(query)
+
   function changePage(nextPage) { setPage(Math.max(1, Math.min(nextPage, totalPages))) }
   function changePageSize(e) { setPageSize(Number(e.target.value)); setPage(1) }
-  function afterSaved() { setShowForm(false); setPage(1); setQuery(''); setSearchInput('') }
 
+  function afterSaved() {
+    setShowForm(false)
+    setPage(1)
+    setQuery('')
+    setSearchInput('')
+    setFilters(EMPTY_VENDOR_FILTERS)
+  }
+
+  // Filters compose: each one narrows the same query, and dependent filters
+  // reset so an impossible combination can never be selected.
+  function setFilter(field, value) {
+    setActionError('')
+    setFilters((current) => {
+      const next = { ...current, [field]: value }
+      if (field === 'media_id') next.sub_media_id = ''
+      if (field === 'state') next.city = ''
+      return next
+    })
+    setPage(1)
+  }
+
+  function clearFilters() {
+    setActionError('')
+    setFilters(EMPTY_VENDOR_FILTERS)
+    setSearchInput('')
+    setQuery('')
+    setPage(1)
+  }
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const currentPageIds = vendors.map((vendor) => vendor.id)
-  const allCurrentSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.includes(id))
+  const allCurrentSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedSet.has(id))
 
   function toggleSelect(id) {
     setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
@@ -1798,6 +1985,70 @@ function VendorsPage() {
       return [...new Set([...current, ...currentPageIds])]
     })
   }
+
+  // Selects every vendor matching the current filters, not just this page.
+  async function selectAllFiltered() {
+    setSelectingAll(true)
+    setActionError('')
+    try {
+      const rows = await fetchAllPaged((from, to) => {
+        const columns = filters.state || filters.city ? 'id,vendor_addresses!inner(state,city)' : 'id'
+        return applyVendorFilters(
+          supabase.from('vendors').select(columns).order('id', { ascending: false }).range(from, to),
+          query,
+          filters,
+        )
+      })
+      setSelectedIds(rows.map((row) => row.id))
+    } catch (err) {
+      console.error(err)
+      setActionError(err?.message || 'Could not select all filtered vendors.')
+    } finally {
+      setSelectingAll(false)
+    }
+  }
+
+  async function exportVendors(mode) {
+    setExporting(mode)
+    setActionError('')
+    try {
+      let rows
+      if (mode === 'selected') {
+        rows = []
+        for (let index = 0; index < selectedIds.length; index += 300) {
+          const chunk = selectedIds.slice(index, index + 300)
+          const { data, error: fetchError } = await supabase
+            .from('vendors')
+            .select(`*,vendor_addresses(${VENDOR_ADDRESS_COLUMNS})`)
+            .in('id', chunk)
+            .order('id', { ascending: false })
+          if (fetchError) throw fetchError
+          rows.push(...(data || []))
+        }
+      } else {
+        rows = await fetchAllPaged((from, to) => applyVendorFilters(
+          supabase.from('vendors').select(vendorSelect('*', filters)).order('id', { ascending: false }).range(from, to),
+          query,
+          filters,
+        ))
+      }
+
+      if (rows.length === 0) {
+        setActionError('There is nothing to export.')
+        return
+      }
+
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadXlsx(`dikho-vendors-${mode}-${stamp}.xlsx`, vendorExportWorkbook(rows, { mediaMap, subMediaMap }))
+    } catch (err) {
+      console.error(err)
+      setActionError(err?.message || 'Could not export vendors.')
+    } finally {
+      setExporting('')
+    }
+  }
+
+  const busy = Boolean(exporting) || selectingAll
 
   return (
     <div className={`vendors-page ${selectedVendor ? 'has-selection' : ''}`}>
@@ -1813,13 +2064,76 @@ function VendorsPage() {
           </button>
         </div>
 
-        <div className="list-toolbar">
+        <div className="list-toolbar vendors-toolbar">
           <div className="search-box">
             <Icon name="search" size={18} />
             <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search company, email, GSTIN or PAN..." aria-label="Search vendors" />
             {searchInput && <button className="search-clear" onClick={() => setSearchInput('')} aria-label="Clear search"><Icon name="close" size={15} /></button>}
           </div>
+          <div className="toolbar-actions">
+            <button className="secondary-button" onClick={() => exportVendors('all')} disabled={busy || loading || totalCount === 0}>
+              <Icon name="download" size={17} /> {exporting === 'all' ? 'Exporting…' : `Export All${totalCount > 0 ? ` (${totalCount.toLocaleString()})` : ''}`}
+            </button>
+            <button className="secondary-button" onClick={() => exportVendors('selected')} disabled={busy || selectedIds.length === 0}>
+              <Icon name="download" size={17} /> {exporting === 'selected' ? 'Exporting…' : `Export Selected${selectedIds.length > 0 ? ` (${selectedIds.length.toLocaleString()})` : ''}`}
+            </button>
+          </div>
         </div>
+
+        <section className="filter-panel">
+          <div className="filter-panel-head">
+            <div className="filter-panel-title">
+              <Icon name="filter" size={16} />
+              Filters
+              {activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}
+            </div>
+            <button type="button" className="filter-clear" onClick={clearFilters} disabled={!hasActiveFilters}>
+              <Icon name="close" size={14} /> Clear Filters
+            </button>
+          </div>
+          <div className="filter-grid">
+            <SearchableSelect
+              label="Media"
+              value={filters.media_id}
+              onChange={(value) => setFilter('media_id', value)}
+              options={mediaFilterOptions}
+              placeholder="All media"
+              searchPlaceholder="Search media..."
+            />
+            <SearchableSelect
+              label="Sub Media"
+              value={filters.sub_media_id}
+              onChange={(value) => setFilter('sub_media_id', value)}
+              options={subMediaFilterOptions}
+              placeholder="All sub media"
+              searchPlaceholder="Search sub media..."
+            />
+            <SearchableSelect
+              label="State"
+              value={filters.state}
+              onChange={(value) => setFilter('state', value)}
+              options={stateFilterOptions}
+              placeholder="All states"
+              searchPlaceholder="Search states..."
+            />
+            <SearchableSelect
+              label="City"
+              value={filters.city}
+              onChange={(value) => setFilter('city', value)}
+              options={cityFilterOptions}
+              placeholder="All cities"
+              searchPlaceholder="Search cities..."
+            />
+            <div className="field">
+              <label htmlFor="vendor-status-filter">Vendor Status</label>
+              <select id="vendor-status-filter" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                <option value="">All statuses</option>
+                <option value="1">Active</option>
+                <option value="0">Inactive</option>
+              </select>
+            </div>
+          </div>
+        </section>
 
         {error && (
           <div className="page-error" role="alert">
@@ -1828,10 +2142,29 @@ function VendorsPage() {
           </div>
         )}
 
+        {actionError && (
+          <div className="page-error" role="alert">
+            <span className="page-error-icon"><Icon name="alert" size={18} /></span>
+            <div><strong>Action failed</strong><p>{actionError}</p></div>
+          </div>
+        )}
+
         <section className="table-card">
           <div className="table-topline">
-            <div><strong>All Vendors</strong><span className="result-count">{totalCount.toLocaleString()} records</span></div>
-            {query && <span className="search-state">Filtered by “{query}”</span>}
+            <div>
+              <strong>All Vendors</strong>
+              <span className="result-count">{totalCount.toLocaleString()} records</span>
+              {query && <span className="search-state">Filtered by “{query}”</span>}
+            </div>
+            <div className="topline-right">
+              <span className="selection-count"><strong>{selectedIds.length.toLocaleString()}</strong> selected</span>
+              <button type="button" className="selection-link" onClick={selectAllFiltered} disabled={busy || loading || totalCount === 0}>
+                {selectingAll ? 'Selecting…' : 'Select all filtered'}
+              </button>
+              <button type="button" className="selection-link" onClick={() => setSelectedIds([])} disabled={selectedIds.length === 0}>
+                Clear selection
+              </button>
+            </div>
           </div>
 
           <div className="table-wrapper">
@@ -1843,6 +2176,8 @@ function VendorsPage() {
                   <th>Company Name</th>
                   <th>Media</th>
                   <th>Sub Media</th>
+                  <th>State</th>
+                  <th>City</th>
                   <th>Contact</th>
                   <th>Email</th>
                   <th>GSTIN</th>
@@ -1854,22 +2189,24 @@ function VendorsPage() {
                 {loading ? (
                   Array.from({ length: Math.min(pageSize, 8) }).map((_, index) => (
                     <tr key={`vendor-skeleton-${index}`}>
-                      {Array.from({ length: 10 }).map((__, cell) => <td key={cell}><span className="skeleton skeleton-company" /></td>)}
+                      {Array.from({ length: VENDOR_COLUMN_COUNT }).map((__, cell) => <td key={cell}><span className="skeleton skeleton-company" /></td>)}
                     </tr>
                   ))
                 ) : vendors.length === 0 ? (
-                  <tr><td colSpan="10" className="empty-state"><div className="empty-title">No vendors found</div><div className="empty-copy">Try a different company name, email, GSTIN or PAN.</div></td></tr>
+                  <tr><td colSpan={VENDOR_COLUMN_COUNT} className="empty-state"><div className="empty-title">No vendors found</div><div className="empty-copy">{hasActiveFilters ? 'No vendors match the current filters. Try clearing one of them.' : 'Try a different company name, email, GSTIN or PAN.'}</div></td></tr>
                 ) : (
                   vendors.map((vendor) => {
-                    const status = getValue(vendor, ['status'])
-                    const isActive = status === 1 || status === '1' || status === true || status === 'true' || status === 'active' || status === 'Active'
+                    const isActive = isActiveStatus(getValue(vendor, ['status']))
+                    const address = primaryAddress(vendor)
                     return (
                       <tr key={vendor.id} onDoubleClick={() => setSelectedVendor(vendor)}>
-                        <td className="check-column"><button type="button" className={`checkbox-button ${selectedIds.includes(vendor.id) ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleSelect(vendor.id) }} aria-label={`Select ${vendor.company_name}`}>{selectedIds.includes(vendor.id) ? <Icon name="check" size={14} /> : null}</button></td>
+                        <td className="check-column"><button type="button" className={`checkbox-button ${selectedSet.has(vendor.id) ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleSelect(vendor.id) }} aria-label={`Select ${vendor.company_name}`}>{selectedSet.has(vendor.id) ? <Icon name="check" size={14} /> : null}</button></td>
                         <td className="id-cell">{formatValue(vendor.id)}</td>
                         <td className="company-cell">{formatValue(vendor.company_name)}</td>
                         <td>{formatValue(mediaMap[vendor.media_id])}</td>
                         <td>{formatValue(subMediaMap[vendor.sub_media_id])}</td>
+                        <td>{formatValue(address?.state)}</td>
+                        <td>{formatValue(address?.city)}</td>
                         <td>{formatValue(vendor.contact == null ? null : `${vendor.country_dialcode || ''} ${vendor.contact}`.trim())}</td>
                         <td>{formatValue(vendor.email)}</td>
                         <td>{formatValue(vendor.gstin)}</td>
