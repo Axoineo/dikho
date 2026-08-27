@@ -475,19 +475,27 @@ function isActiveStatus(value) {
    VENDOR FILTERING, SELECTION AND EXPORT
    ============================================================ */
 
-const EMPTY_VENDOR_FILTERS = { media_id: '', sub_media_id: '', state: '', city: '', status: '' }
+const EMPTY_VENDOR_FILTERS = { media_id: '', sub_media_id: '', country: '', state: '', city: '', status: '' }
 
-// Checkbox, ID, Company, Media, Sub Media, State, City, Contact, Email, GSTIN,
-// Status, Actions — keep in step with the <thead> and the .vendors-page widths.
-const VENDOR_COLUMN_COUNT = 12
+// Checkbox, ID, Vendor, Media, Location, Contact, GSTIN, Status, Actions —
+// keep in step with the <thead> and the .vendors-page column widths.
+const VENDOR_COLUMN_COUNT = 9
 
-// State and city live on vendor_addresses, so every vendor query embeds the
-// address rows. When a state or city filter is active the embed becomes an
-// inner join so non-matching vendors drop out of the result and the count.
+// The vendor list shows exactly one page size and never offers another.
+const VENDORS_PAGE_SIZE = 15
+
+// Country, state and city live on vendor_addresses, so every vendor query
+// embeds the address rows. When one of those filters is active the embed
+// becomes an inner join so non-matching vendors drop out of the result and
+// the count.
 const VENDOR_ADDRESS_COLUMNS = 'address,country,state,city,zipcode,is_default'
 
+function needsAddressJoin(filters) {
+  return Boolean(filters.country || filters.state || filters.city)
+}
+
 function vendorSelect(columns, filters) {
-  const join = filters.state || filters.city ? '!inner' : ''
+  const join = needsAddressJoin(filters) ? '!inner' : ''
   return `${columns},vendor_addresses${join}(${VENDOR_ADDRESS_COLUMNS})`
 }
 
@@ -501,6 +509,7 @@ function applyVendorFilters(request, query, filters) {
   if (filters.media_id) request = request.eq('media_id', Number(filters.media_id))
   if (filters.sub_media_id) request = request.eq('sub_media_id', Number(filters.sub_media_id))
   if (filters.status !== '') request = request.eq('status', Number(filters.status))
+  if (filters.country) request = request.eq('vendor_addresses.country', filters.country)
   if (filters.state) request = request.eq('vendor_addresses.state', filters.state)
   if (filters.city) request = request.eq('vendor_addresses.city', filters.city)
   return request
@@ -509,6 +518,116 @@ function applyVendorFilters(request, query, filters) {
 function primaryAddress(vendor) {
   const addresses = Array.isArray(vendor?.vendor_addresses) ? vendor.vendor_addresses : []
   return addresses.find((item) => item.is_default) || addresses[0] || null
+}
+
+/* ============================================================
+   SLASH-COMMAND SEARCH
+   ------------------------------------------------------------
+   Typing "/" turns the search bar into a chained filter. Segments map
+   positionally onto state → country → media → sub media, so
+   "/gujarat/india/hoarding/banner" is the same query as picking those four
+   values from the dropdowns. Segments may be partial ("/guj"), the chain may
+   stop early ("/gujarat/india"), and every step only offers values that can
+   still co-exist with the steps before it.
+   ============================================================ */
+
+const SLASH_CHAIN = [
+  { key: 'state', field: 'state', dimension: 'State' },
+  { key: 'country', field: 'country', dimension: 'Country' },
+  { key: 'media', field: 'media_id', dimension: 'Media' },
+  { key: 'sub_media', field: 'sub_media_id', dimension: 'Sub Media' },
+]
+
+const SLASH_PATH_HINT = `/${SLASH_CHAIN.map((step) => step.dimension.toLowerCase().replace(' ', '')).join('/')}`
+
+// Fold case, spacing and punctuation so "New Delhi", "new-delhi" and
+// "newdelhi" all resolve to the same option.
+function normalizeToken(value) {
+  return String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function isSlashSearch(input) {
+  return typeof input === 'string' && input.trimStart().startsWith('/')
+}
+
+function uniqueOptions(values) {
+  return [...new Set(values.filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value, label: value }))
+}
+
+// The candidates for one link in the chain, narrowed by the links already
+// resolved ahead of it.
+function slashOptions(key, catalog, resolved) {
+  if (key === 'state') return uniqueOptions(catalog.facets.map((row) => row.state))
+  if (key === 'country') {
+    return uniqueOptions(catalog.facets
+      .filter((row) => !resolved.state || row.state === resolved.state)
+      .map((row) => row.country))
+  }
+  if (key === 'media') return catalog.media.map((item) => ({ value: item.id, label: item.name }))
+  return catalog.subMedia
+    .filter((item) => !resolved.media_id || String(item.media_id) === String(resolved.media_id))
+    .map((item) => ({ value: item.id, label: item.name }))
+}
+
+// Exact match wins, then prefix, then substring — so "/guj" lands on Gujarat
+// but "/gujarat" is never dragged onto some unrelated longer name.
+function matchSlashOption(raw, options) {
+  const needle = normalizeToken(raw)
+  if (!needle) return null
+  return options.find((option) => normalizeToken(option.label) === needle)
+    || options.find((option) => normalizeToken(option.label).startsWith(needle))
+    || options.find((option) => normalizeToken(option.label).includes(needle))
+    || null
+}
+
+// Returns null for ordinary free-text searches. Otherwise: the filters the
+// chain resolves to, one token per segment (for the chips and the suggestion
+// list) and the first segment that matched nothing.
+function resolveSlashSearch(input, catalog) {
+  if (!isSlashSearch(input)) return null
+
+  const written = input.trimStart().slice(1).split('/').map((part) => part.trim())
+  const segments = written.slice(0, SLASH_CHAIN.length)
+  const resolved = {}
+  const tokens = []
+  let unmatched = null
+
+  segments.forEach((raw, index) => {
+    const step = SLASH_CHAIN[index]
+    // Computed before `resolved` is extended, so a step never narrows itself.
+    const options = slashOptions(step.key, catalog, resolved)
+    const match = raw ? matchSlashOption(raw, options) : null
+
+    if (match) resolved[step.field] = String(match.value)
+    else if (raw && !unmatched) unmatched = { ...step, raw }
+
+    tokens.push({
+      ...step,
+      raw,
+      options,
+      match: match && { value: match.value, label: match.label },
+      status: !raw ? 'pending' : match ? 'matched' : 'unmatched',
+    })
+  })
+
+  return {
+    filters: resolved,
+    tokens,
+    unmatched,
+    overflow: written.length > SLASH_CHAIN.length,
+    activeIndex: tokens.length - 1,
+  }
+}
+
+// Rebuilds the raw input after a suggestion is picked, normalising every
+// already-resolved segment to its canonical label.
+function buildSlashInput(slash, index, label) {
+  const parts = slash.tokens.map((token, position) => (
+    position === index ? label : (token.match?.label || token.raw)
+  ))
+  return `/${parts.join('/')}${index < SLASH_CHAIN.length - 1 ? '/' : ''}`
 }
 
 const FETCH_CHUNK = 1000
@@ -1440,11 +1559,14 @@ function AddVendorModal({ onClose, onSaved }) {
         status: Number(form.status),
       }
 
-      const { data: savedVendor, error: vendorError } = await supabase.from('vendors').insert([vendorPayload]).select('id').single()
+      // `select()` on the insert gives us the saved row to hand straight back
+      // to the list, so the new vendor can be shown without waiting on a
+      // second round trip.
+      const { data: savedVendor, error: vendorError } = await supabase.from('vendors').insert([vendorPayload]).select('*').single()
       if (vendorError) throw vendorError
       if (!savedVendor?.id) throw new Error('Vendor was created but no vendor ID was returned.')
 
-      const { error: addressError } = await supabase.from('vendor_addresses').insert([{
+      const { data: savedAddress, error: addressError } = await supabase.from('vendor_addresses').insert([{
         vendor_id: savedVendor.id,
         address: form.address.trim(),
         country: form.country_name,
@@ -1453,12 +1575,13 @@ function AddVendorModal({ onClose, onSaved }) {
         city: form.city.trim(),
         zipcode: form.zipcode.trim() || null,
         is_default: true,
-      }])
+      }]).select(VENDOR_ADDRESS_COLUMNS).single()
       if (addressError) {
         await supabase.from('vendors').delete().eq('id', savedVendor.id)
         throw addressError
       }
 
+      let documentPath = null
       if (documentFile) {
         const safeName = documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
         const path = `vendors_documents/${savedVendor.id}/${Date.now()}-${safeName}`
@@ -1475,9 +1598,15 @@ function AddVendorModal({ onClose, onSaved }) {
           await supabase.from('vendors').delete().eq('id', savedVendor.id)
           throw pathError
         }
+        documentPath = path
       }
 
-      onSaved()
+      onSaved({
+        ...savedVendor,
+        vendor_document_file_path: documentPath,
+        vendor_document_file_name: documentFile?.name || null,
+        vendor_addresses: savedAddress ? [savedAddress] : [],
+      })
     } catch (err) {
       console.error(err); setError(err?.message || 'Could not save vendor.')
     } finally { setSaving(false) }
@@ -1777,25 +1906,77 @@ function AddVendorModal({ onClose, onSaved }) {
 }
 
 function VendorsPage() {
-  const [vendors, setVendors] = useState([])
+  // ── Catalogs that both the dropdowns and the "/" chain resolve against ────
   const [mediaOptions, setMediaOptions] = useState([])
   const [subMediaOptions, setSubMediaOptions] = useState([])
+  const [addressFacets, setAddressFacets] = useState([])
+  const [catalogReady, setCatalogReady] = useState(false)
+
+  // ── Search: `searchInput` drives the UI, `appliedSearch` drives the query ─
   const [searchInput, setSearchInput] = useState('')
-  const [query, setQuery] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestIndex, setSuggestIndex] = useState(0)
+  const searchInputRef = useRef(null)
+  const searchShellRef = useRef(null)
+
+  const [filters, setFilters] = useState(EMPTY_VENDOR_FILTERS)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  const [vendors, setVendors] = useState([])
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
   const [totalCount, setTotalCount] = useState(0)
+  // Bumping `refresh` re-runs the loader even when nothing else changed. It is
+  // a fresh object every time on purpose: the previous implementation reset
+  // page/query/filters to values they already held, React bailed out of all
+  // three updates, and a newly added vendor only showed up after a reload.
+  const [refresh, setRefresh] = useState({ key: 0, silent: false })
+
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
+
   const [showForm, setShowForm] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [selectedVendorAddress, setSelectedVendorAddress] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
-  const [filters, setFilters] = useState(EMPTY_VENDOR_FILTERS)
-  const [addressFacets, setAddressFacets] = useState([])
   const [selectingAll, setSelectingAll] = useState(false)
   const [exporting, setExporting] = useState('')
-  const [actionError, setActionError] = useState('')
+
+  /* ── Data loading ─────────────────────────────────────────────────────── */
+
+  // Reloaded after every save too: a new vendor can introduce a state, city or
+  // country that the filters and the "/" chain should immediately offer.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadCatalog() {
+      try {
+        const [media, subMedia, facets] = await Promise.all([
+          supabase.from('media').select('id,name').order('name', { ascending: true }),
+          supabase.from('sub_media').select('id,name,media_id').order('name', { ascending: true }),
+          fetchAllPaged((from, to) => supabase
+            .from('vendor_addresses')
+            .select('state,city,country')
+            .order('id', { ascending: true })
+            .range(from, to)),
+        ])
+        if (cancelled) return
+        setMediaOptions(media.data || [])
+        setSubMediaOptions(subMedia.data || [])
+        setAddressFacets(facets)
+      } catch {
+        if (!cancelled) setAddressFacets([])
+      } finally {
+        if (!cancelled) setCatalogReady(true)
+      }
+    }
+
+    loadCatalog()
+    return () => { cancelled = true }
+  }, [refresh.key])
+
   useEffect(() => {
     let cancelled = false
 
@@ -1804,7 +1985,6 @@ function VendorsPage() {
         setSelectedVendorAddress(null)
         return
       }
-
       const { data, error: addressError } = await supabase
         .from('vendor_addresses')
         .select('*')
@@ -1813,7 +1993,6 @@ function VendorsPage() {
         .order('id', { ascending: true })
         .limit(1)
         .maybeSingle()
-
       if (cancelled) return
       setSelectedVendorAddress(addressError ? null : data)
     }
@@ -1822,66 +2001,153 @@ function VendorsPage() {
     return () => { cancelled = true }
   }, [selectedVendor])
 
-
   useEffect(() => {
     const timer = setTimeout(() => {
-      setQuery(searchInput.trim())
+      setAppliedSearch(searchInput)
       setPage(1)
     }, 250)
     return () => clearTimeout(timer)
   }, [searchInput])
 
+  /* ── Slash-command parsing ────────────────────────────────────────────── */
+
+  const slashCatalog = useMemo(
+    () => ({ facets: addressFacets, media: mediaOptions, subMedia: subMediaOptions }),
+    [addressFacets, mediaOptions, subMediaOptions],
+  )
+
+  // Two resolutions of the same pure function: the live one keeps the chips and
+  // suggestions in step with every keystroke, the applied one is debounced so
+  // typing does not fire a request per character.
+  const liveSlash = useMemo(() => resolveSlashSearch(searchInput, slashCatalog), [searchInput, slashCatalog])
+  const appliedSlash = useMemo(() => resolveSlashSearch(appliedSearch, slashCatalog), [appliedSearch, slashCatalog])
+
+  const slashActive = Boolean(liveSlash)
+  const textQuery = appliedSlash ? '' : appliedSearch.trim()
+
+  // A "/" chain owns the four dimensions it addresses plus city (which hangs off
+  // state); status stays under manual control because nothing in the chain
+  // touches it.
+  const effectiveFilters = useMemo(() => (
+    appliedSlash
+      ? { ...EMPTY_VENDOR_FILTERS, ...appliedSlash.filters, status: filters.status }
+      : filters
+  ), [appliedSlash, filters])
+
+  const activeToken = liveSlash?.tokens[liveSlash.activeIndex] || null
+
+  const suggestions = useMemo(() => {
+    if (!activeToken) return []
+    const needle = normalizeToken(activeToken.raw)
+    const pool = needle
+      ? activeToken.options.filter((option) => normalizeToken(option.label).includes(needle))
+      : activeToken.options
+    return pool.slice(0, 8)
+  }, [activeToken])
+
+  const showSuggestions = slashActive && suggestOpen && catalogReady
+  const boundedSuggestIndex = suggestions.length ? Math.min(suggestIndex, suggestions.length - 1) : 0
+
+  useEffect(() => { setSuggestIndex(0) }, [searchInput])
+
+  // Close the suggestion list on an outside click, like the other menus here.
   useEffect(() => {
-    async function loadMedia() {
-      const [{ data: mediaData }, { data: subMediaData }] = await Promise.all([
-        supabase.from('media').select('id,name').order('name', { ascending: true }),
-        supabase.from('sub_media').select('id,name,media_id').order('name', { ascending: true }),
-      ])
-      setMediaOptions(mediaData || [])
-      setSubMediaOptions(subMediaData || [])
+    if (!showSuggestions) return
+    function handlePointerDown(event) {
+      if (searchShellRef.current && !searchShellRef.current.contains(event.target)) setSuggestOpen(false)
     }
-    loadMedia()
-  }, [])
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [showSuggestions])
 
-  // State and city filter options come from the addresses that actually exist,
-  // so the dropdowns never offer a value that would return zero vendors.
+  // "/" anywhere on the page jumps into the chained filter.
   useEffect(() => {
-    let cancelled = false
+    function handleKeyDown(event) {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey || showForm) return
+      const target = event.target
+      if (target?.isContentEditable) return
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)) return
+      event.preventDefault()
+      setSearchInput((current) => (isSlashSearch(current) ? current : '/'))
+      setSuggestOpen(true)
+      searchInputRef.current?.focus()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [showForm])
 
-    async function loadAddressFacets() {
-      try {
-        const rows = await fetchAllPaged((from, to) => supabase
-          .from('vendor_addresses')
-          .select('state,city')
-          .order('id', { ascending: true })
-          .range(from, to))
-        if (!cancelled) setAddressFacets(rows)
-      } catch {
-        if (!cancelled) setAddressFacets([])
-      }
+  function applySuggestion(option) {
+    if (!liveSlash) return
+    const next = buildSlashInput(liveSlash, liveSlash.activeIndex, option.label)
+    setSearchInput(next)
+    setAppliedSearch(next)
+    setPage(1)
+    setSuggestIndex(0)
+    searchInputRef.current?.focus()
+  }
+
+  // Clicking a chip truncates the chain back to that step so it can be retyped.
+  function editSegment(index) {
+    if (!liveSlash) return
+    const parts = liveSlash.tokens.slice(0, index + 1).map((token) => token.match?.label || token.raw)
+    setSearchInput(`/${parts.join('/')}`)
+    setSuggestOpen(true)
+    setSuggestIndex(0)
+    searchInputRef.current?.focus()
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key === 'Escape') {
+      setSuggestOpen(false)
+      return
+    }
+    if (!showSuggestions || suggestions.length === 0) return
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      setSuggestIndex((current) => (current + 1) % suggestions.length)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      setSuggestIndex((current) => (current - 1 + suggestions.length) % suggestions.length)
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      applySuggestion(suggestions[boundedSuggestIndex])
+    }
+  }
+
+  /* ── Vendor list ──────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    // A "/" chain cannot be resolved before the catalogs are in memory, and
+    // fetching early would briefly apply an empty chain — i.e. show everything.
+    if (appliedSlash && !catalogReady) return
+
+    // A segment that matches nothing is a genuinely empty result, not a reason
+    // to fall back to the broader query the rest of the chain would produce.
+    if (appliedSlash?.unmatched) {
+      setVendors([])
+      setTotalCount(0)
+      setError('')
+      setLoading(false)
+      setRefreshing(false)
+      return
     }
 
-    loadAddressFacets()
-    return () => { cancelled = true }
-  }, [])
-
-  useEffect(() => {
     let cancelled = false
+    const silent = refresh.silent
 
     async function loadVendors() {
-      setLoading(true)
+      if (silent) setRefreshing(true)
+      else setLoading(true)
       setError('')
 
-      const from = (page - 1) * pageSize
-      const to = from + pageSize - 1
-
+      const from = (page - 1) * VENDORS_PAGE_SIZE
       let request = supabase
         .from('vendors')
-        .select(vendorSelect('*', filters), { count: 'exact' })
+        .select(vendorSelect('*', effectiveFilters), { count: 'exact' })
         .order('id', { ascending: false })
-        .range(from, to)
+        .range(from, from + VENDORS_PAGE_SIZE - 1)
 
-      request = applyVendorFilters(request, query, filters)
+      request = applyVendorFilters(request, textQuery, effectiveFilters)
 
       const { data, count, error: fetchError } = await request
       if (cancelled) return
@@ -1895,21 +2161,30 @@ function VendorsPage() {
         setTotalCount(count || 0)
       }
       setLoading(false)
+      setRefreshing(false)
     }
 
     loadVendors()
     return () => { cancelled = true }
-  }, [page, pageSize, query, filters])
+  }, [page, textQuery, effectiveFilters, appliedSlash, catalogReady, refresh])
 
   const mediaMap = useMemo(() => Object.fromEntries(mediaOptions.map((item) => [item.id, item.name])), [mediaOptions])
   const subMediaMap = useMemo(() => Object.fromEntries(subMediaOptions.map((item) => [item.id, item.name])), [subMediaOptions])
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
-  const pageEnd = Math.min(page * pageSize, totalCount)
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / VENDORS_PAGE_SIZE))
+  const pageStart = totalCount === 0 ? 0 : (page - 1) * VENDORS_PAGE_SIZE + 1
+  const pageEnd = Math.min(page * VENDORS_PAGE_SIZE, totalCount)
   const pageNumbers = useMemo(() => {
     const current = Math.min(page, totalPages)
     return [current - 2, current - 1, current, current + 1, current + 2].filter((n) => n >= 1 && n <= totalPages)
   }, [page, totalPages])
+
+  // Deleting or filtering can shrink the result set under the current page.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  /* ── Filter option lists ──────────────────────────────────────────────── */
 
   const mediaFilterOptions = useMemo(() => [
     { value: '', label: 'All media' },
@@ -1923,52 +2198,101 @@ function VendorsPage() {
       .map((item) => ({ value: String(item.id), label: item.name })),
   ], [subMediaOptions, filters.media_id])
 
-  const stateFilterOptions = useMemo(() => {
-    const states = [...new Set(addressFacets.map((item) => item.state).filter(Boolean))].sort((a, b) => a.localeCompare(b))
-    return [{ value: '', label: 'All states' }, ...states.map((state) => ({ value: state, label: state }))]
-  }, [addressFacets])
+  const countryFilterOptions = useMemo(() => [
+    { value: '', label: 'All countries' },
+    ...uniqueOptions(addressFacets.map((item) => item.country)),
+  ], [addressFacets])
 
-  const cityFilterOptions = useMemo(() => {
-    const cities = [...new Set(addressFacets
-      .filter((item) => !filters.state || item.state === filters.state)
-      .map((item) => item.city)
-      .filter(Boolean))].sort((a, b) => a.localeCompare(b))
-    return [{ value: '', label: 'All cities' }, ...cities.map((city) => ({ value: city, label: city }))]
-  }, [addressFacets, filters.state])
+  const stateFilterOptions = useMemo(() => [
+    { value: '', label: 'All states' },
+    ...uniqueOptions(addressFacets
+      .filter((item) => !filters.country || item.country === filters.country)
+      .map((item) => item.state)),
+  ], [addressFacets, filters.country])
 
-  const activeFilterCount = Object.values(filters).filter((value) => value !== '').length
-  const hasActiveFilters = activeFilterCount > 0 || Boolean(query)
+  const cityFilterOptions = useMemo(() => [
+    { value: '', label: 'All cities' },
+    ...uniqueOptions(addressFacets
+      .filter((item) => (!filters.country || item.country === filters.country) && (!filters.state || item.state === filters.state))
+      .map((item) => item.city)),
+  ], [addressFacets, filters.country, filters.state])
+
+  // Chain dimensions are only manually adjustable while no "/" search owns them.
+  const activeFilterCount = Object.entries(filters)
+    .filter(([field, value]) => value !== '' && (!slashActive || field === 'status'))
+    .length
+  const hasActiveCriteria = Boolean(searchInput) || activeFilterCount > 0
+
+  const filterChips = useMemo(() => {
+    const chips = []
+    const push = (field, label, value) => { if (value) chips.push({ field, label, value }) }
+    if (!slashActive) {
+      push('media_id', 'Media', filters.media_id && (mediaMap[Number(filters.media_id)] || filters.media_id))
+      push('sub_media_id', 'Sub media', filters.sub_media_id && (subMediaMap[Number(filters.sub_media_id)] || filters.sub_media_id))
+      push('country', 'Country', filters.country)
+      push('state', 'State', filters.state)
+      push('city', 'City', filters.city)
+    }
+    push('status', 'Status', filters.status === '' ? '' : (filters.status === '1' ? 'Active' : 'Inactive'))
+    return chips
+  }, [filters, slashActive, mediaMap, subMediaMap])
+
+  /* ── Actions ──────────────────────────────────────────────────────────── */
 
   function changePage(nextPage) { setPage(Math.max(1, Math.min(nextPage, totalPages))) }
-  function changePageSize(e) { setPageSize(Number(e.target.value)); setPage(1) }
 
-  function afterSaved() {
-    setShowForm(false)
-    setPage(1)
-    setQuery('')
-    setSearchInput('')
-    setFilters(EMPTY_VENDOR_FILTERS)
-  }
-
-  // Filters compose: each one narrows the same query, and dependent filters
-  // reset so an impossible combination can never be selected.
+  // Dependent filters reset so an impossible combination can never be selected.
   function setFilter(field, value) {
     setActionError('')
     setFilters((current) => {
       const next = { ...current, [field]: value }
       if (field === 'media_id') next.sub_media_id = ''
+      if (field === 'country') { next.state = ''; next.city = '' }
       if (field === 'state') next.city = ''
       return next
     })
     setPage(1)
   }
 
-  function clearFilters() {
+  function clearSearch() {
+    setSearchInput('')
+    setAppliedSearch('')
+    setSuggestOpen(false)
+    setPage(1)
+  }
+
+  function clearAllCriteria() {
     setActionError('')
     setFilters(EMPTY_VENDOR_FILTERS)
     setSearchInput('')
-    setQuery('')
+    setAppliedSearch('')
+    setSuggestOpen(false)
     setPage(1)
+  }
+
+  function afterSaved(created) {
+    setShowForm(false)
+    setError('')
+    setActionError('')
+
+    // The new vendor need not match whatever is currently filtered, so return
+    // the view to the top of the unfiltered list where it is guaranteed to be.
+    setSearchInput('')
+    setAppliedSearch('')
+    setSuggestOpen(false)
+    setFilters(EMPTY_VENDOR_FILTERS)
+    setPage(1)
+
+    // Optimistic: the row is on screen before the reload lands. Rows are
+    // ordered by descending id, so a new vendor belongs at the top of page 1.
+    if (created?.id) {
+      setVendors((current) => [created, ...current.filter((vendor) => vendor.id !== created.id)].slice(0, VENDORS_PAGE_SIZE))
+      setTotalCount((current) => current + 1)
+    }
+
+    // …then reconcile against the server. `silent` keeps the optimistic row
+    // visible instead of replacing it with loading skeletons.
+    setRefresh((current) => ({ key: current.key + 1, silent: Boolean(created?.id) }))
   }
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
@@ -1986,17 +2310,17 @@ function VendorsPage() {
     })
   }
 
-  // Selects every vendor matching the current filters, not just this page.
+  // Selects every vendor matching the current criteria, not just this page.
   async function selectAllFiltered() {
     setSelectingAll(true)
     setActionError('')
     try {
       const rows = await fetchAllPaged((from, to) => {
-        const columns = filters.state || filters.city ? 'id,vendor_addresses!inner(state,city)' : 'id'
+        const columns = needsAddressJoin(effectiveFilters) ? 'id,vendor_addresses!inner(country,state,city)' : 'id'
         return applyVendorFilters(
           supabase.from('vendors').select(columns).order('id', { ascending: false }).range(from, to),
-          query,
-          filters,
+          textQuery,
+          effectiveFilters,
         )
       })
       setSelectedIds(rows.map((row) => row.id))
@@ -2027,9 +2351,9 @@ function VendorsPage() {
         }
       } else {
         rows = await fetchAllPaged((from, to) => applyVendorFilters(
-          supabase.from('vendors').select(vendorSelect('*', filters)).order('id', { ascending: false }).range(from, to),
-          query,
-          filters,
+          supabase.from('vendors').select(vendorSelect('*', effectiveFilters)).order('id', { ascending: false }).range(from, to),
+          textQuery,
+          effectiveFilters,
         ))
       }
 
@@ -2050,6 +2374,12 @@ function VendorsPage() {
 
   const busy = Boolean(exporting) || selectingAll
 
+  const emptyCopy = appliedSlash?.unmatched
+    ? `No ${appliedSlash.unmatched.dimension.toLowerCase()} matches “${appliedSlash.unmatched.raw}”. Pick a suggestion from the search bar to correct that step.`
+    : hasActiveCriteria
+      ? 'No vendors match the current search and filters. Try clearing one of them.'
+      : 'Add your first vendor to see it listed here.'
+
   return (
     <div className={`vendors-page ${selectedVendor ? 'has-selection' : ''}`}>
       <div className="vendors-main-content">
@@ -2057,20 +2387,86 @@ function VendorsPage() {
           <div>
             <span className="page-kicker">MASTER DATA</span>
             <h1>Vendors</h1>
-            <p>Manage your vendor database</p>
+            <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'vendor' : 'vendors'} in view · 15 per page</p>
           </div>
           <button className="primary-button add-button" onClick={() => setShowForm(true)}>
-            <Icon name="plus" size={18} /> Add
+            <Icon name="plus" size={18} /> Add vendor
           </button>
         </div>
 
-        <div className="list-toolbar vendors-toolbar">
-          <div className="search-box">
-            <Icon name="search" size={18} />
-            <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search company, email, GSTIN or PAN..." aria-label="Search vendors" />
-            {searchInput && <button className="search-clear" onClick={() => setSearchInput('')} aria-label="Clear search"><Icon name="close" size={15} /></button>}
+        {/* ── Search + actions ─────────────────────────────────────────── */}
+        <div className="vendors-toolbar">
+          <div className={`vendor-search ${slashActive ? 'is-chained' : ''}`} ref={searchShellRef}>
+            <span className="vendor-search-icon"><Icon name="search" size={17} /></span>
+            <input
+              ref={searchInputRef}
+              className="vendor-search-input"
+              value={searchInput}
+              onChange={(event) => { setSearchInput(event.target.value); setSuggestOpen(true) }}
+              onFocus={() => setSuggestOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder={`Search company, email, GSTIN or PAN — or type ${SLASH_PATH_HINT}`}
+              aria-label="Search vendors"
+              role="combobox"
+              aria-expanded={showSuggestions}
+              aria-controls="vendor-slash-suggestions"
+              aria-autocomplete="list"
+              autoComplete="off"
+              spellCheck="false"
+            />
+            {slashActive
+              ? <span className="vendor-search-mode">Chained filter</span>
+              : <kbd className="vendor-search-kbd" title="Press / to filter by state, country, media and sub media">/</kbd>}
+            {searchInput && (
+              <button type="button" className="search-clear" onClick={clearSearch} aria-label="Clear search">
+                <Icon name="close" size={15} />
+              </button>
+            )}
+
+            {showSuggestions && activeToken && (
+              <div className="slash-suggestions" id="vendor-slash-suggestions" role="listbox" aria-label={`${activeToken.dimension} suggestions`}>
+                <div className="slash-suggestions-head">
+                  <span className="slash-suggestions-step">Step {liveSlash.activeIndex + 1} of {SLASH_CHAIN.length} · {activeToken.dimension}</span>
+                  <span className="slash-suggestions-path">{SLASH_PATH_HINT}</span>
+                </div>
+                {suggestions.length === 0 ? (
+                  <div className="search-select-empty">
+                    {activeToken.options.length === 0
+                      ? `No ${activeToken.dimension.toLowerCase()} values available yet`
+                      : `No ${activeToken.dimension.toLowerCase()} matches “${activeToken.raw}”`}
+                  </div>
+                ) : suggestions.map((option, index) => (
+                  <button
+                    type="button"
+                    key={`${activeToken.key}-${option.value}`}
+                    role="option"
+                    aria-selected={index === boundedSuggestIndex}
+                    className={`slash-suggestion ${index === boundedSuggestIndex ? 'is-active' : ''}`}
+                    onMouseEnter={() => setSuggestIndex(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => applySuggestion(option)}
+                  >
+                    <span className="slash-suggestion-label">{option.label}</span>
+                    <span className="slash-suggestion-hint">↵</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
           <div className="toolbar-actions">
+            <button
+              type="button"
+              className={`filter-toggle ${filtersOpen ? 'is-open' : ''}`}
+              onClick={() => setFiltersOpen((value) => !value)}
+              aria-expanded={filtersOpen}
+              aria-controls="vendor-filter-grid"
+            >
+              <Icon name="filter" size={16} />
+              Filters
+              {activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}
+              <span className="filter-toggle-caret"><Icon name="chevronDown" size={15} /></span>
+            </button>
             <button className="secondary-button" onClick={() => exportVendors('all')} disabled={busy || loading || totalCount === 0}>
               <Icon name="download" size={17} /> {exporting === 'all' ? 'Exporting…' : `Export All${totalCount > 0 ? ` (${totalCount.toLocaleString()})` : ''}`}
             </button>
@@ -2080,60 +2476,101 @@ function VendorsPage() {
           </div>
         </div>
 
-        <section className="filter-panel">
-          <div className="filter-panel-head">
-            <div className="filter-panel-title">
-              <Icon name="filter" size={16} />
-              Filters
-              {activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}
-            </div>
-            <button type="button" className="filter-clear" onClick={clearFilters} disabled={!hasActiveFilters}>
-              <Icon name="close" size={14} /> Clear Filters
-            </button>
+        {/* ── Active criteria ──────────────────────────────────────────── */}
+        {(slashActive || filterChips.length > 0) && (
+          <div className="criteria-row">
+            {slashActive && liveSlash.tokens.map((token, index) => (
+              <button
+                type="button"
+                key={token.key}
+                className={`criteria-chip is-slash is-${token.status}`}
+                onClick={() => editSegment(index)}
+                title={`Edit the ${token.dimension.toLowerCase()} step`}
+              >
+                <span className="criteria-chip-key">{token.dimension}</span>
+                <span className="criteria-chip-value">{token.match?.label || token.raw || 'any'}</span>
+              </button>
+            ))}
+            {filterChips.map((chip) => (
+              <span className="criteria-chip" key={chip.field}>
+                <span className="criteria-chip-key">{chip.label}</span>
+                <span className="criteria-chip-value">{chip.value}</span>
+                <button type="button" className="criteria-chip-remove" onClick={() => setFilter(chip.field, '')} aria-label={`Remove ${chip.label} filter`}>
+                  <Icon name="close" size={12} />
+                </button>
+              </span>
+            ))}
+            {hasActiveCriteria && (
+              <button type="button" className="criteria-reset" onClick={clearAllCriteria}>Reset all</button>
+            )}
           </div>
-          <div className="filter-grid">
-            <SearchableSelect
-              label="Media"
-              value={filters.media_id}
-              onChange={(value) => setFilter('media_id', value)}
-              options={mediaFilterOptions}
-              placeholder="All media"
-              searchPlaceholder="Search media..."
-            />
-            <SearchableSelect
-              label="Sub Media"
-              value={filters.sub_media_id}
-              onChange={(value) => setFilter('sub_media_id', value)}
-              options={subMediaFilterOptions}
-              placeholder="All sub media"
-              searchPlaceholder="Search sub media..."
-            />
-            <SearchableSelect
-              label="State"
-              value={filters.state}
-              onChange={(value) => setFilter('state', value)}
-              options={stateFilterOptions}
-              placeholder="All states"
-              searchPlaceholder="Search states..."
-            />
-            <SearchableSelect
-              label="City"
-              value={filters.city}
-              onChange={(value) => setFilter('city', value)}
-              options={cityFilterOptions}
-              placeholder="All cities"
-              searchPlaceholder="Search cities..."
-            />
-            <div className="field">
-              <label htmlFor="vendor-status-filter">Vendor Status</label>
-              <select id="vendor-status-filter" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
-                <option value="">All statuses</option>
-                <option value="1">Active</option>
-                <option value="0">Inactive</option>
-              </select>
+        )}
+
+        {/* ── Filters ──────────────────────────────────────────────────── */}
+        {filtersOpen && (
+          <section className="filter-panel" id="vendor-filter-grid">
+            {slashActive && (
+              <p className="filter-panel-note">
+                State, country, media and sub media are coming from the <code>/</code> search. Clear it to set them here.
+              </p>
+            )}
+            <div className="filter-grid">
+              <SearchableSelect
+                label="Media"
+                value={filters.media_id}
+                onChange={(value) => setFilter('media_id', value)}
+                options={mediaFilterOptions}
+                placeholder="All media"
+                searchPlaceholder="Search media..."
+                disabled={slashActive}
+              />
+              <SearchableSelect
+                label="Sub Media"
+                value={filters.sub_media_id}
+                onChange={(value) => setFilter('sub_media_id', value)}
+                options={subMediaFilterOptions}
+                placeholder="All sub media"
+                searchPlaceholder="Search sub media..."
+                disabled={slashActive}
+              />
+              <SearchableSelect
+                label="Country"
+                value={filters.country}
+                onChange={(value) => setFilter('country', value)}
+                options={countryFilterOptions}
+                placeholder="All countries"
+                searchPlaceholder="Search countries..."
+                disabled={slashActive}
+              />
+              <SearchableSelect
+                label="State"
+                value={filters.state}
+                onChange={(value) => setFilter('state', value)}
+                options={stateFilterOptions}
+                placeholder="All states"
+                searchPlaceholder="Search states..."
+                disabled={slashActive}
+              />
+              <SearchableSelect
+                label="City"
+                value={filters.city}
+                onChange={(value) => setFilter('city', value)}
+                options={cityFilterOptions}
+                placeholder="All cities"
+                searchPlaceholder="Search cities..."
+                disabled={slashActive}
+              />
+              <div className="field">
+                <label htmlFor="vendor-status-filter">Vendor Status</label>
+                <select id="vendor-status-filter" value={filters.status} onChange={(event) => setFilter('status', event.target.value)}>
+                  <option value="">All statuses</option>
+                  <option value="1">Active</option>
+                  <option value="0">Inactive</option>
+                </select>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {error && (
           <div className="page-error" role="alert">
@@ -2149,12 +2586,14 @@ function VendorsPage() {
           </div>
         )}
 
+        {/* ── Table ────────────────────────────────────────────────────── */}
         <section className="table-card">
           <div className="table-topline">
             <div>
               <strong>All Vendors</strong>
               <span className="result-count">{totalCount.toLocaleString()} records</span>
-              {query && <span className="search-state">Filtered by “{query}”</span>}
+              {refreshing && <span className="result-count">Updating…</span>}
+              {textQuery && <span className="search-state">Filtered by “{textQuery}”</span>}
             </div>
             <div className="topline-right">
               <span className="selection-count"><strong>{selectedIds.length.toLocaleString()}</strong> selected</span>
@@ -2173,13 +2612,10 @@ function VendorsPage() {
                 <tr>
                   <th className="check-column"><button type="button" className={`checkbox-button ${allCurrentSelected ? 'checked' : ''}`} onClick={toggleSelectPage} aria-label="Select all vendors on this page">{allCurrentSelected ? <Icon name="check" size={14} /> : null}</button></th>
                   <th>ID</th>
-                  <th>Company Name</th>
+                  <th>Vendor</th>
                   <th>Media</th>
-                  <th>Sub Media</th>
-                  <th>State</th>
-                  <th>City</th>
+                  <th>Location</th>
                   <th>Contact</th>
-                  <th>Email</th>
                   <th>GSTIN</th>
                   <th>Status</th>
                   <th className="actions-column">Actions</th>
@@ -2187,30 +2623,56 @@ function VendorsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  Array.from({ length: Math.min(pageSize, 8) }).map((_, index) => (
+                  Array.from({ length: VENDORS_PAGE_SIZE }).map((_, index) => (
                     <tr key={`vendor-skeleton-${index}`}>
                       {Array.from({ length: VENDOR_COLUMN_COUNT }).map((__, cell) => <td key={cell}><span className="skeleton skeleton-company" /></td>)}
                     </tr>
                   ))
                 ) : vendors.length === 0 ? (
-                  <tr><td colSpan={VENDOR_COLUMN_COUNT} className="empty-state"><div className="empty-title">No vendors found</div><div className="empty-copy">{hasActiveFilters ? 'No vendors match the current filters. Try clearing one of them.' : 'Try a different company name, email, GSTIN or PAN.'}</div></td></tr>
+                  <tr>
+                    <td colSpan={VENDOR_COLUMN_COUNT} className="empty-state">
+                      <div className="empty-title">No vendors found</div>
+                      <div className="empty-copy">{emptyCopy}</div>
+                    </td>
+                  </tr>
                 ) : (
                   vendors.map((vendor) => {
                     const isActive = isActiveStatus(getValue(vendor, ['status']))
                     const address = primaryAddress(vendor)
+                    const subtitle = getValue(vendor, ['alias', 'contact_person', 'vendor_type'])
+                    const region = [address?.state, address?.country].filter(Boolean).join(' · ')
+                    const phone = vendor.contact == null ? null : `${vendor.country_dialcode || ''} ${vendor.contact}`.trim()
                     return (
-                      <tr key={vendor.id} onDoubleClick={() => setSelectedVendor(vendor)}>
-                        <td className="check-column"><button type="button" className={`checkbox-button ${selectedSet.has(vendor.id) ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleSelect(vendor.id) }} aria-label={`Select ${vendor.company_name}`}>{selectedSet.has(vendor.id) ? <Icon name="check" size={14} /> : null}</button></td>
+                      <tr
+                        key={vendor.id}
+                        className={selectedVendor?.id === vendor.id ? 'is-open' : ''}
+                        onDoubleClick={() => setSelectedVendor(vendor)}
+                      >
+                        <td className="check-column"><button type="button" className={`checkbox-button ${selectedSet.has(vendor.id) ? 'checked' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSelect(vendor.id) }} aria-label={`Select ${vendor.company_name}`}>{selectedSet.has(vendor.id) ? <Icon name="check" size={14} /> : null}</button></td>
                         <td className="id-cell">{formatValue(vendor.id)}</td>
-                        <td className="company-cell">{formatValue(vendor.company_name)}</td>
-                        <td>{formatValue(mediaMap[vendor.media_id])}</td>
-                        <td>{formatValue(subMediaMap[vendor.sub_media_id])}</td>
-                        <td>{formatValue(address?.state)}</td>
-                        <td>{formatValue(address?.city)}</td>
-                        <td>{formatValue(vendor.contact == null ? null : `${vendor.country_dialcode || ''} ${vendor.contact}`.trim())}</td>
-                        <td>{formatValue(vendor.email)}</td>
-                        <td>{formatValue(vendor.gstin)}</td>
-                        <td><span className={`status-icon ${isActive ? 'active' : 'inactive'}`} title={isActive ? 'Active' : 'Inactive'}>{isActive ? <Icon name="check" size={17} /> : '—'}</span></td>
+                        <td>
+                          <span className="cell-primary company-cell" title={vendor.company_name || ''}>{formatValue(vendor.company_name)}</span>
+                          <span className="cell-secondary" title={subtitle || ''}>{formatValue(subtitle)}</span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">{formatValue(mediaMap[vendor.media_id])}</span>
+                          <span className="cell-secondary">{formatValue(subMediaMap[vendor.sub_media_id])}</span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">{formatValue(address?.city)}</span>
+                          <span className="cell-secondary" title={region}>{formatValue(region)}</span>
+                        </td>
+                        <td>
+                          <span className="cell-primary">{formatValue(phone)}</span>
+                          <span className="cell-secondary" title={vendor.email || ''}>{formatValue(vendor.email)}</span>
+                        </td>
+                        <td className="mono-cell">{formatValue(vendor.gstin)}</td>
+                        <td>
+                          <span className={`status-pill ${isActive ? 'active' : 'inactive'}`}>
+                            <span className="status-dot" />
+                            {isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
                         <td className="actions-column"><button className="row-action" onClick={() => setSelectedVendor(vendor)} aria-label={`Open vendor ${vendor.company_name}`}><Icon name="chevron" size={17} /></button></td>
                       </tr>
                     )
@@ -2221,13 +2683,15 @@ function VendorsPage() {
           </div>
 
           <div className="pagination-bar">
-            <div className="page-size-control"><span>Items per page</span><select value={pageSize} onChange={changePageSize}><option value="25">25</option><option value="50">50</option><option value="75">75</option><option value="100">100</option></select></div>
+            <span className="pagination-summary">
+              {totalCount === 0 ? 'No records' : <>Showing <strong>{pageStart}–{pageEnd}</strong> of {totalCount.toLocaleString()}</>}
+            </span>
             <div className="pagination-meta">
-              <span>{pageStart} – {pageEnd} of {totalCount.toLocaleString()}</span>
+              <span className="pagination-page-label">Page {Math.min(page, totalPages)} of {totalPages.toLocaleString()}</span>
               <div className="pagination-buttons">
                 <button onClick={() => changePage(1)} disabled={page <= 1} aria-label="First page"><Icon name="first" size={16} /></button>
                 <button onClick={() => changePage(page - 1)} disabled={page <= 1} aria-label="Previous page"><Icon name="chevron" size={16} /></button>
-                {pageNumbers.map((number) => <button key={number} className={number === page ? 'current' : ''} onClick={() => changePage(number)}>{number}</button>)}
+                {pageNumbers.map((number) => <button key={number} className={number === page ? 'current' : ''} onClick={() => changePage(number)} aria-current={number === page ? 'page' : undefined}>{number}</button>)}
                 <button onClick={() => changePage(page + 1)} disabled={page >= totalPages} aria-label="Next page"><Icon name="chevron" size={16} /></button>
                 <button onClick={() => changePage(totalPages)} disabled={page >= totalPages} aria-label="Last page"><Icon name="last" size={16} /></button>
               </div>
@@ -2421,3 +2885,4 @@ function App() {
 }
 
 export default App
+export { VendorsPage as __PreviewVendorsPage }
