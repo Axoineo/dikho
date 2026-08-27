@@ -249,7 +249,7 @@ function Login({ onLogin }) {
           <img src="/dikho-logo.png" alt="Dikho" className="login-logo" />
 
           <h1>Sign in to your account</h1>
-          <p className="login-subtitle">Access your Dikho SO-PO system</p>
+          <p className="login-subtitle">Access your Dikho.</p>
 
           <form onSubmit={handleSendOtp}>
             <label htmlFor="login-email">Email</label>
@@ -377,11 +377,24 @@ function SidebarIcon({ name, size = 20 }) {
         <path d="m9 18 6-6-6-6" />
       </svg>
     ),
+    settings: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+    logout: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
+    ),
   }
   return icons[name] || null
 }
 
-function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick }) {
+function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick, onLogout }) {
   const items = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'clients', label: 'Clients', icon: 'clients' },
@@ -413,15 +426,12 @@ function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick }) {
         {/* Logo area */}
         <div className="sidebar-logo-area">
           <div className="sidebar-logo-full">
-            <img src="/dikho-logo1.png" alt="Dikho" className="sidebar-logo-img" />
+            <img src="/dikho-logo.png" alt="Dikho" className="sidebar-logo-img" />
           </div>
           <div className="sidebar-logo-icon">
             <img src="/fevicon.png" alt="Dikho" className="sidebar-favicon" />
           </div>
         </div>
-
-        {/* Divider */}
-        <div className="sidebar-divider" />
 
         {/* Navigation */}
         <nav className="sidebar-nav">
@@ -448,6 +458,31 @@ function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick }) {
             )
           })}
         </nav>
+
+        {/* Footer */}
+        <div className="sidebar-footer">
+          <div className="sidebar-footer-divider" />
+          <button
+            className="nav-item sidebar-footer-item"
+            onClick={() => handleNav('settings')}
+            title={collapsed ? 'Settings' : undefined}
+          >
+            <span className="nav-icon">
+              <SidebarIcon name="settings" size={20} />
+            </span>
+            <span className="nav-label">Settings</span>
+          </button>
+          <button
+            className="sidebar-logout-btn"
+            onClick={onLogout}
+            title={collapsed ? 'Log out' : undefined}
+          >
+            <span className="nav-icon">
+              <SidebarIcon name="logout" size={18} />
+            </span>
+            <span className="nav-label">Log out</span>
+          </button>
+        </div>
       </aside>
     </>
   )
@@ -1689,8 +1724,12 @@ function AddVendorModal({ onClose, onSaved }) {
           <div className="field field-phone">
             <label htmlFor="vf-contact">Contact No.</label>
             <div className="phone-control">
-              <div className="dial-code-display">{form.country_dialcode || '+91'}</div>
-              <input id="vf-contact" type="tel" inputMode="numeric" value={form.contact} onChange={(e) => update('contact', e.target.value.replace(/\D/g, ''))} placeholder="98765 43210" />
+              <select className="dial-code-select" value={form.country_dialcode || '+91'} onChange={(e) => update('country_dialcode', e.target.value)}>
+                {allCountries.map((c) => (
+                  <option key={c.isoCode} value={`+${c.phonecode}`}>+{c.phonecode}</option>
+                ))}
+              </select>
+              <input id="vf-contact" type="tel" inputMode="numeric" maxLength={10} value={form.contact} onChange={(e) => { const digits = e.target.value.replace(/\D/g, '').slice(0, 10); update('contact', digits) }} placeholder="98765 43210" />
             </div>
           </div>
 
@@ -1728,7 +1767,7 @@ function AddVendorModal({ onClose, onSaved }) {
 
           <div className="field">
             <label htmlFor="vf-pt-date">Payment Term Date</label>
-            <input id="vf-pt-date" type="date" value={form.payment_term_invoice_date} onChange={(e) => update('payment_term_invoice_date', e.target.value)} />
+            <input id="vf-pt-date" type="date" value={form.payment_term_invoice_date} onChange={(e) => update('payment_term_invoice_date', e.target.value)} placeholder="DD-MM-YYYY" />
           </div>
 
           {/* ── Tax Information ──────────────────────────────────── */}
@@ -1752,7 +1791,7 @@ function AddVendorModal({ onClose, onSaved }) {
 
           <div className="field">
             <label htmlFor="vf-gstin-date">GSTIN Date</label>
-            <input id="vf-gstin-date" type="date" value={form.gstin_date} onChange={(e) => update('gstin_date', e.target.value)} />
+            <input id="vf-gstin-date" type="date" value={form.gstin_date} onChange={(e) => update('gstin_date', e.target.value)} placeholder="DD-MM-YYYY" />
           </div>
 
           <div className="field">
@@ -2833,6 +2872,7 @@ function App() {
         setActivePage={setActivePage}
         collapsed={collapsed}
         onOverlayClick={isMobile ? () => setSidebarOpen(false) : null}
+        onLogout={logout}
       />
 
       <div className="app-main">
@@ -2847,7 +2887,6 @@ function App() {
               else document.exitFullscreen?.()
             }}><Icon name="expand" size={19} /></button>
             <button className="header-icon" aria-label="Account"><Icon name="user" size={20} /></button>
-            <button className="logout-link" onClick={logout}>Logout</button>
           </div>
         </header>
 
@@ -2864,6 +2903,7 @@ function App() {
           {activePage === 'receipt' && <PlaceholderPage title="Payment Receipt" />}
           {activePage === 'paymentrequest' && <PlaceholderPage title="Payment Request" />}
           {activePage === 'courier' && <PlaceholderPage title="Document Courier" />}
+          {activePage === 'settings' && <PlaceholderPage title="Settings" />}
         </main>
       </div>
 

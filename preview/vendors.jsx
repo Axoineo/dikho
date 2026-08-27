@@ -49,14 +49,14 @@ function respond(body, { start = 0, end = 0, total = 0 } = {}) {
 window.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url)
   const table = url.pathname.split('/').pop()
-  const range = (new Headers(init.headers || {}).get('range') || '0-999').split('-').map(Number)
-  console.log('[stub]', table, url.search, range.join('-'))
+  const offset = Number(url.searchParams.get('offset') || 0)
+  const limit = Number(url.searchParams.get('limit') || 1000)
 
   if (table === 'media') return respond(MEDIA)
   if (table === 'sub_media') return respond(SUB_MEDIA)
 
   if (table === 'vendor_addresses') {
-    if (range[0] > 0) return respond([])
+    if (offset > 0) return respond([])
     return respond(PLACES.map(({ state, city, country }) => ({ state, city, country })))
   }
 
@@ -81,8 +81,8 @@ window.fetch = async (input, init = {}) => {
     }
 
     const total = rows.length
-    const page = rows.slice(range[0], range[1] + 1)
-    return respond(page, { start: range[0], end: range[0] + page.length - 1, total })
+    const page = rows.slice(offset, offset + limit)
+    return respond(page, { start: offset, end: offset + page.length - 1, total })
   }
 
   return respond([])
