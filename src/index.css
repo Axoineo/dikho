@@ -267,19 +267,28 @@ button:disabled { cursor: default; }
   transform: translateX(0) scale(1);
   transition:
     opacity 0.2s ease,
-    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 0s;
   pointer-events: none;
   white-space: nowrap;
+  visibility: visible;
 }
 .sidebar-is-collapsed .sidebar-logo-full {
   opacity: 0;
   transform: translateX(-8px) scale(0.92);
   pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 0.2s;
 }
 .sidebar-logo-img {
   width: 100px;
   height: auto;
   display: block;
+  border: none;
+  outline: none;
 }
 
 /* Favicon icon — fades in when collapsed */
@@ -305,6 +314,8 @@ button:disabled { cursor: default; }
   width: 30px;
   height: 30px;
   object-fit: contain;
+  border: none;
+  outline: none;
 }
 
 /* ---------- Navigation ---------- */
@@ -312,7 +323,7 @@ button:disabled { cursor: default; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   padding: 0 6px 14px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -668,6 +679,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   .sidebar-is-collapsed .sidebar-logo-full {
     opacity: 1;
     transform: none;
+    visibility: visible;
   }
   .sidebar-is-collapsed .sidebar-logo-icon {
     opacity: 0;
