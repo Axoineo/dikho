@@ -2684,3 +2684,60 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   .pvf-nav { padding: 16px; }
   .pvf-type-cards { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   Table Contact Hover (Phone/Email inline actions)
+   ============================================================ */
+.contact-hover-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 -8px 0 -4px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.contact-hover-wrap.mt {
+  margin-top: 2px;
+}
+
+.contact-hover-wrap:hover,
+.contact-hover-wrap.touched {
+  background: var(--brand-blue-soft);
+}
+
+.contact-hover-wrap .cell-primary,
+.contact-hover-wrap .cell-secondary {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.contact-hover-wrap:hover .cd-action-btn,
+.contact-hover-wrap.touched .cd-action-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+@starting-style {
+  .contact-hover-wrap:hover .cd-action-btn,
+  .contact-hover-wrap.touched .cd-action-btn {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+
+.cd-action-btn--sm {
+  padding: 4px 8px;
+  font-size: 11px;
+  gap: 4px;
+  border-radius: 6px;
+}
+.cd-action-btn--sm svg {
+  width: 12px;
+  height: 12px;
+}

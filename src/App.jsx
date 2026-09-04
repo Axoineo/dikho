@@ -1,3 +1,5 @@
+import './ContactDetails.css'
+import { ContactHoverAction } from './ContactHoverAction'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase';
 import PurchaseOrdersPage from './pages/PurchaseOrders'
@@ -2757,8 +2759,8 @@ function VendorsPage() {
                           <span className="cell-secondary" title={region}>{formatValue(region)}</span>
                         </td>
                         <td>
-                          <span className="cell-primary">{formatValue(phone)}</span>
-                          <span className="cell-secondary" title={vendor.email || ''}>{formatValue(vendor.email)}</span>
+                          {phone ? <ContactHoverAction type="phone" value={phone} /> : <span className="cell-primary">-</span>}
+                          {vendor.email ? <ContactHoverAction type="email" value={vendor.email} /> : <span className="cell-secondary">-</span>}
                         </td>
                         <td className="mono-cell">{formatValue(vendor.gstin)}</td>
                         <td>

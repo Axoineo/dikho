@@ -1,0 +1,15 @@
+.contact-hover-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 -8px 0 -4px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.contact-hover-wrap.mt {
+  margin-top: 2px;
+}
