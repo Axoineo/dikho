@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { supabase } from './supabase'
+import { supabase } from './supabase';
+import PurchaseOrdersPage from './pages/PurchaseOrders'
+import PublicVendorForm from './pages/PublicVendorForm'
 import { downloadXlsx } from './xlsx'
 import { Country, State, City } from 'country-state-city'
 
-function Icon({ name, size = 18, strokeWidth = 1.8 }) {
+export function Icon({ name, size = 18, strokeWidth = 1.8 }) {
   const paths = {
     menu: <><path d="M4 6h16M4 12h16M4 18h16" /></>,
     dashboard: <><rect x="3.5" y="3.5" width="7" height="7" rx="1.2" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.2" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.2" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.2" /></>,
@@ -402,7 +404,7 @@ function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick, onLogou
     { id: 'clients', label: 'Clients', icon: 'clients' },
     { id: 'vendors', label: 'Vendors', icon: 'vendors' },
     { id: 'so', label: 'Sales Orders', icon: 'so' },
-    { id: 'po', label: 'PO', icon: 'po' },
+    { id: 'po', label: 'Purchase Orders', icon: 'po' },
     { id: 'invoice', label: 'Invoice Notification', icon: 'invoice' },
     { id: 'advance', label: 'Advance Payment Receipt', icon: 'advance' },
     { id: 'receipt', label: 'Payment Receipt', icon: 'receipt' },
@@ -488,12 +490,12 @@ function Sidebar({ activePage, setActivePage, collapsed, onOverlayClick, onLogou
   )
 }
 
-function formatValue(value) {
+export function formatValue(value) {
   if (value === null || value === undefined || value === '') return '—'
   return String(value)
 }
 
-function getValue(row, keys) {
+export function getValue(row, keys) {
   for (const key of keys) {
     if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== '') {
       return row[key]
@@ -502,7 +504,7 @@ function getValue(row, keys) {
   return null
 }
 
-function isActiveStatus(value) {
+export function isActiveStatus(value) {
   return value === 1 || value === '1' || value === true || value === 'true' || value === 'active' || value === 'Active'
 }
 
@@ -585,7 +587,7 @@ function isSlashSearch(input) {
   return typeof input === 'string' && input.trimStart().startsWith('/')
 }
 
-function uniqueOptions(values) {
+export function uniqueOptions(values) {
   return [...new Set(values.filter(Boolean))]
     .sort((a, b) => a.localeCompare(b))
     .map((value) => ({ value, label: value }))
@@ -1351,7 +1353,7 @@ function VendorDetails({ vendor, address, onClose, mediaMap, subMediaMap }) {
   )
 }
 
- function SearchableSelect({ label, value, onChange, options, placeholder, disabled = false, required = false, searchPlaceholder = 'Search...' }) {
+ export function SearchableSelect({ label, value, onChange, options, placeholder, disabled = false, required = false, searchPlaceholder = 'Search...' }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const containerRef = useRef(null)
@@ -2764,24 +2766,24 @@ const SO_COLUMN_COUNT = 7
 const SO_PAGE_SIZES = [25, 50, 75, 100]
 
 // The three advertising categories the rest of the product is organised around.
-const ORDER_TYPE_OPTIONS = ['ATL', 'TTL', 'BTL']
+export const ORDER_TYPE_OPTIONS = ['ATL', 'TTL', 'BTL']
 
 // `order_status` and `purchase_status` are open text in the database, so these
 // are the values this module *writes* — not a set it can enforce. Whatever the
 // table already holds is merged in at runtime (see `SalesOrdersPage`) and the
 // list renders any value it is given.
-const ORDER_STATUS_OPTIONS = ['Draft', 'Pending Approval', 'Approved', 'In Progress', 'Completed', 'Cancelled']
+export const ORDER_STATUS_OPTIONS = ['Draft', 'Pending Approval', 'Approved', 'In Progress', 'Completed', 'Cancelled']
 const PURCHASE_STATUS_OPTIONS = ['Not Started', 'Partial', 'Completed']
 
 // CGST + SGST within one state, IGST across states, CGST + UTGST in a union
 // territory. These are the three shapes the four child tax columns can take.
-const GST_TYPE_OPTIONS = [
+export const GST_TYPE_OPTIONS = [
   { value: 'Intra-State', label: 'Intra-State (CGST + SGST)' },
   { value: 'Inter-State', label: 'Inter-State (IGST)' },
   { value: 'Union Territory', label: 'Union Territory (CGST + UTGST)' },
 ]
 
-const GST_RATES = [0, 5, 12, 18, 28]
+export const GST_RATES = [0, 5, 12, 18, 28]
 
 const SO_ITEM_TYPE_OPTIONS = ['Media', 'Production', 'Printing', 'Installation', 'Service', 'Other']
 
@@ -2789,18 +2791,18 @@ const SO_COURIER_STATUS_OPTIONS = ['Not Sent', 'Dispatched', 'In Transit', 'Deli
 
 /* ── Money ──────────────────────────────────────────────────────────────── */
 
-function round2(value) {
+export function round2(value) {
   const number = Number(value)
   return Number.isFinite(number) ? Math.round(number * 100) / 100 : 0
 }
 
-function toAmount(value) {
+export function toAmount(value) {
   if (value === '' || value === null || value === undefined) return 0
   const number = Number(value)
   return Number.isFinite(number) ? number : 0
 }
 
-function formatMoney(value) {
+export function formatMoney(value) {
   if (value === null || value === undefined || value === '') return '—'
   const number = Number(value)
   if (!Number.isFinite(number)) return formatValue(value)
@@ -2810,12 +2812,12 @@ function formatMoney(value) {
 // Dates come back from PostgREST as `date` or `timestamptz` strings. The rest of
 // the app shows them as stored rather than reformatting, so this only trims a
 // timestamp down to its day.
-function formatDate(value) {
+export function formatDate(value) {
   if (!value) return '—'
   return String(value).slice(0, 10)
 }
 
-function campaignDays(start, end) {
+export function campaignDays(start, end) {
   if (!start || !end) return null
   const from = new Date(start)
   const to = new Date(end)
@@ -2824,7 +2826,7 @@ function campaignDays(start, end) {
   return days > 0 ? days : null
 }
 
-function todayIso() {
+export function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
@@ -2833,7 +2835,7 @@ function todayIso() {
 // Splits one item's tax across the four columns the child table stores. The two
 // halves are derived from each other rather than both from `tax`, so
 // cgst + sgst adds back up to tax exactly even when tax has an odd last paisa.
-function splitGst(gstType, taxAmount, isTaxable) {
+export function splitGst(gstType, taxAmount, isTaxable) {
   const zero = { cgst_amount: 0, sgst_amount: 0, igst_amount: 0, utgst_amount: 0 }
   const tax = round2(taxAmount)
   if (!isTaxable || tax === 0) return zero
@@ -2846,7 +2848,7 @@ function splitGst(gstType, taxAmount, isTaxable) {
 // One form row → every money column the child table stores. Nothing downstream
 // has to recompute or guess: the split is applied here and after-tax is always
 // taxable + tax.
-function itemAmounts(item) {
+export function itemAmounts(item) {
   const taxable = round2(toAmount(item.taxable_amount))
   const isTaxable = Boolean(item.is_taxable)
   const tax = isTaxable ? round2(toAmount(item.tax_amount)) : 0
@@ -2858,7 +2860,7 @@ function itemAmounts(item) {
   }
 }
 
-function taxFromRate(taxableAmount, rate) {
+export function taxFromRate(taxableAmount, rate) {
   return round2(toAmount(taxableAmount) * (toAmount(rate) / 100))
 }
 
@@ -2866,14 +2868,14 @@ function taxFromRate(taxableAmount, rate) {
 // opened for editing has its rate read back out of the two amounts. Anything
 // that is not one of the standard slabs comes back as a custom rate, which hands
 // the tax field to the user instead of overwriting it.
-function rateFromAmounts(taxableAmount, taxAmount) {
+export function rateFromAmounts(taxableAmount, taxAmount) {
   const taxable = toAmount(taxableAmount)
   if (taxable <= 0) return '18'
   const rate = round2((toAmount(taxAmount) / taxable) * 100)
   return GST_RATES.includes(rate) ? String(rate) : 'custom'
 }
 
-function gstBreakdown(row) {
+export function gstBreakdown(row) {
   return [
     ['CGST', row.cgst_amount],
     ['SGST', row.sgst_amount],
@@ -2932,7 +2934,7 @@ function reconcileSalesOrderTotals(items) {
 
 // The same three numbers for rows that are already in the database, so the
 // details panel can flag a parent whose stored totals no longer match its items.
-function storedItemTotals(rows) {
+export function storedItemTotals(rows) {
   return rows.reduce((accumulator, row) => ({
     sub_total: round2(accumulator.sub_total + toAmount(row.taxable_amount)),
     tax_total: round2(accumulator.tax_total + toAmount(row.tax_amount)),
@@ -2959,12 +2961,12 @@ function storedItemTotals(rows) {
 
 const MAX_WRITE_ATTEMPTS = 8
 
-function missingColumnFrom(error) {
+export function missingColumnFrom(error) {
   if (error?.code !== 'PGRST204') return null
   return (String(error.message || '').match(/'([^']+)' column/) || [])[1] || null
 }
 
-function notNullColumnFrom(error) {
+export function notNullColumnFrom(error) {
   if (error?.code !== '23502') return null
   const from = (text) => (String(text || '').match(/column "([^"]+)"/) || [])[1]
   return from(error.details) || from(error.message) || null
@@ -3038,7 +3040,7 @@ async function writeRows(run, rows, fallbacks) {
 const SO_SEARCH_COLUMNS = ['order_number', 'company', 'crm_reference_id']
 const SO_SEARCH_FALLBACK_COLUMNS = ['company']
 
-function isIlikeTypeError(error) {
+export function isIlikeTypeError(error) {
   return error?.code === '42883' || /\bilike\b/i.test(String(error?.message || ''))
 }
 
@@ -3053,7 +3055,7 @@ function soSearchFilter(request, query, columns) {
 // Statuses are open text, so the pill is chosen from what the value reads like
 // rather than from a fixed map — a status this module never writes still lands
 // somewhere sensible.
-function statusTone(status) {
+export function statusTone(status) {
   const text = String(status ?? '').toLowerCase()
   if (!text) return 'neutral'
   if (/(cancel|reject|hold|fail|void)/.test(text)) return 'danger'
@@ -3126,7 +3128,7 @@ function salesOrderToForm(row) {
 
 // `<input type="date">` only accepts YYYY-MM-DD, so a timestamp column is
 // trimmed to its day rather than silently rejected.
-function formatDateInput(value) {
+export function formatDateInput(value) {
   return value ? String(value).slice(0, 10) : ''
 }
 
@@ -3184,7 +3186,7 @@ function salesOrderItemToForm(row, key) {
 
 // Rate → tax is the normal direction; choosing "Custom" hands the tax field back
 // to the user, and clearing "Taxable" zeroes it whatever the rate says.
-function applyItemChange(item, field, value) {
+export function applyItemChange(item, field, value) {
   const next = { ...item, [field]: value }
 
   if (field === 'is_taxable') {
@@ -3233,7 +3235,7 @@ function buildSalesOrderPayload(form, totals, session) {
   }
 }
 
-function sessionActor(session) {
+export function sessionActor(session) {
   const user = session?.user
   return user?.user_metadata?.full_name || user?.email || null
 }
@@ -4754,6 +4756,19 @@ function App() {
     await supabase.auth.signOut()
   }
 
+  // ── Public routes: bypass login entirely ─────────────────────────────
+  // Anyone who visits /#/vendor-register gets the public form, no session needed.
+  const [hashPath, setHashPath] = useState(() => window.location.hash)
+  useEffect(() => {
+    function onHashChange() { setHashPath(window.location.hash) }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+  if (hashPath === '#/vendor-register') {
+    return <PublicVendorForm />
+  }
+  // ─────────────────────────────────────────────────────────────────────
+
   if (session === undefined) {
     return <div className="loading-screen">Loading...</div>
   }
@@ -4795,7 +4810,7 @@ function App() {
           {activePage === 'dashboard' && <PlaceholderPage title="Dashboard" />}
           {activePage === 'vendors' && <VendorsPage />}
           {activePage === 'so' && <SalesOrdersPage session={session} />}
-          {activePage === 'po' && <PlaceholderPage title="PO" />}
+          {activePage === 'po' && <PurchaseOrdersPage session={session} />}
           {activePage === 'invoice' && <PlaceholderPage title="Invoice Notification" />}
           {activePage === 'advance' && <PlaceholderPage title="Advance Payment Receipt" />}
           {activePage === 'receipt' && <PlaceholderPage title="Payment Receipt" />}

@@ -2103,3 +2103,107 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   border-color: rgba(217, 83, 79, 0.35);
   color: #e07a76;
 }
+
+/* ══════════════════════════════════════════════════════════
+   Public Vendor Registration Form
+   ══════════════════════════════════════════════════════════ */
+
+.pub-shell {
+  min-height: 100vh;
+  background: var(--page);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px 64px;
+}
+
+.pub-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 760px;
+  margin-bottom: 28px;
+}
+
+.pub-logo {
+  height: 40px;
+  width: auto;
+  flex-shrink: 0;
+}
+
+.pub-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+
+.pub-subtitle {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.pub-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 760px;
+  padding: 32px 32px 24px;
+  box-shadow: 0 2px 12px rgba(24, 84, 148, 0.06);
+}
+
+.pub-success {
+  text-align: center;
+  padding: 40px 16px;
+}
+
+.pub-success-icon {
+  margin-bottom: 20px;
+}
+
+.pub-success h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.pub-success p {
+  font-size: 0.95rem;
+  color: var(--muted);
+  max-width: 400px;
+  margin: 0 auto 10px;
+  line-height: 1.6;
+}
+
+.pub-success-note {
+  font-size: 0.82rem !important;
+  color: var(--muted) !important;
+  opacity: 0.7;
+}
+
+.pub-disclaimer {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  margin: 16px 0 0;
+  line-height: 1.6;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+  .pub-card {
+    padding: 20px 16px 20px;
+    border-radius: 10px;
+  }
+
+  .pub-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
