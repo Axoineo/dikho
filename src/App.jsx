@@ -1984,6 +1984,8 @@ function VendorsPage() {
   const [selectedIds, setSelectedIds] = useState([])
   const [selectingAll, setSelectingAll] = useState(false)
   const [exporting, setExporting] = useState('')
+  const [showSharePopover, setShowSharePopover] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
 
   /* ── Data loading ─────────────────────────────────────────────────────── */
 
@@ -2430,9 +2432,60 @@ function VendorsPage() {
             <h1>Vendors</h1>
             <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'vendor' : 'vendors'} in view · 15 per page</p>
           </div>
-          <button className="primary-button add-button" onClick={() => setShowForm(true)}>
-            <Icon name="plus" size={18} /> Add vendor
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
+            {showSharePopover && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 300,
+                background: 'var(--surface)', border: '1px solid var(--line)',
+                borderRadius: 10, padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                minWidth: 320,
+              }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Vendor Registration Link
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                  Share this link with anyone — no login required. Submissions will appear as <strong>Inactive</strong> pending your review.
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    readOnly
+                    value={`${window.location.origin}/#/vendor-register`}
+                    style={{
+                      flex: 1, fontSize: '0.82rem', padding: '7px 10px',
+                      border: '1px solid var(--line)', borderRadius: 6,
+                      background: 'var(--page)', color: 'var(--text)',
+                      fontFamily: 'monospace', outline: 'none',
+                    }}
+                    onFocus={e => e.target.select()}
+                  />
+                  <button
+                    className="primary-button"
+                    style={{ padding: '7px 14px', fontSize: '0.82rem', flexShrink: 0 }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/#/vendor-register`)
+                        .then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000) })
+                    }}
+                  >
+                    {shareCopied ? <><Icon name="check" size={14} /> Copied!</> : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            )}
+            <button
+              className="secondary-button"
+              onClick={() => { setShowSharePopover(v => !v); setShareCopied(false) }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              Share
+            </button>
+            <button className="primary-button add-button" onClick={() => setShowForm(true)}>
+              <Icon name="plus" size={18} /> Add vendor
+            </button>
+          </div>
         </div>
 
         {/* ── Search + actions ─────────────────────────────────────────── */}
