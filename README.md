@@ -13,6 +13,17 @@
 
 ---
 
+## Documentation
+
+| Document | Description |
+| --- | --- |
+| **[Architecture](docs/ARCHITECTURE.md)** | System design, frontend/backend architecture, auth flow, business logic |
+| **[Database Schema](docs/DATABASE.md)** | Tables, columns, RLS policies, views, migrations, money invariants |
+| **[Contributing](CONTRIBUTING.md)** | Setup, development workflow, coding conventions, security guidelines |
+| **[Deployment](docs/DEPLOYMENT.md)** | Cloudflare, Docker, Edge Functions, CI/CD, production checklist |
+
+---
+
 ## Overview
 
 **Dikho** is an internal advertising operations platform designed to manage the complete workflow between clients, sales orders, vendors, and purchase orders.
