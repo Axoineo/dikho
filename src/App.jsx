@@ -1513,11 +1513,13 @@ function AddVendorModal({ onClose, onSaved }) {
 
   function handleCountryChange(code) {
     const country = allCountries.find((item) => item.isoCode === code)
+    const raw = country?.phonecode || ''
+    const dial = raw ? ((raw.startsWith('+') ? raw : `+${raw}`).split('-')[0]) : ''
     setForm((current) => ({
       ...current,
       country_code: code,
       country_name: country?.name || code,
-      country_dialcode: country?.phonecode ? `+${country.phonecode}` : '',
+      country_dialcode: dial,
       state: '', state_code: '', city: '', zipcode: '',
     }))
     setZipStatus(null)
@@ -1729,9 +1731,11 @@ function AddVendorModal({ onClose, onSaved }) {
             <label htmlFor="vf-contact">Contact No.</label>
             <div className="phone-control">
               <select className="dial-code-select" value={form.country_dialcode || '+91'} onChange={(e) => update('country_dialcode', e.target.value)}>
-                {allCountries.map((c) => (
-                  <option key={c.isoCode} value={`+${c.phonecode}`}>+{c.phonecode}</option>
-                ))}
+                {allCountries.map((c) => {
+                  const raw = c.phonecode.startsWith('+') ? c.phonecode : `+${c.phonecode}`
+                  const dialCode = raw.includes('-') ? raw.split('-')[0] : raw
+                  return <option key={c.isoCode} value={dialCode}>{c.flag} {c.isoCode} ({dialCode})</option>
+                })}
               </select>
               <input id="vf-contact" type="tel" inputMode="numeric" maxLength={10} value={form.contact} onChange={(e) => { const digits = e.target.value.replace(/\D/g, '').slice(0, 10); update('contact', digits) }} placeholder="98765 43210" />
             </div>
@@ -2451,7 +2455,7 @@ function VendorsPage() {
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <input
                     readOnly
-                    value={`${window.location.origin}/#/vendor-register`}
+                    value={`${window.location.origin}/vendor/register`}
                     style={{
                       flex: 1, fontSize: '0.82rem', padding: '7px 10px',
                       border: '1px solid var(--line)', borderRadius: 6,
@@ -2464,7 +2468,7 @@ function VendorsPage() {
                     className="primary-button"
                     style={{ padding: '7px 14px', fontSize: '0.82rem', flexShrink: 0 }}
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/#/vendor-register`)
+                      navigator.clipboard.writeText(`${window.location.origin}/vendor/register`)
                         .then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000) })
                     }}
                   >
@@ -4812,14 +4816,14 @@ function App() {
   }
 
   // ── Public routes: bypass login entirely ─────────────────────────────
-  // Anyone who visits /#/vendor-register gets the public form, no session needed.
-  const [hashPath, setHashPath] = useState(() => window.location.hash)
+  // Anyone who visits /vendor/register gets the public form, no session needed.
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname)
   useEffect(() => {
-    function onHashChange() { setHashPath(window.location.hash) }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
+    function onPopState() { setCurrentPath(window.location.pathname) }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
   }, [])
-  if (hashPath === '#/vendor-register') {
+  if (currentPath === '/vendor/register') {
     return <PublicVendorForm />
   }
   // ─────────────────────────────────────────────────────────────────────

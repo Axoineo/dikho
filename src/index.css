@@ -2134,6 +2134,8 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   height: 32px;
   width: auto;
   flex-shrink: 0;
+  display: block;
+  object-fit: contain;
 }
 
 .pvf-topbar-text {
@@ -2408,6 +2410,160 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-dial:focus { border-color: #185494; box-shadow: 0 0 0 3px rgba(24, 84, 148, 0.12); }
+
+/* Dial Code Picker */
+.dial-picker {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.dial-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1.5px solid #d1dbe8;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #1e2a3a;
+  white-space: nowrap;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.dial-picker-trigger:hover {
+  border-color: #b0bec5;
+}
+
+.dial-picker-trigger:focus {
+  outline: none;
+  border-color: #185494;
+  box-shadow: 0 0 0 3px rgba(24, 84, 148, 0.12);
+}
+
+.dial-picker-flag {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.dial-picker-code {
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.dial-picker-chevron {
+  opacity: 0.5;
+  margin-left: 2px;
+}
+
+.dial-picker-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  width: 280px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: dialPickerFadeIn 0.12s ease-out;
+}
+
+@keyframes dialPickerFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dial-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dial-picker-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.82rem;
+  color: #1e2a3a;
+  background: transparent;
+}
+
+.dial-picker-search input::placeholder {
+  color: #94a3b8;
+}
+
+.dial-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.dial-picker-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.dial-picker-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.dial-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #334155;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.dial-picker-option:hover {
+  background: #f1f5f9;
+}
+
+.dial-picker-option.is-selected {
+  background: #eef2ff;
+  color: #185494;
+  font-weight: 500;
+}
+
+.dial-picker-option-flag {
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dial-picker-option-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dial-picker-option-code {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.dial-picker-empty {
+  padding: 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
 
 /* Suffix input */
 .pvf-suffix-wrap { position: relative; }

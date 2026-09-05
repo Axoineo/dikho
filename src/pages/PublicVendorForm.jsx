@@ -93,6 +93,77 @@ function SuccessScreen() {
   )
 }
 
+/* ─── Dial Code Picker ─────────────────────────────────────────────── */
+function DialCodePicker({ countries, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const containerRef = useRef(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus()
+  }, [open])
+
+  // Strip hyphenated area-code suffixes (e.g. "+358-18" → "+358", "+1-684" → "+1")
+  const cleanCode = (raw) => {
+    const code = raw.startsWith('+') ? raw : `+${raw}`
+    return code.includes('-') ? code.split('-')[0] : code
+  }
+
+  const selected = countries.find(c => cleanCode(c.phonecode) === value)
+
+  const filtered = countries.filter(c => {
+    const q = query.toLowerCase()
+    return c.name.toLowerCase().includes(q) || c.isoCode.toLowerCase().includes(q) || cleanCode(c.phonecode).includes(q)
+  }).slice(0, 80)
+
+  return (
+    <div ref={containerRef} className="dial-picker">
+      <button type="button" className="dial-picker-trigger" onClick={() => setOpen(v => !v)}>
+        <span className="dial-picker-flag">{selected?.flag || '🌐'}</span>
+        <span className="dial-picker-code">{value}</span>
+        <svg className="dial-picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <div className="dial-picker-dropdown">
+          <div className="dial-picker-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search country…" autoComplete="off" />
+          </div>
+          <div className="dial-picker-list">
+            {filtered.length === 0 ? (
+              <div className="dial-picker-empty">No matches</div>
+            ) : filtered.map(c => {
+              const code = cleanCode(c.phonecode)
+              return (
+                <button type="button" key={c.isoCode}
+                  className={`dial-picker-option ${code === value ? 'is-selected' : ''}`}
+                  onClick={() => { onChange(code); setOpen(false) }}>
+                  <span className="dial-picker-option-flag">{c.flag}</span>
+                  <span className="dial-picker-option-name">{c.name}</span>
+                  <span className="dial-picker-option-code">{code}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── Step indicator ───────────────────────────────────────────────── */
 function StepBar({ current }) {
   return (
@@ -187,11 +258,13 @@ export default function PublicVendorForm() {
 
   function handleCountryChange(code) {
     const c = allCountries.find(x => x.isoCode === code)
+    const raw = c?.phonecode || ''
+    const dial = raw ? ((raw.startsWith('+') ? raw : `+${raw}`).split('-')[0]) : ''
     setForm(f => ({
       ...f,
       country_code: code,
       country_name: c?.name || code,
-      country_dialcode: c?.phonecode ? `+${c.phonecode}` : '',
+      country_dialcode: dial,
       state: '', state_code: '', city: '', zipcode: '',
     }))
     setZipStatus(null)
@@ -399,7 +472,7 @@ export default function PublicVendorForm() {
         <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
         <div className="pvf-topbar-text">
           <div className="pvf-topbar-title">Vendor Registration</div>
-          <div className="pvf-topbar-sub">Fill in your details — our team will review and onboard you</div>
+          <div className="pvf-topbar-sub">Fill in your details our team will review and onboard you</div>
         </div>
       </header>
 
@@ -457,9 +530,7 @@ export default function PublicVendorForm() {
 
                   <FieldGroup label="Phone Number">
                     <div className="pvf-phone">
-                      <select className="pvf-dial" value={form.country_dialcode} onChange={e => update('country_dialcode', e.target.value)}>
-                        {allCountries.map(c => <option key={c.isoCode} value={`+${c.phonecode}`}>+{c.phonecode}</option>)}
-                      </select>
+                      <DialCodePicker countries={allCountries} value={form.country_dialcode} onChange={val => update('country_dialcode', val)} />
                       <input className="pvf-input" type="tel" inputMode="numeric" maxLength={10} value={form.contact}
                         onChange={e => update('contact', e.target.value.replace(/\D/g, '').slice(0, 10))}
                         placeholder="98765 43210" />
