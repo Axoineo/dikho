@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase';
 import PurchaseOrdersPage from './pages/PurchaseOrders'
 import PublicVendorForm from './pages/PublicVendorForm'
+import PublicClientWelcome from './pages/PublicClientWelcome'
 import { downloadXlsx } from './xlsx'
+import { generateTaxInvoice } from './generateTaxInvoice'
 import { Country, State, City } from 'country-state-city'
 
 export function Icon({ name, size = 18, strokeWidth = 1.8 }) {
@@ -748,6 +750,13 @@ function ClientDetails({ client, onClose }) {
     ['GSTIN', getValue(client, ['gstin', 'gstin_number'])],
     ['GSTIN Date', getValue(client, ['gstin_date', 'gstinDate'])],
     ['PAN Number', getValue(client, ['pan_number', 'pan'])],
+    ['Designation', getValue(client, ['designation'])],
+    ['Address Line 1', getValue(client, ['address_line1'])],
+    ['Address Line 2', getValue(client, ['address_line2'])],
+    ['City', getValue(client, ['city'])],
+    ['State', getValue(client, ['state'])],
+    ['Pincode', getValue(client, ['pincode'])],
+    ['Country', getValue(client, ['country'])],
   ]
 
   return (
@@ -780,6 +789,7 @@ function AddClientModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     company_name: '',
     contact_person: '',
+    designation: '',
     contact: '',
     country_code: '+91',
     email: '',
@@ -790,6 +800,12 @@ function AddClientModal({ onClose, onSaved }) {
     registration: '',
     pan_number: '',
     status: '1',
+    address_line1: '',
+    address_line2: '',
+    city: '',
+    state: '',
+    pincode: '',
+    country: 'India',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -807,6 +823,7 @@ function AddClientModal({ onClose, onSaved }) {
     const payload = {
       company_name: form.company_name.trim(),
       contact_person: form.contact_person.trim() || null,
+      designation: form.designation.trim() || null,
       contact: phoneDigits ? Number(phoneDigits) : null,
       email: form.email.trim() || null,
       gstin: form.gstin.trim() || null,
@@ -816,6 +833,12 @@ function AddClientModal({ onClose, onSaved }) {
       registration: form.registration.trim() || null,
       pan_number: form.pan_number.trim() || null,
       status: Number(form.status),
+      address_line1: form.address_line1.trim() || null,
+      address_line2: form.address_line2.trim() || null,
+      city: form.city.trim() || null,
+      state: form.state.trim() || null,
+      pincode: form.pincode.trim() || null,
+      country: form.country.trim() || null,
     }
 
     const { error: insertError } = await supabase.from('clients').insert([payload])
@@ -856,6 +879,11 @@ function AddClientModal({ onClose, onSaved }) {
           <div className="field">
             <label htmlFor="contact-person">Contact Person</label>
             <input id="contact-person" value={form.contact_person} onChange={(e) => update('contact_person', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="designation">Designation</label>
+            <input id="designation" value={form.designation} onChange={(e) => update('designation', e.target.value)} placeholder="e.g. Procurement Manager" />
           </div>
 
           <div className="field">
@@ -924,6 +952,36 @@ function AddClientModal({ onClose, onSaved }) {
             <input id="pan-number" value={form.pan_number} onChange={(e) => update('pan_number', e.target.value.toUpperCase())} />
           </div>
 
+          <div className="field field-wide">
+            <label htmlFor="address-line1">Address Line 1</label>
+            <input id="address-line1" value={form.address_line1} onChange={(e) => update('address_line1', e.target.value)} placeholder="Building, street, area…" />
+          </div>
+
+          <div className="field field-wide">
+            <label htmlFor="address-line2">Address Line 2</label>
+            <input id="address-line2" value={form.address_line2} onChange={(e) => update('address_line2', e.target.value)} placeholder="Floor, landmark (optional)" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="client-city">City</label>
+            <input id="client-city" value={form.city} onChange={(e) => update('city', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="client-state">State</label>
+            <input id="client-state" value={form.state} onChange={(e) => update('state', e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="client-pincode">Pincode</label>
+            <input id="client-pincode" value={form.pincode} onChange={(e) => update('pincode', e.target.value)} placeholder="e.g. 400001" />
+          </div>
+
+          <div className="field">
+            <label htmlFor="client-country">Country</label>
+            <input id="client-country" value={form.country} onChange={(e) => update('country', e.target.value)} />
+          </div>
+
           <div className="form-actions">
             <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving...' : 'Save Client'}</button>
@@ -933,6 +991,7 @@ function AddClientModal({ onClose, onSaved }) {
     </div>
   )
 }
+
 
 function ClientsPage() {
   const [clients, setClients] = useState([])
@@ -946,6 +1005,8 @@ function ClientsPage() {
   const [showForm, setShowForm] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
+  const [showSharePopover, setShowSharePopover] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1060,10 +1121,61 @@ function ClientsPage() {
           <p>Manage your client database</p>
         </div>
 
-        <button className="primary-button add-button" onClick={() => setShowForm(true)}>
-          <Icon name="plus" size={18} />
-          Add
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
+          {showSharePopover && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 300,
+              background: 'var(--surface)', border: '1px solid var(--line)',
+              borderRadius: 10, padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              minWidth: 320,
+            }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Corporate Gifting Welcome Link
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                Share this link with clients — no login required. Submissions will appear as <strong>Inactive</strong> pending your review.
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  readOnly
+                  value={`${window.location.origin}/welcome`}
+                  style={{
+                    flex: 1, fontSize: '0.82rem', padding: '7px 10px',
+                    border: '1px solid var(--line)', borderRadius: 6,
+                    background: 'var(--page)', color: 'var(--text)',
+                    fontFamily: 'monospace', outline: 'none',
+                  }}
+                  onFocus={e => e.target.select()}
+                />
+                <button
+                  className="primary-button"
+                  style={{ padding: '7px 14px', fontSize: '0.82rem', flexShrink: 0 }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/welcome`)
+                      .then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000) })
+                  }}
+                >
+                  {shareCopied ? <><Icon name="check" size={14} /> Copied!</> : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+          <button
+            className="secondary-button"
+            onClick={() => { setShowSharePopover(v => !v); setShareCopied(false) }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            Share
+          </button>
+          <button className="primary-button add-button" onClick={() => setShowForm(true)}>
+            <Icon name="plus" size={18} />
+            Add
+          </button>
+        </div>
       </div>
 
       <div className="list-toolbar">
@@ -2818,9 +2930,9 @@ function VendorsPage() {
 const SALES_ORDER_TABLE = 'salesorder'
 const SALES_ORDER_ITEM_TABLE = 'salesorderdocument'
 
-// Order #, Client, Type, Campaign, Status, Total, Actions — keep in step with
-// the <thead> and the .so-page column widths.
-const SO_COLUMN_COUNT = 7
+// Order #, Client, Type, Campaign, Status, Total, Actions, Download — keep in
+// step with the <thead> and the .so-page column widths.
+const SO_COLUMN_COUNT = 8
 
 const SO_PAGE_SIZES = [25, 50, 75, 100]
 
@@ -4416,6 +4528,18 @@ function SalesOrdersPage({ session }) {
     ? 'No sales orders match this search. Try an order number, client or CRM reference.'
     : 'Add your first sales order to see it listed here.'
 
+  // ── Tax Invoice Download ─────────────────────────────────────────────
+  const TEMPLATE_PATH = '/Temps/SO_template.pdf'
+
+  async function handleTIDownload(order) {
+    try {
+      await generateTaxInvoice(TEMPLATE_PATH, order)
+    } catch (err) {
+      console.error('[TI Download]', err)
+      alert(`Could not generate Tax Invoice: ${err.message}`)
+    }
+  }
+
   return (
     <div className={`so-page ${selectedOrder ? 'has-selection' : ''}`}>
       <div className="so-main-content">
@@ -4484,6 +4608,7 @@ function SalesOrdersPage({ session }) {
                   <th>Status</th>
                   <th className="so-total-column">Total</th>
                   <th className="actions-column">Actions</th>
+                  <th className="download-column">Download</th>
                 </tr>
               </thead>
               <tbody>
@@ -4546,6 +4671,16 @@ function SalesOrdersPage({ session }) {
                         <td className="actions-column">
                           <button className="row-action" onClick={() => setSelectedOrder(order)} aria-label={`Open sales order ${order.order_number || order.id}`}>
                             <Icon name="chevron" size={17} />
+                          </button>
+                        </td>
+                        <td className="download-column">
+                          <button
+                            className="download-btn"
+                            onClick={(e) => { e.stopPropagation(); handleTIDownload(order); }}
+                            aria-label={`Download Tax Invoice for ${order.order_number || order.id}`}
+                            title="Download Tax Invoice"
+                          >
+                            TI
                           </button>
                         </td>
                       </tr>
@@ -4825,6 +4960,9 @@ function App() {
   }, [])
   if (currentPath === '/vendor/register') {
     return <PublicVendorForm />
+  }
+  if (currentPath === '/welcome') {
+    return <PublicClientWelcome />
   }
   // ─────────────────────────────────────────────────────────────────────
 
