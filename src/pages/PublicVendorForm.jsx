@@ -23,6 +23,7 @@ function TurnstileWidget({ onVerify, onExpire }) {
         callback: stableVerify,
         'expired-callback': stableExpire,
         theme: 'light',
+        size: 'invisible',
       })
     }
     if (window.turnstile) {
@@ -780,18 +781,12 @@ export default function PublicVendorForm() {
                   )}
                 </div>
 
-                <div className="pvf-divider" />
-
-                <SectionTitle
-                  icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>}
-                  title="Security Check"
-                  subtitle="Please verify you're human before submitting"
-                />
-
-                <TurnstileWidget
-                  onVerify={t => { setCaptchaToken(t); setError('') }}
-                  onExpire={() => setCaptchaToken(null)}
-                />
+                <div>
+                  <TurnstileWidget
+                    onVerify={t => { setCaptchaToken(t); setError('') }}
+                    onExpire={() => setCaptchaToken(null)}
+                  />
+                </div>
 
                 <div className="pvf-disclaimer">
                   By submitting, you agree your information will be used for vendor onboarding. Your registration will be reviewed before activation.

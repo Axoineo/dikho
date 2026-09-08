@@ -22,6 +22,7 @@ function TurnstileWidget({ onVerify, onExpire }) {
         callback: stableVerify,
         'expired-callback': stableExpire,
         theme: 'light',
+        size: 'invisible',
       })
     }
     if (window.turnstile) {
@@ -44,12 +45,19 @@ function TurnstileWidget({ onVerify, onExpire }) {
 }
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
-function FieldGroup({ label, children, hint }) {
+function FieldGroup({ label, children, hint, error }) {
+  const isRequired = typeof label === 'string' && label.trim().endsWith('*')
+  const cleanLabel = isRequired ? label.replace(/\s*\*\s*$/, '') : label
+  
   return (
     <div className="pvf-field">
-      <label className="pvf-label">{label}</label>
+      <label className="pvf-label">
+        {cleanLabel}
+        {isRequired && <span style={{ color: '#e53e3e' }}> *</span>}
+      </label>
       {children}
-      {hint && <span className="pvf-hint">{hint}</span>}
+      {error && <div className="pvf-field-error">Please complete this required field.</div>}
+      {hint && !error && <span className="pvf-hint">{hint}</span>}
     </div>
   )
 }
@@ -151,14 +159,27 @@ function SuccessScreen({ companyName }) {
         We've received your information successfully. Explore our curated corporate gifting
         catalogue to discover options for your team, clients and business partners.
       </p>
-      <a
-        href={DRIVE_CATALOGUE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="pvf-success-cta"
-      >
-        Explore Corporate Gifting Catalogue →
-      </a>
+      <div style={{ display: 'flex', gap: '0px', justifyContent: 'center', marginTop: '24px' }}>
+        <a
+          href={DRIVE_CATALOGUE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pvf-btn-submit-pill"
+          style={{ marginRight: '-4px' }}
+        >
+          Explore Corporate Gifting Catalogue
+        </a>
+        <a 
+          href={DRIVE_CATALOGUE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pvf-btn-submit-circle"
+          style={{ zIndex: 1, position: 'relative' }}
+          aria-label="Explore Catalogue"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        </a>
+      </div>
     </div>
   )
 }
@@ -339,28 +360,60 @@ export default function PublicClientWelcome() {
   if (submitted) return (
     <div className="pvf-shell">
       <header className="pvf-topbar">
-        <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#718096', letterSpacing: '0.05em' }}>POWERED BY</span>
+          <a href="https://dikho.in" title="Visit Dikho.in" className="pvf-logo-link">
+            <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
+          </a>
+        </div>
       </header>
       <main className="pvf-main">
         <div className="pvf-card">
           <SuccessScreen companyName={submittedCompany} />
         </div>
       </main>
+      <footer className="pvf-footer" style={{ padding: '24px', textAlign: 'center' }}>
+        <div className="pvf-footer-copy" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '1.2em', transform: 'translateY(-1px)' }}>&copy;</span>
+            <span>2026 <strong>Dikho</strong>. All Rights Reserved.</span>
+          </span>
+          <span style={{ color: '#cbd5e1' }}>|</span>
+          <a href="https://www.facebook.com/people/Dikho/61592320121301/?rdid=KWCjR7Wc7nS3Kuim&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1DRPCoKmUz%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Facebook">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          </a>
+          <a href="https://www.instagram.com/dikho0/" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Instagram">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          </a>
+          <a href="https://www.linkedin.com/login/?session_redirect=%2Fcompany%2F111150306%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="LinkedIn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+        </div>
+      </footer>
     </div>
   )
 
   return (
     <div className="pvf-shell">
       <header className="pvf-topbar">
-        <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
-        <div className="pvf-topbar-text">
-          <div className="pvf-topbar-title">Corporate Gifting</div>
-          <div className="pvf-topbar-sub">Share your company details to explore our curated gifting catalogue</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#718096', letterSpacing: '0.05em' }}>POWERED BY</span>
+          <a href="https://dikho.in" title="Visit Dikho.in" className="pvf-logo-link">
+            <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
+          </a>
         </div>
       </header>
 
       <main className="pvf-main">
-        {/* Error banner */}
+        <div className="pvf-hero">
+          <h1 className="pvf-hero-title">
+            Welcome to Dikho <br />
+            <span className="pvf-hero-italic">Corporate Gifting.</span>
+          </h1>
+          <p className="pvf-hero-sub">Share your company details to explore our curated gifting catalogue.</p>
+        </div>
+
+        {/* Step Indicator */}
         {error && (
           <div className="pvf-error" role="alert">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -379,33 +432,33 @@ export default function PublicClientWelcome() {
               />
 
               <div className="pvf-grid">
-                <FieldGroup label="Company Name *">
-                  <input name="company_name" id="field-company_name" className={`pvf-input ${fieldError === 'company_name' ? 'has-error' : ''}`} value={form.company_name} onChange={e => { update('company_name', e.target.value); setFieldError('') }} placeholder="e.g. Acme Corporation Pvt. Ltd." required />
+                <FieldGroup label="Company Name *" error={fieldError === 'company_name'}>
+                  <input name="company_name" id="field-company_name" className={`pvf-input ${fieldError === 'company_name' ? 'has-error' : ''}`} value={form.company_name} onChange={e => { update('company_name', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
-                <FieldGroup label="Contact Person *">
-                  <input name="contact_person" id="field-contact_person" className={`pvf-input ${fieldError === 'contact_person' ? 'has-error' : ''}`} value={form.contact_person} onChange={e => { update('contact_person', e.target.value); setFieldError('') }} placeholder="Full name of primary contact" required />
+                <FieldGroup label="Contact Person *" error={fieldError === 'contact_person'}>
+                  <input name="contact_person" id="field-contact_person" className={`pvf-input ${fieldError === 'contact_person' ? 'has-error' : ''}`} value={form.contact_person} onChange={e => { update('contact_person', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
-                <FieldGroup label="Designation">
-                  <input name="designation" id="field-designation" className={`pvf-input ${fieldError === 'designation' ? 'has-error' : ''}`} value={form.designation} onChange={e => update('designation', e.target.value)} placeholder="e.g. Procurement Manager" />
+                <FieldGroup label="Designation" error={fieldError === 'designation'}>
+                  <input name="designation" id="field-designation" className={`pvf-input ${fieldError === 'designation' ? 'has-error' : ''}`} value={form.designation} onChange={e => update('designation', e.target.value)} />
                 </FieldGroup>
 
-                <FieldGroup label="Mobile Number *">
+                <FieldGroup label="Mobile Number *" error={fieldError === 'contact'}>
                   <div className={`pvf-phone ${fieldError === 'contact' ? 'has-error' : ''}`}>
                     <DialCodePicker countries={allCountries} value={form.country_dialcode} onChange={val => update('country_dialcode', val)} />
                     <input name="contact" id="field-contact" className={`pvf-input ${fieldError === 'contact' ? 'has-error' : ''}`} type="tel" inputMode="numeric" maxLength={10} value={form.contact}
                       onChange={e => { update('contact', e.target.value.replace(/\D/g, '').slice(0, 10)); setFieldError('') }}
-                      placeholder="98765 43210" required />
+                      required />
                   </div>
                 </FieldGroup>
 
-                <FieldGroup label="Email">
-                  <input name="email" id="field-email" className={`pvf-input ${fieldError === 'email' ? 'has-error' : ''}`} type="email" value={form.email} onChange={e => { update('email', e.target.value); setFieldError('') }} placeholder="contact@company.com" />
+                <FieldGroup label="Email" error={fieldError === 'email'}>
+                  <input name="email" id="field-email" className={`pvf-input ${fieldError === 'email' ? 'has-error' : ''}`} type="email" value={form.email} onChange={e => { update('email', e.target.value); setFieldError('') }} />
                 </FieldGroup>
 
-                <FieldGroup label="GST Number">
-                  <input name="gstin" id="field-gstin" className={`pvf-input pvf-mono ${fieldError === 'gstin' ? 'has-error' : ''}`} value={form.gstin} onChange={e => { update('gstin', e.target.value.toUpperCase()); setFieldError('') }} placeholder="27AABCU9603R1ZM" maxLength={15} />
+                <FieldGroup label="GST Number" error={fieldError === 'gstin'}>
+                  <input name="gstin" id="field-gstin" className={`pvf-input pvf-mono ${fieldError === 'gstin' ? 'has-error' : ''}`} value={form.gstin} onChange={e => { update('gstin', e.target.value.toUpperCase()); setFieldError('') }} maxLength={15} />
                 </FieldGroup>
               </div>
 
@@ -419,24 +472,24 @@ export default function PublicClientWelcome() {
               />
 
               <div className="pvf-grid">
-                <FieldGroup label="Address Line 1 *">
-                  <input name="address_line1" id="field-address_line1" className={`pvf-input ${fieldError === 'address_line1' ? 'has-error' : ''}`} value={form.address_line1} onChange={e => { update('address_line1', e.target.value); setFieldError('') }} placeholder="Building, street, area…" required />
+                <FieldGroup label="Address Line 1 *" error={fieldError === 'address_line1'}>
+                  <input name="address_line1" id="field-address_line1" className={`pvf-input ${fieldError === 'address_line1' ? 'has-error' : ''}`} value={form.address_line1} onChange={e => { update('address_line1', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
-                <FieldGroup label="Address Line 2">
-                  <input name="address_line2" id="field-address_line2" className={`pvf-input ${fieldError === 'address_line2' ? 'has-error' : ''}`} value={form.address_line2} onChange={e => update('address_line2', e.target.value)} placeholder="Floor, landmark (optional)" />
+                <FieldGroup label="Address Line 2" error={fieldError === 'address_line2'}>
+                  <input name="address_line2" id="field-address_line2" className={`pvf-input ${fieldError === 'address_line2' ? 'has-error' : ''}`} value={form.address_line2} onChange={e => update('address_line2', e.target.value)} />
                 </FieldGroup>
 
                 <SearchableSelect label="Country" value={form.country_code} onChange={c => { handleCountryChange(c); setFieldError('') }}
-                  options={countryOptions} placeholder="Select country" searchPlaceholder="Search countries…" hasError={fieldError === 'country_code'} />
+                  options={countryOptions} placeholder="" searchPlaceholder="" hasError={fieldError === 'country_code'} error={fieldError === 'country_code'} />
 
-                <SearchableSelect label="State *" value={form.state_code} onChange={s => { handleStateChange(s); setFieldError('') }}
+                <SearchableSelect label="State" value={form.state_code} onChange={s => { handleStateChange(s); setFieldError('') }}
                   options={stateOptions}
-                  placeholder={!form.country_code ? 'Select country first' : stateOptions.length ? 'Select state' : 'No states available'}
-                  searchPlaceholder="Search states…"
-                  disabled={!form.country_code || !states.length} required hasError={fieldError === 'state'} />
+                  placeholder=""
+                  searchPlaceholder=""
+                  disabled={!form.country_code || !states.length} required hasError={fieldError === 'state'} error={fieldError === 'state'} />
 
-                <SearchableSelect label="City *" value={form.city}
+                <SearchableSelect label="City" value={form.city}
                   onChange={val => { update('city', val); setZipStatus(null); setFieldError('') }}
                   options={cityOptions}
                   placeholder={!form.state_code ? 'Select state first' : cityOptions.length ? 'Select city' : 'No cities available'}
@@ -465,35 +518,69 @@ export default function PublicClientWelcome() {
                 </FieldGroup>
               </div>
 
-              <div className="pvf-divider" />
+              <div>
+                <TurnstileWidget
+                  onVerify={t => { setCaptchaToken(t); setError('') }}
+                  onExpire={() => setCaptchaToken(null)}
+                />
+              </div>
 
-              {/* ── Security Check ───────────────────────────────────── */}
-              <SectionTitle
-                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>}
-                title="Security Check"
-                subtitle="Please verify you're human before submitting"
-              />
-
-              <TurnstileWidget
-                onVerify={t => { setCaptchaToken(t); setError('') }}
-                onExpire={() => setCaptchaToken(null)}
-              />
-
-              <div className="pvf-disclaimer">
-                By submitting, you agree your information will be used by Dikho for corporate gifting communications. Our team may reach out to you with gifting options and catalogues.
+              <div className="pvf-disclaimer" style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => alert("By submitting, you agree your information will be used by Dikho for corporate gifting communications. Our team may reach out to you with gifting options and catalogues.")}>
+                Terms & Conditions will be applied
               </div>
             </div>
 
             {/* Navigation */}
             <div className="pvf-nav">
-              <div style={{ flex: 1 }} />
-              <button type="submit" className="pvf-btn-submit" disabled={saving || !captchaToken}>
-                {saving ? 'Submitting…' : 'Submit Details'}
-              </button>
+              <div className="pvf-nav-spacer" style={{ flex: 1 }} />
+              <div style={{ display: 'flex', gap: '0px' }}>
+                <button type="submit" className="pvf-btn-submit-pill" disabled={saving || !captchaToken} style={{ marginRight: '-4px' }}>
+                  {saving ? 'Submitting…' : 'Submit'}
+                </button>
+                <button type="submit" className="pvf-btn-submit-circle" disabled={saving || !captchaToken} aria-label="Submit" style={{ zIndex: 1, position: 'relative' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+                </button>
+              </div>
             </div>
           </form>
         </div>
       </main>
+
+      {/* Floating Contact Pill */}
+      <div className="pvf-contact-pill">
+        <a href="mailto:inquiry@dikho.in" className="pvf-contact-item">
+          <span className="pvf-contact-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </span>
+          inquiry@dikho.in
+        </a>
+        <div className="pvf-contact-divider" />
+        <a href="tel:+918866008292" className="pvf-contact-item">
+          <span className="pvf-contact-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </span>
+          +91 886600 8292
+        </a>
+      </div>
+
+      <footer className="pvf-footer" style={{ padding: '24px', textAlign: 'center' }}>
+        <div className="pvf-footer-copy" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '1.2em', transform: 'translateY(-1px)' }}>&copy;</span>
+            <span>2026 <strong>Dikho</strong>. All Rights Reserved.</span>
+          </span>
+          <span style={{ color: '#cbd5e1' }}>|</span>
+          <a href="https://www.facebook.com/people/Dikho/61592320121301/?rdid=KWCjR7Wc7nS3Kuim&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1DRPCoKmUz%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Facebook">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          </a>
+          <a href="https://www.instagram.com/dikho0/" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Instagram">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+          </a>
+          <a href="https://www.linkedin.com/login/?session_redirect=%2Fcompany%2F111150306%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="LinkedIn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </a>
+        </div>
+      </footer>
     </div>
   )
 }
