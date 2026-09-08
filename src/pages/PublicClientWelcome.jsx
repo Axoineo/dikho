@@ -165,7 +165,7 @@ function SuccessScreen({ companyName }) {
           target="_blank"
           rel="noopener noreferrer"
           className="pvf-btn-submit-pill"
-          style={{ marginRight: '-4px' }}
+          style={{ marginRight: '0px' }}
         >
           Explore Corporate Gifting Catalogue
         </a>
@@ -277,6 +277,7 @@ export default function PublicClientWelcome() {
   function validate() {
     if (!form.company_name.trim()) return { field: 'company_name', message: 'Company name is required.' }
     if (!form.contact_person.trim()) return { field: 'contact_person', message: 'Contact person name is required.' }
+    if (!form.designation.trim()) return { field: 'designation', message: 'Job title is required.' }
     if (!form.contact.trim()) return { field: 'contact', message: 'Mobile number is required.' }
     if (form.country_code === 'IN' && form.contact.replace(/\D/g, '').length !== 10) {
       return { field: 'contact', message: 'Please enter a valid 10-digit mobile number.' }
@@ -374,10 +375,7 @@ export default function PublicClientWelcome() {
       </main>
       <footer className="pvf-footer" style={{ padding: '24px', textAlign: 'center' }}>
         <div className="pvf-footer-copy" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '1.2em', transform: 'translateY(-1px)' }}>&copy;</span>
-            <span>2026 <strong>Dikho</strong>. All Rights Reserved.</span>
-          </span>
+          <span>© 2026 <strong>Dikho</strong>. All Rights Reserved.</span>
           <span style={{ color: '#cbd5e1' }}>|</span>
           <a href="https://www.facebook.com/people/Dikho/61592320121301/?rdid=KWCjR7Wc7nS3Kuim&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1DRPCoKmUz%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Facebook">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
@@ -440,8 +438,8 @@ export default function PublicClientWelcome() {
                   <input name="contact_person" id="field-contact_person" className={`pvf-input ${fieldError === 'contact_person' ? 'has-error' : ''}`} value={form.contact_person} onChange={e => { update('contact_person', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
-                <FieldGroup label="Designation" error={fieldError === 'designation'}>
-                  <input name="designation" id="field-designation" className={`pvf-input ${fieldError === 'designation' ? 'has-error' : ''}`} value={form.designation} onChange={e => update('designation', e.target.value)} />
+                <FieldGroup label="Job Title *" error={fieldError === 'designation'}>
+                  <input name="designation" id="field-designation" className={`pvf-input ${fieldError === 'designation' ? 'has-error' : ''}`} value={form.designation} onChange={e => { update('designation', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
                 <FieldGroup label="Mobile Number *" error={fieldError === 'contact'}>
@@ -525,8 +523,8 @@ export default function PublicClientWelcome() {
                 />
               </div>
 
-              <div className="pvf-disclaimer" style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => alert("By submitting, you agree your information will be used by Dikho for corporate gifting communications. Our team may reach out to you with gifting options and catalogues.")}>
-                Terms & Conditions will be applied
+              <div className="pvf-disclaimer" style={{ marginBottom: '24px' }}>
+                By submitting, you agree your information will be used by Dikho for corporate gifting communications. Our team may reach out to you with gifting options and catalogues.
               </div>
             </div>
 
@@ -534,7 +532,7 @@ export default function PublicClientWelcome() {
             <div className="pvf-nav">
               <div className="pvf-nav-spacer" style={{ flex: 1 }} />
               <div style={{ display: 'flex', gap: '0px' }}>
-                <button type="submit" className="pvf-btn-submit-pill" disabled={saving || !captchaToken} style={{ marginRight: '-4px' }}>
+                <button type="submit" className="pvf-btn-submit-pill" disabled={saving || !captchaToken} style={{ marginRight: '0px' }}>
                   {saving ? 'Submitting…' : 'Submit'}
                 </button>
                 <button type="submit" className="pvf-btn-submit-circle" disabled={saving || !captchaToken} aria-label="Submit" style={{ zIndex: 1, position: 'relative' }}>
@@ -565,10 +563,7 @@ export default function PublicClientWelcome() {
 
       <footer className="pvf-footer" style={{ padding: '24px', textAlign: 'center' }}>
         <div className="pvf-footer-copy" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '1.2em', transform: 'translateY(-1px)' }}>&copy;</span>
-            <span>2026 <strong>Dikho</strong>. All Rights Reserved.</span>
-          </span>
+          <span>© 2026 <strong>Dikho</strong>. All Rights Reserved.</span>
           <span style={{ color: '#cbd5e1' }}>|</span>
           <a href="https://www.facebook.com/people/Dikho/61592320121301/?rdid=KWCjR7Wc7nS3Kuim&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F1DRPCoKmUz%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Facebook">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
