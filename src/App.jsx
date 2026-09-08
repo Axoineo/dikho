@@ -1498,7 +1498,7 @@ export function SearchableSelect({ label, value, onChange, options, placeholder,
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
       >
-        <span className={selected ? '' : 'search-select-placeholder'}>{selected?.label || placeholder}</span>
+        <span className={selected || value ? '' : 'search-select-placeholder'}>{selected ? selected.label : (value || placeholder)}</span>
         <Icon name="chevronDown" size={16} />
       </button>
       {open && (

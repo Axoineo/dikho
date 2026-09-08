@@ -265,20 +265,31 @@ export default function PublicClientWelcome() {
       
       const office = offices[0]
       const allStates = State.getStatesOfCountry('IN')
-      const stateMatch = allStates.find(s => s.name.toLowerCase() === office.State.toLowerCase())
+      const stateMatch = allStates.find(s => {
+        const s1 = s.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const s2 = office.State.toLowerCase().replace(/[^a-z0-9]/g, '')
+        return s1 === s2 || s1.includes(s2) || s2.includes(s1)
+      })
       
       if (stateMatch) {
         const citiesInState = City.getCitiesOfState('IN', stateMatch.isoCode)
-        const cityMatch = citiesInState.find(c => c.name.toLowerCase() === office.District.toLowerCase())
+        const d2 = office.District.toLowerCase().replace(/[^a-z0-9]/g, '')
+        
+        let cityMatch = citiesInState.find(c => {
+          const cName = c.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+          return cName === d2 || (d2 && cName.includes(d2)) || (d2 && d2.includes(cName))
+        })
+        
+        const cityName = cityMatch ? cityMatch.name : office.District
         
         setForm(f => ({
           ...f,
           state_code: stateMatch.isoCode,
           state: stateMatch.name,
-          city: cityMatch ? cityMatch.name : (f.city || office.District)
+          city: cityName
         }))
         
-        setZipStatus({ type: 'success', message: `${office.District}, ${office.State}` })
+        setZipStatus({ type: 'success', message: `${cityName}, ${stateMatch.name}` })
       } else {
         setZipStatus({ type: 'warning', message: `Please select State manually.` })
       }

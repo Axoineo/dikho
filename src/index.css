@@ -2236,12 +2236,13 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-hero-sub {
-  font-size: 1.15rem;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.25rem;
   font-weight: 400;
   color: #4a5568;
   margin: 0 auto;
   max-width: 600px;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.01em;
 }
 
 .pvf-main {
@@ -3126,9 +3127,18 @@ select.pvf-input.has-error:focus,
   .pvf-step-label { display: none; }
   .pvf-step.is-active .pvf-step-label { display: block; font-size: 0.75rem; }
   
+  .pvf-hero-title { font-size: 1.8rem; }
+  .pvf-hero-sub { font-size: 1.1rem; padding: 0 10px; }
+  
+  .pvf-input, select.pvf-input, .search-select-trigger, .pvf-phone input {
+    font-size: 16px !important; /* prevents iOS auto-zoom */
+    height: 46px !important; /* more finger-friendly */
+  }
+  .pvf-textarea { font-size: 16px !important; }
+
   .pvf-nav { padding: 0 16px 20px; flex-direction: column-reverse; gap: 12px; }
   .pvf-nav-spacer { display: none; }
-  .pvf-btn-submit, .pvf-btn-next, .pvf-btn-back { width: 100%; display: flex; text-align: center; justify-content: center; height: 44px; }
+  .pvf-btn-submit-pill, .pvf-btn-next, .pvf-btn-back { width: 100%; display: flex; text-align: center; justify-content: center; height: 48px; border-radius: 40px !important; }
   
   .pvf-footer { padding: 16px; }
   .pvf-footer-content { flex-direction: column; text-align: center; gap: 12px; }
