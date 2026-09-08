@@ -248,26 +248,42 @@ export default function PublicClientWelcome() {
     setZipStatus(null)
   }
 
-  // Indian PIN verification
+  // Indian PIN verification and auto-fill
   async function verifyPin(zip) {
-    if (form.country_code !== 'IN' || !/^\d{6}$/.test(zip) || !form.city) return
-    setZipStatus({ type: 'checking', message: 'Verifying PIN…' })
+    if (form.country_code !== 'IN' || !/^\d{6}$/.test(zip)) return
+    
+    setZipStatus({ type: 'checking', message: 'Fetching details…' })
     try {
       const res = await fetch(`https://api.postalpincode.in/pincode/${zip}`)
       const json = await res.json()
       const offices = json?.[0]?.PostOffice || []
-      if (!offices.length) { setZipStatus({ type: 'error', message: 'PIN code not found.' }); return }
-      const sel = form.city.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const match = offices.some(o => {
-        const n = String(o.Name || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-        const d = String(o.District || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-        return n.includes(sel) || sel.includes(n) || d.includes(sel) || sel.includes(d)
-      })
-      setZipStatus(match
-        ? { type: 'success', message: 'PIN code matches.' }
-        : { type: 'warning', message: `PIN ${zip} may not match ${form.city} — please verify.` })
+      
+      if (!offices.length) { 
+        setZipStatus({ type: 'error', message: 'PIN code not found.' })
+        return 
+      }
+      
+      const office = offices[0]
+      const allStates = State.getStatesOfCountry('IN')
+      const stateMatch = allStates.find(s => s.name.toLowerCase() === office.State.toLowerCase())
+      
+      if (stateMatch) {
+        const citiesInState = City.getCitiesOfState('IN', stateMatch.isoCode)
+        const cityMatch = citiesInState.find(c => c.name.toLowerCase() === office.District.toLowerCase())
+        
+        setForm(f => ({
+          ...f,
+          state_code: stateMatch.isoCode,
+          state: stateMatch.name,
+          city: cityMatch ? cityMatch.name : (f.city || office.District)
+        }))
+        
+        setZipStatus({ type: 'success', message: `${office.District}, ${office.State}` })
+      } else {
+        setZipStatus({ type: 'warning', message: `Please select State manually.` })
+      }
     } catch {
-      setZipStatus({ type: 'warning', message: 'PIN verification unavailable. You can still continue.' })
+      setZipStatus({ type: 'warning', message: 'Auto-fetch unavailable. Please select manually.' })
     }
   }
 
@@ -373,7 +389,7 @@ export default function PublicClientWelcome() {
           <SuccessScreen companyName={submittedCompany} />
         </div>
       </main>
-      <footer className="pvf-footer" style={{ padding: '24px', textAlign: 'center' }}>
+      <footer className="pvf-footer" style={{ padding: '16px', textAlign: 'center', fontSize: '0.9rem' }}>
         <div className="pvf-footer-copy" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.83 14.83a4 4 0 1 1 0-5.66"/></svg>
@@ -481,6 +497,30 @@ export default function PublicClientWelcome() {
                   <input name="address_line2" id="field-address_line2" className={`pvf-input ${fieldError === 'address_line2' ? 'has-error' : ''}`} value={form.address_line2} onChange={e => update('address_line2', e.target.value)} />
                 </FieldGroup>
 
+                <FieldGroup label="Pincode *" error={fieldError === 'pincode'}>
+                  <input name="pincode" id="field-pincode" className={`pvf-input ${fieldError === 'pincode' ? 'has-error' : ''}`} value={form.pincode}
+                    onChange={e => {
+                      const raw = e.target.value
+                      const val = form.country_code === 'IN'
+                        ? raw.replace(/\D/g, '').slice(0, 6)
+                        : raw.replace(/[^a-zA-Z0-9 -]/g, '').slice(0, 10)
+                      update('pincode', val)
+                      setZipStatus(null)
+                      setFieldError('')
+                      if (form.country_code === 'IN' && val.length === 6) {
+                        verifyPin(val)
+                      }
+                    }}
+                    onBlur={() => verifyPin(form.pincode)}
+                    inputMode={form.country_code === 'IN' ? 'numeric' : 'text'}
+                    required />
+                  {zipStatus && (
+                    <span style={{ fontSize: '0.8rem', marginTop: '4px', display: 'block' }} className={`${zipStatus.type === 'success' ? 'pvf-hint-ok' : zipStatus.type === 'error' ? 'pvf-hint-error' : 'pvf-hint-warn'}`}>
+                      {zipStatus.message}
+                    </span>
+                  )}
+                </FieldGroup>
+
                 <SearchableSelect label="Country" value={form.country_code} onChange={c => { handleCountryChange(c); setFieldError('') }}
                   options={countryOptions} placeholder="" searchPlaceholder="" hasError={fieldError === 'country_code'} error={fieldError === 'country_code'} />
 
@@ -496,27 +536,6 @@ export default function PublicClientWelcome() {
                   placeholder=""
                   searchPlaceholder="Search cities…"
                   disabled={!form.state_code || !cities.length} required hasError={fieldError === 'city'} />
-
-                <FieldGroup label="Pincode *">
-                  <input name="pincode" id="field-pincode" className={`pvf-input ${fieldError === 'pincode' ? 'has-error' : ''}`} value={form.pincode}
-                    onChange={e => {
-                      const raw = e.target.value
-                      const val = form.country_code === 'IN'
-                        ? raw.replace(/\D/g, '').slice(0, 6)
-                        : raw.replace(/[^a-zA-Z0-9 -]/g, '').slice(0, 10)
-                      update('pincode', val)
-                      setZipStatus(null)
-                      setFieldError('')
-                    }}
-                    onBlur={() => verifyPin(form.pincode)}
-                    inputMode={form.country_code === 'IN' ? 'numeric' : 'text'}
-                    required />
-                  {zipStatus && (
-                    <span className={`pvf-hint ${zipStatus.type === 'success' ? 'pvf-hint-ok' : zipStatus.type === 'error' ? 'pvf-hint-error' : 'pvf-hint-warn'}`}>
-                      {zipStatus.message}
-                    </span>
-                  )}
-                </FieldGroup>
               </div>
 
               <div>
@@ -560,7 +579,7 @@ export default function PublicClientWelcome() {
         </a>
       </div>
 
-      <footer className="pvf-footer" style={{ padding: '24px', textAlign: 'center' }}>
+      <footer className="pvf-footer" style={{ padding: '16px', textAlign: 'center', fontSize: '0.9rem' }}>
         <div className="pvf-footer-copy" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M14.83 14.83a4 4 0 1 1 0-5.66"/></svg>

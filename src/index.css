@@ -2131,9 +2131,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-topbar {
-  background: rgba(234, 243, 250, 0.8);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
+  background: #eaf3fa;
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 40px;
   margin: 16px auto;
@@ -3139,6 +3137,10 @@ select.pvf-input.has-error:focus,
   .pvf-footer-col.left, .pvf-footer-col.center, .pvf-footer-col.right { justify-content: center; align-items: center; }
   
   .pvf-contact-pill {
+    display: none;
+  }
+  
+  .pvf-btn-submit-circle {
     display: none;
   }
 
