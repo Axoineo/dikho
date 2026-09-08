@@ -2132,8 +2132,8 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 .pvf-topbar {
   background: rgba(234, 243, 250, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 40px;
   margin: 16px auto;
@@ -2321,7 +2321,6 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
-  overflow: hidden;
   box-shadow: 0 2px 12px rgba(24, 84, 148, 0.05);
 }
 
@@ -2412,7 +2411,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-field-error {
-  color: #e53e3e;
+  color: #ef4444;
   font-size: 0.75rem;
   margin-top: 2px;
 }
@@ -2445,6 +2444,19 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .pvf-input:focus {
   border-color: #185494;
   box-shadow: 0 0 0 3px rgba(24, 84, 148, 0.12);
+}
+
+select.pvf-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+select.pvf-input:invalid,
+select.pvf-input option[value=""] {
+  color: #a0aec0;
 }
 
 .pvf-textarea {
@@ -2971,9 +2983,15 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-input.has-error,
-.search-select-wrap.has-error .search-select-trigger {
-  border-color: #e53e3e !important;
-  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.12) !important;
+select.pvf-input.has-error,
+.pvf-phone.has-error {
+  border-color: #ef4444 !important;
+  box-shadow: none !important;
+}
+.pvf-input.has-error:focus,
+select.pvf-input.has-error:focus,
+.pvf-phone.has-error:focus-within {
+  box-shadow: 0 0 0 1px #ef4444 !important;
 }
 
 /* Footer */
@@ -3121,31 +3139,8 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   .pvf-footer-col.left, .pvf-footer-col.center, .pvf-footer-col.right { justify-content: center; align-items: center; }
   
   .pvf-contact-pill {
-    left: auto;
-    right: 16px;
-    bottom: 16px;
-    flex-direction: column;
-    width: auto;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    gap: 12px;
-    transform: none;
+    display: none;
   }
-  .pvf-contact-item {
-    background: #fff;
-    border-radius: 40px;
-    padding: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    border: 1px solid #e2e8f0;
-    font-size: 0; /* hides text */
-  }
-  .pvf-contact-icon {
-    width: 32px;
-    height: 32px;
-  }
-  .pvf-contact-divider { display: none; }
 
   /* Success Screen Mobile Fixes */
   .pvf-success { padding: 32px 16px; }

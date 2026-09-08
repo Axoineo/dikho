@@ -5023,6 +5023,7 @@ function App() {
           </div>
         </div>
       )}
+      {error && <div className="pvf-field-error">Please complete this required field.</div>}
     </div>
   )
 }
