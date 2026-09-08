@@ -250,34 +250,52 @@ export default function PublicClientWelcome() {
     }
   }
 
+  const [fieldError, setFieldError] = useState('')
+
   // Validation
   function validate() {
-    if (!form.company_name.trim()) return 'Company name is required.'
-    if (!form.contact_person.trim()) return 'Contact person name is required.'
-    if (!form.contact.trim()) return 'Mobile number is required.'
+    if (!form.company_name.trim()) return { field: 'company_name', message: 'Company name is required.' }
+    if (!form.contact_person.trim()) return { field: 'contact_person', message: 'Contact person name is required.' }
+    if (!form.contact.trim()) return { field: 'contact', message: 'Mobile number is required.' }
     if (form.country_code === 'IN' && form.contact.replace(/\D/g, '').length !== 10) {
-      return 'Please enter a valid 10-digit mobile number.'
+      return { field: 'contact', message: 'Please enter a valid 10-digit mobile number.' }
     }
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      return 'Please enter a valid email address.'
+      return { field: 'email', message: 'Please enter a valid email address.' }
     }
-    if (!form.address_line1.trim()) return 'Address line 1 is required.'
-    if (!form.city.trim()) return 'City is required.'
-    if (!form.state.trim()) return 'State is required.'
-    if (!form.pincode.trim()) return 'Pincode is required.'
+    if (!form.address_line1.trim()) return { field: 'address_line1', message: 'Address line 1 is required.' }
+    if (!form.state.trim()) return { field: 'state', message: 'State is required.' }
+    if (!form.city.trim()) return { field: 'city', message: 'City is required.' }
+    if (!form.pincode.trim()) return { field: 'pincode', message: 'Pincode is required.' }
     if (form.country_code === 'IN' && !/^\d{6}$/.test(form.pincode.trim())) {
-      return 'Please enter a valid 6-digit pincode.'
+      return { field: 'pincode', message: 'Please enter a valid 6-digit pincode.' }
     }
-    if (zipStatus?.type === 'error') return zipStatus.message
-    if (!captchaToken) return 'Please complete the security check.'
-    return ''
+    if (zipStatus?.type === 'error') return { field: 'pincode', message: zipStatus.message }
+    if (!captchaToken) return { field: 'captcha', message: 'Please complete the security check.' }
+    return null
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
+    setFieldError('')
+    setError('')
+    
     const err = validate()
-    if (err) { setError(err); return }
-    setSaving(true); setError('')
+    if (err) { 
+      setError(err.message)
+      setFieldError(err.field)
+      
+      // Auto-focus the field with the error
+      setTimeout(() => {
+        const el = document.querySelector(`[name="${err.field}"]`) || document.getElementById(`field-${err.field}`)
+        if (el && el.focus) {
+          el.focus()
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 50)
+      return 
+    }
+    setSaving(true)
 
     try {
       const ph = form.contact.replace(/\D/g, '')
@@ -362,32 +380,32 @@ export default function PublicClientWelcome() {
 
               <div className="pvf-grid">
                 <FieldGroup label="Company Name *">
-                  <input className="pvf-input" value={form.company_name} onChange={e => update('company_name', e.target.value)} placeholder="e.g. Acme Corporation Pvt. Ltd." required />
+                  <input name="company_name" id="field-company_name" className={`pvf-input ${fieldError === 'company_name' ? 'has-error' : ''}`} value={form.company_name} onChange={e => { update('company_name', e.target.value); setFieldError('') }} placeholder="e.g. Acme Corporation Pvt. Ltd." required />
                 </FieldGroup>
 
                 <FieldGroup label="Contact Person *">
-                  <input className="pvf-input" value={form.contact_person} onChange={e => update('contact_person', e.target.value)} placeholder="Full name of primary contact" required />
+                  <input name="contact_person" id="field-contact_person" className={`pvf-input ${fieldError === 'contact_person' ? 'has-error' : ''}`} value={form.contact_person} onChange={e => { update('contact_person', e.target.value); setFieldError('') }} placeholder="Full name of primary contact" required />
                 </FieldGroup>
 
                 <FieldGroup label="Designation">
-                  <input className="pvf-input" value={form.designation} onChange={e => update('designation', e.target.value)} placeholder="e.g. Procurement Manager" />
+                  <input name="designation" id="field-designation" className={`pvf-input ${fieldError === 'designation' ? 'has-error' : ''}`} value={form.designation} onChange={e => update('designation', e.target.value)} placeholder="e.g. Procurement Manager" />
                 </FieldGroup>
 
                 <FieldGroup label="Mobile Number *">
-                  <div className="pvf-phone">
+                  <div className={`pvf-phone ${fieldError === 'contact' ? 'has-error' : ''}`}>
                     <DialCodePicker countries={allCountries} value={form.country_dialcode} onChange={val => update('country_dialcode', val)} />
-                    <input className="pvf-input" type="tel" inputMode="numeric" maxLength={10} value={form.contact}
-                      onChange={e => update('contact', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    <input name="contact" id="field-contact" className={`pvf-input ${fieldError === 'contact' ? 'has-error' : ''}`} type="tel" inputMode="numeric" maxLength={10} value={form.contact}
+                      onChange={e => { update('contact', e.target.value.replace(/\D/g, '').slice(0, 10)); setFieldError('') }}
                       placeholder="98765 43210" required />
                   </div>
                 </FieldGroup>
 
                 <FieldGroup label="Email">
-                  <input className="pvf-input" type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="contact@company.com" />
+                  <input name="email" id="field-email" className={`pvf-input ${fieldError === 'email' ? 'has-error' : ''}`} type="email" value={form.email} onChange={e => { update('email', e.target.value); setFieldError('') }} placeholder="contact@company.com" />
                 </FieldGroup>
 
                 <FieldGroup label="GST Number">
-                  <input className="pvf-input pvf-mono" value={form.gstin} onChange={e => update('gstin', e.target.value.toUpperCase())} placeholder="27AABCU9603R1ZM" maxLength={15} />
+                  <input name="gstin" id="field-gstin" className={`pvf-input pvf-mono ${fieldError === 'gstin' ? 'has-error' : ''}`} value={form.gstin} onChange={e => { update('gstin', e.target.value.toUpperCase()); setFieldError('') }} placeholder="27AABCU9603R1ZM" maxLength={15} />
                 </FieldGroup>
               </div>
 
@@ -402,31 +420,31 @@ export default function PublicClientWelcome() {
 
               <div className="pvf-grid">
                 <FieldGroup label="Address Line 1 *">
-                  <input className="pvf-input" value={form.address_line1} onChange={e => update('address_line1', e.target.value)} placeholder="Building, street, area…" required />
+                  <input name="address_line1" id="field-address_line1" className={`pvf-input ${fieldError === 'address_line1' ? 'has-error' : ''}`} value={form.address_line1} onChange={e => { update('address_line1', e.target.value); setFieldError('') }} placeholder="Building, street, area…" required />
                 </FieldGroup>
 
                 <FieldGroup label="Address Line 2">
-                  <input className="pvf-input" value={form.address_line2} onChange={e => update('address_line2', e.target.value)} placeholder="Floor, landmark (optional)" />
+                  <input name="address_line2" id="field-address_line2" className={`pvf-input ${fieldError === 'address_line2' ? 'has-error' : ''}`} value={form.address_line2} onChange={e => update('address_line2', e.target.value)} placeholder="Floor, landmark (optional)" />
                 </FieldGroup>
 
-                <SearchableSelect label="Country" value={form.country_code} onChange={handleCountryChange}
-                  options={countryOptions} placeholder="Select country" searchPlaceholder="Search countries…" />
+                <SearchableSelect label="Country" value={form.country_code} onChange={c => { handleCountryChange(c); setFieldError('') }}
+                  options={countryOptions} placeholder="Select country" searchPlaceholder="Search countries…" hasError={fieldError === 'country_code'} />
 
-                <SearchableSelect label="State" value={form.state_code} onChange={handleStateChange}
+                <SearchableSelect label="State *" value={form.state_code} onChange={s => { handleStateChange(s); setFieldError('') }}
                   options={stateOptions}
                   placeholder={!form.country_code ? 'Select country first' : stateOptions.length ? 'Select state' : 'No states available'}
                   searchPlaceholder="Search states…"
-                  disabled={!form.country_code || !states.length} required />
+                  disabled={!form.country_code || !states.length} required hasError={fieldError === 'state'} />
 
-                <SearchableSelect label="City" value={form.city}
-                  onChange={val => { update('city', val); setZipStatus(null) }}
+                <SearchableSelect label="City *" value={form.city}
+                  onChange={val => { update('city', val); setZipStatus(null); setFieldError('') }}
                   options={cityOptions}
                   placeholder={!form.state_code ? 'Select state first' : cityOptions.length ? 'Select city' : 'No cities available'}
                   searchPlaceholder="Search cities…"
-                  disabled={!form.state_code || !cities.length} required />
+                  disabled={!form.state_code || !cities.length} required hasError={fieldError === 'city'} />
 
                 <FieldGroup label="Pincode *">
-                  <input className="pvf-input" value={form.pincode}
+                  <input name="pincode" id="field-pincode" className={`pvf-input ${fieldError === 'pincode' ? 'has-error' : ''}`} value={form.pincode}
                     onChange={e => {
                       const raw = e.target.value
                       const val = form.country_code === 'IN'
@@ -434,6 +452,7 @@ export default function PublicClientWelcome() {
                         : raw.replace(/[^a-zA-Z0-9 -]/g, '').slice(0, 10)
                       update('pincode', val)
                       setZipStatus(null)
+                      setFieldError('')
                     }}
                     onBlur={() => verifyPin(form.pincode)}
                     inputMode={form.country_code === 'IN' ? 'numeric' : 'text'}

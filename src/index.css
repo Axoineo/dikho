@@ -2852,12 +2852,34 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   border: 1.5px solid #d1dbe8;
   border-radius: 8px;
   font-size: 0.88rem;
+  background: #fff !important;
+  color: #1e2a3a !important;
+}
+
+.pvf-grid .search-select-menu {
+  background: #fff !important;
+  border-color: #d1dbe8 !important;
+}
+
+.pvf-grid .search-select-option {
+  color: #1e2a3a !important;
+}
+
+.pvf-grid .search-select-option:hover,
+.pvf-grid .search-select-option.selected {
+  background: #f0f4f9 !important;
 }
 
 .pvf-grid .search-select-trigger:focus-within,
 .pvf-grid .search-select-wrap.is-open .search-select-trigger {
-  border-color: #185494;
-  box-shadow: 0 0 0 3px rgba(24, 84, 148, 0.12);
+  border-color: #185494 !important;
+  box-shadow: 0 0 0 3px rgba(24, 84, 148, 0.12) !important;
+}
+
+.pvf-input.has-error,
+.search-select-wrap.has-error .search-select-trigger {
+  border-color: #e53e3e !important;
+  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.12) !important;
 }
 
 /* Mobile */

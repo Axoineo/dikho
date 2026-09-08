@@ -1467,7 +1467,7 @@ function VendorDetails({ vendor, address, onClose, mediaMap, subMediaMap }) {
   )
 }
 
- export function SearchableSelect({ label, value, onChange, options, placeholder, disabled = false, required = false, searchPlaceholder = 'Search...' }) {
+ export function SearchableSelect({ label, value, onChange, options, placeholder, disabled = false, required = false, searchPlaceholder = 'Search...', hasError = false }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const containerRef = useRef(null)
@@ -1496,10 +1496,11 @@ function VendorDetails({ vendor, address, onClose, mediaMap, subMediaMap }) {
     .slice(0, 150)
 
   return (
-    <div ref={containerRef} className={`search-select-wrap ${open ? 'is-open' : ''}`}>
+    <div ref={containerRef} className={`search-select-wrap ${open ? 'is-open' : ''} ${hasError ? 'has-error' : ''}`}>
       <label>{label}{required ? ' *' : ''}</label>
       <button
         type="button"
+        name={label.toLowerCase().includes('state') ? 'state' : label.toLowerCase().includes('city') ? 'city' : label.toLowerCase().includes('country') ? 'country_code' : ''}
         className={`search-select-trigger ${open ? 'open' : ''}`}
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
