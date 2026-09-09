@@ -304,7 +304,6 @@ export default function PublicClientWelcome() {
   function validate() {
     if (!form.company_name.trim()) return { field: 'company_name', message: 'Company name is required.' }
     if (!form.contact_person.trim()) return { field: 'contact_person', message: 'Contact person name is required.' }
-    if (!form.designation.trim()) return { field: 'designation', message: 'Job title is required.' }
     if (!form.contact.trim()) return { field: 'contact', message: 'Mobile number is required.' }
     if (form.country_code === 'IN' && form.contact.replace(/\D/g, '').length !== 10) {
       return { field: 'contact', message: 'Please enter a valid 10-digit mobile number.' }
@@ -312,7 +311,6 @@ export default function PublicClientWelcome() {
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       return { field: 'email', message: 'Please enter a valid email address.' }
     }
-    if (!form.address_line1.trim()) return { field: 'address_line1', message: 'Address line 1 is required.' }
     if (!form.state.trim()) return { field: 'state', message: 'State is required.' }
     if (!form.city.trim()) return { field: 'city', message: 'City is required.' }
     if (!form.pincode.trim()) return { field: 'pincode', message: 'Pincode is required.' }
@@ -351,13 +349,13 @@ export default function PublicClientWelcome() {
       const payload = {
         company_name: form.company_name.trim(),
         contact_person: form.contact_person.trim(),
-        designation: form.designation.trim() || null,
+        designation: null,
         country_dialcode: form.country_dialcode,
         contact: ph ? Number(ph) : null,
         email: form.email.trim() || null,
-        gstin: form.gstin.trim().toUpperCase() || null,
-        address_line1: form.address_line1.trim(),
-        address_line2: form.address_line2.trim() || null,
+        gstin: null,
+        address_line1: '-',
+        address_line2: null,
         city: form.city.trim(),
         state: form.state.trim(),
         pincode: form.pincode.trim(),
@@ -413,7 +411,7 @@ export default function PublicClientWelcome() {
           <a href="https://www.instagram.com/dikho0/" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Instagram">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
           </a>
-          <a href="https://www.linkedin.com/login/?session_redirect=%2Fcompany%2F111150306%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="LinkedIn">
+          <a href="https://www.linkedin.com/company/dikhoglobalmedia/" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="LinkedIn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
         </div>
@@ -438,7 +436,7 @@ export default function PublicClientWelcome() {
             Welcome to Dikho <br />
             <span className="pvf-hero-italic">Corporate Gifting.</span>
           </h1>
-          <p className="pvf-hero-sub">Share your company details to explore our curated gifting catalogue.</p>
+          <p className="pvf-hero-sub">Fill the details &amp; get instant access to 60+ exclusive Corporate &amp; Festive Gifting Catalogues 2026</p>
         </div>
 
         {/* Step Indicator */}
@@ -455,24 +453,20 @@ export default function PublicClientWelcome() {
               {/* ── Company Information ──────────────────────────────── */}
               <SectionTitle
                 icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>}
-                title="Company Information"
-                subtitle="Tell us about your organisation"
+                title="Quick Access Form"
+                subtitle="Please provide your details below to continue."
               />
 
               <div className="pvf-grid">
-                <FieldGroup label="Company Name *" error={fieldError === 'company_name'}>
+                <FieldGroup label="Company name *" error={fieldError === 'company_name'}>
                   <input name="company_name" id="field-company_name" className={`pvf-input ${fieldError === 'company_name' ? 'has-error' : ''}`} value={form.company_name} onChange={e => { update('company_name', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
-                <FieldGroup label="Contact Person *" error={fieldError === 'contact_person'}>
+                <FieldGroup label="Your Name *" error={fieldError === 'contact_person'}>
                   <input name="contact_person" id="field-contact_person" className={`pvf-input ${fieldError === 'contact_person' ? 'has-error' : ''}`} value={form.contact_person} onChange={e => { update('contact_person', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
 
-                <FieldGroup label="Job Title *" error={fieldError === 'designation'}>
-                  <input name="designation" id="field-designation" className={`pvf-input ${fieldError === 'designation' ? 'has-error' : ''}`} value={form.designation} onChange={e => { update('designation', e.target.value); setFieldError('') }} required />
-                </FieldGroup>
-
-                <FieldGroup label="Mobile Number *" error={fieldError === 'contact'}>
+                <FieldGroup label="Mobile number *" error={fieldError === 'contact'}>
                   <div className={`pvf-phone ${fieldError === 'contact' ? 'has-error' : ''}`}>
                     <DialCodePicker countries={allCountries} value={form.country_dialcode} onChange={val => update('country_dialcode', val)} />
                     <input name="contact" id="field-contact" className={`pvf-input ${fieldError === 'contact' ? 'has-error' : ''}`} type="tel" inputMode="numeric" maxLength={10} value={form.contact}
@@ -481,31 +475,8 @@ export default function PublicClientWelcome() {
                   </div>
                 </FieldGroup>
 
-                <FieldGroup label="Email" error={fieldError === 'email'}>
+                <FieldGroup label="Email ID (optional)" error={fieldError === 'email'}>
                   <input name="email" id="field-email" className={`pvf-input ${fieldError === 'email' ? 'has-error' : ''}`} type="email" value={form.email} onChange={e => { update('email', e.target.value); setFieldError('') }} />
-                </FieldGroup>
-
-                <FieldGroup label="GST Number" error={fieldError === 'gstin'}>
-                  <input name="gstin" id="field-gstin" className={`pvf-input pvf-mono ${fieldError === 'gstin' ? 'has-error' : ''}`} value={form.gstin} onChange={e => { update('gstin', e.target.value.toUpperCase()); setFieldError('') }} maxLength={15} />
-                </FieldGroup>
-              </div>
-
-              <div className="pvf-divider" />
-
-              {/* ── Address ──────────────────────────────────────────── */}
-              <SectionTitle
-                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>}
-                title="Business Address"
-                subtitle="Your company's registered or office address"
-              />
-
-              <div className="pvf-grid">
-                <FieldGroup label="Address Line 1 *" error={fieldError === 'address_line1'}>
-                  <input name="address_line1" id="field-address_line1" className={`pvf-input ${fieldError === 'address_line1' ? 'has-error' : ''}`} value={form.address_line1} onChange={e => { update('address_line1', e.target.value); setFieldError('') }} required />
-                </FieldGroup>
-
-                <FieldGroup label="Address Line 2" error={fieldError === 'address_line2'}>
-                  <input name="address_line2" id="field-address_line2" className={`pvf-input ${fieldError === 'address_line2' ? 'has-error' : ''}`} value={form.address_line2} onChange={e => update('address_line2', e.target.value)} />
                 </FieldGroup>
 
                 <FieldGroup label="Pincode *" error={fieldError === 'pincode'}>
@@ -558,15 +529,18 @@ export default function PublicClientWelcome() {
             </div>
 
             {/* Navigation */}
-            <div className="pvf-nav">
-              <div className="pvf-nav-spacer" style={{ flex: 1 }} />
+            <div className="pvf-nav" style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
               <div style={{ display: 'flex', gap: '0px' }}>
                 <button type="submit" className="pvf-btn-submit-pill" disabled={saving || !captchaToken} style={{ marginRight: '0px' }}>
-                  {saving ? 'Submitting…' : 'Submit'}
+                  {saving ? 'Submitting…' : 'Explore The Collection'}
                 </button>
-                <button type="submit" className="pvf-btn-submit-circle" disabled={saving || !captchaToken} aria-label="Submit" style={{ zIndex: 1, position: 'relative' }}>
+                <button type="submit" className="pvf-btn-submit-circle" disabled={saving || !captchaToken} aria-label="Explore The Collection" style={{ zIndex: 1, position: 'relative' }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
                 </button>
+              </div>
+              <div className="pvf-privacy-policy" style={{ textAlign: 'center', fontSize: '0.8rem', color: '#718096', lineHeight: 1.5, maxWidth: '400px' }}>
+                🔒 <strong>Corporate Privacy Assured:</strong><br/>
+                "At Dikho, we value your time and confidentiality. Your information is strictly used for official communication only."
               </div>
             </div>
           </form>
@@ -603,7 +577,7 @@ export default function PublicClientWelcome() {
           <a href="https://www.instagram.com/dikho0/" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="Instagram">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
           </a>
-          <a href="https://www.linkedin.com/login/?session_redirect=%2Fcompany%2F111150306%2F" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="LinkedIn">
+          <a href="https://www.linkedin.com/company/dikhoglobalmedia/" target="_blank" rel="noreferrer" className="pvf-footer-link" aria-label="LinkedIn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
           </a>
         </div>

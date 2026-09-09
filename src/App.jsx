@@ -1138,7 +1138,7 @@ function ClientsPage() {
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input
                   readOnly
-                  value={`${window.location.origin}/welcome`}
+                  value={`${window.location.origin}/CorporateGifting`}
                   style={{
                     flex: 1, fontSize: '0.82rem', padding: '7px 10px',
                     border: '1px solid var(--line)', borderRadius: 6,
@@ -1151,7 +1151,7 @@ function ClientsPage() {
                   className="primary-button"
                   style={{ padding: '7px 14px', fontSize: '0.82rem', flexShrink: 0 }}
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/welcome`)
+                    navigator.clipboard.writeText(`${window.location.origin}/CorporateGifting`)
                       .then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000) })
                   }}
                 >
@@ -4954,7 +4954,7 @@ function App() {
   if (currentPath === '/vendor/register') {
     return <PublicVendorForm />
   }
-  if (currentPath === '/welcome') {
+  if (currentPath === '/CorporateGifting') {
     return <PublicClientWelcome />
   }
   // ─────────────────────────────────────────────────────────────────────
@@ -5023,7 +5023,6 @@ function App() {
           </div>
         </div>
       )}
-      {error && <div className="pvf-field-error">Please complete this required field.</div>}
     </div>
   )
 }

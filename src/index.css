@@ -2131,8 +2131,10 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-topbar {
-  background: #eaf3fa;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(234, 243, 250, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 40px;
   margin: 16px auto;
   max-width: 900px;
