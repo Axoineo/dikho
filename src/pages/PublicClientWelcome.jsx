@@ -311,13 +311,7 @@ export default function PublicClientWelcome() {
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       return { field: 'email', message: 'Please enter a valid email address.' }
     }
-    if (!form.state.trim()) return { field: 'state', message: 'State is required.' }
-    if (!form.city.trim()) return { field: 'city', message: 'City is required.' }
-    if (!form.pincode.trim()) return { field: 'pincode', message: 'Pincode is required.' }
-    if (form.country_code === 'IN' && !/^\d{6}$/.test(form.pincode.trim())) {
-      return { field: 'pincode', message: 'Please enter a valid 6-digit pincode.' }
-    }
-    if (zipStatus?.type === 'error') return { field: 'pincode', message: zipStatus.message }
+    if (!form.city.trim()) return { field: 'city', message: 'City / Location is required.' }
     if (!captchaToken) return { field: 'captcha', message: 'Please complete the security check.' }
     return null
   }
@@ -479,45 +473,9 @@ export default function PublicClientWelcome() {
                   <input name="email" id="field-email" className={`pvf-input ${fieldError === 'email' ? 'has-error' : ''}`} type="email" value={form.email} onChange={e => { update('email', e.target.value); setFieldError('') }} />
                 </FieldGroup>
 
-                <FieldGroup label="Pincode *" error={fieldError === 'pincode'}>
-                  <input name="pincode" id="field-pincode" className={`pvf-input ${fieldError === 'pincode' ? 'has-error' : ''}`} value={form.pincode}
-                    onChange={e => {
-                      const raw = e.target.value
-                      const val = form.country_code === 'IN'
-                        ? raw.replace(/\D/g, '').slice(0, 6)
-                        : raw.replace(/[^a-zA-Z0-9 -]/g, '').slice(0, 10)
-                      update('pincode', val)
-                      setZipStatus(null)
-                      setFieldError('')
-                      if (form.country_code === 'IN' && val.length === 6) {
-                        verifyPin(val)
-                      }
-                    }}
-                    onBlur={() => verifyPin(form.pincode)}
-                    inputMode={form.country_code === 'IN' ? 'numeric' : 'text'}
-                    required />
-                  {zipStatus && (
-                    <span style={{ fontSize: '0.8rem', marginTop: '4px', display: 'block' }} className={`${zipStatus.type === 'success' ? 'pvf-hint-ok' : zipStatus.type === 'error' ? 'pvf-hint-error' : 'pvf-hint-warn'}`}>
-                      {zipStatus.message}
-                    </span>
-                  )}
+                <FieldGroup label="City / Location *" error={fieldError === 'city'}>
+                  <input name="city" id="field-city" className={`pvf-input ${fieldError === 'city' ? 'has-error' : ''}`} value={form.city} onChange={e => { update('city', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
-
-                <SearchableSelect label="Country" value={form.country_code} onChange={c => { handleCountryChange(c); setFieldError('') }}
-                  options={countryOptions} placeholder="" searchPlaceholder="" hasError={fieldError === 'country_code'} error={fieldError === 'country_code'} />
-
-                <SearchableSelect label="State" value={form.state_code} onChange={s => { handleStateChange(s); setFieldError('') }}
-                  options={stateOptions}
-                  placeholder=""
-                  searchPlaceholder=""
-                  disabled={!form.country_code || !states.length} required hasError={fieldError === 'state'} error={fieldError === 'state'} />
-
-                <SearchableSelect label="City" value={form.city}
-                  onChange={val => { update('city', val); setZipStatus(null); setFieldError('') }}
-                  options={cityOptions}
-                  placeholder=""
-                  searchPlaceholder="Search cities…"
-                  disabled={!form.state_code || !cities.length} required hasError={fieldError === 'city'} />
               </div>
 
               <div>
@@ -540,7 +498,7 @@ export default function PublicClientWelcome() {
               </div>
               <div className="pvf-privacy-policy" style={{ textAlign: 'center', fontSize: '0.8rem', color: '#718096', lineHeight: 1.5, maxWidth: '400px' }}>
                 🔒 <strong>Corporate Privacy Assured:</strong><br/>
-                "At Dikho, we value your time and confidentiality. Your information is strictly used for official communication only."
+                At Dikho, we value your time and confidentiality. Your information is strictly used for official communication only.
               </div>
             </div>
           </form>
