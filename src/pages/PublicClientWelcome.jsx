@@ -5,7 +5,7 @@ import { SearchableSelect } from '../App'
 
 /* ─── Constants ────────────────────────────────────────────────────── */
 const TURNSTILE_SITEKEY = '0x4AAAAAAEnxgBvSPuBu7S85'
-const DRIVE_CATALOGUE_URL = 'https://drive.google.com/drive/folders/1LhjqwF2ISWLs59N2q7PUhqBHG5a47Rss?usp=drive_link'
+const DRIVE_CATALOGUE_URL = 'https://www.dropbox.com/scl/fo/hvs3nrxa5zfwyols7undr/AFJBK3hZ5JMtl0XUEyPY9sI?rlkey=9n71uwcr2splnw6de89q7ie9d&st=xknk2n8z&dl=0'
 
 /* ─── Cloudflare Turnstile ─────────────────────────────────────────── */
 function TurnstileWidget({ onVerify, onExpire }) {
