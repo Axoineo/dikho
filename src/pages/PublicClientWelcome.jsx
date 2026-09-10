@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { City, Country, State } from 'country-state-city'
 import { supabase } from '../supabase'
 import { SearchableSelect } from '../App'
@@ -11,37 +11,77 @@ const DRIVE_CATALOGUE_URL = 'https://drive.google.com/drive/folders/1LhjqwF2ISWL
 function TurnstileWidget({ onVerify, onExpire }) {
   const containerRef = useRef(null)
   const widgetIdRef = useRef(null)
-  const stableVerify = useCallback(onVerify, [])
-  const stableExpire = useCallback(onExpire, [])
+  const [loading, setLoading] = useState(true)
+
+  // Store callbacks in refs — this means the useEffect never needs to re-run
+  // when the parent re-renders with new inline functions
+  const onVerifyRef = useRef(onVerify)
+  const onExpireRef = useRef(onExpire)
+  useEffect(() => { onVerifyRef.current = onVerify }, [onVerify])
+  useEffect(() => { onExpireRef.current = onExpire }, [onExpire])
 
   useEffect(() => {
+    // Empty dependency array [] — runs ONCE on mount, never again
+    let cancelled = false
+
     function init() {
-      if (!window.turnstile || !containerRef.current || widgetIdRef.current != null) return
+      if (cancelled || !window.turnstile || !containerRef.current || widgetIdRef.current != null) return
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: TURNSTILE_SITEKEY,
-        callback: stableVerify,
-        'expired-callback': stableExpire,
+        callback: (token) => { if (!cancelled) { setLoading(false); onVerifyRef.current(token) } },
+        'expired-callback': () => { if (!cancelled) onExpireRef.current() },
+        'before-interactive-callback': () => { if (!cancelled) setLoading(false) },
+        'unsupported-callback': () => { if (!cancelled) setLoading(false) },
         theme: 'light',
-        size: 'invisible',
+        size: 'normal',
+        appearance: 'always',
+        'refresh-expired': 'auto',
+        language: 'en',
       })
+      setLoading(false)
     }
+
     if (window.turnstile) {
-      init()
+      setTimeout(init, 0)
     } else {
-      const s = document.createElement('script')
-      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
-      s.async = true; s.defer = true; s.onload = init
-      document.head.appendChild(s)
+      const existing = document.querySelector('script[src*="turnstile"]')
+      if (existing) {
+        existing.addEventListener('load', init)
+      } else {
+        const s = document.createElement('script')
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+        s.async = true
+        s.defer = true
+        s.onload = () => { if (!cancelled) init() }
+        document.head.appendChild(s)
+      }
     }
+
     return () => {
+      cancelled = true
       if (widgetIdRef.current != null && window.turnstile) {
         try { window.turnstile.remove(widgetIdRef.current) } catch {}
         widgetIdRef.current = null
       }
     }
-  }, [stableVerify, stableExpire])
+  }, []) // ← empty array: mount once, never re-run
 
-  return <div ref={containerRef} />
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+      {loading && (
+        <div style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+            <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+            <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+          </svg>
+          Loading security check…
+        </div>
+      )}
+      <div ref={containerRef} />
+    </div>
+  )
 }
 
 /* ─── Helpers ──────────────────────────────────────────────────────── */
@@ -477,17 +517,15 @@ export default function PublicClientWelcome() {
                   <input name="city" id="field-city" className={`pvf-input ${fieldError === 'city' ? 'has-error' : ''}`} value={form.city} onChange={e => { update('city', e.target.value); setFieldError('') }} required />
                 </FieldGroup>
               </div>
-
-              <div>
-                <TurnstileWidget
-                  onVerify={t => { setCaptchaToken(t); setError('') }}
-                  onExpire={() => setCaptchaToken(null)}
-                />
-              </div>
             </div>
 
             {/* Navigation */}
-            <div className="pvf-nav" style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+            <div className="pvf-nav" style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              {/* Turnstile — directly above submit button */}
+              <TurnstileWidget
+                onVerify={t => { setCaptchaToken(t); setError('') }}
+                onExpire={() => setCaptchaToken(null)}
+              />
               <div style={{ display: 'flex', gap: '0px' }}>
                 <button type="submit" className="pvf-btn-submit-pill" disabled={saving || !captchaToken} style={{ marginRight: '0px' }}>
                   {saving ? 'Submitting…' : 'Explore The Collection'}

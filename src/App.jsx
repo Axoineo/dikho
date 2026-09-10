@@ -4954,7 +4954,7 @@ function App() {
   if (currentPath === '/vendor/register') {
     return <PublicVendorForm />
   }
-  if (currentPath === '/CorporateGifting') {
+  if (currentPath.toLowerCase() === '/corporategifting') {
     return <PublicClientWelcome />
   }
   // ─────────────────────────────────────────────────────────────────────

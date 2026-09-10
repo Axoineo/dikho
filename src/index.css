@@ -575,6 +575,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .skeleton-status { width: 19px; height: 19px; border-radius: 50%; }
 .skeleton-action { width: 40px; height: 29px; border-radius: 16px; }
 @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ---------- Pagination ---------- */
 .pagination-bar { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 16px; border-top: 1px solid var(--line); color: #66758a; font-size: 12px; }
@@ -2131,10 +2132,10 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 
 .pvf-topbar {
-  background: rgba(234, 243, 250, 0.80);
-  backdrop-filter: blur(48px) saturate(180%);
-  -webkit-backdrop-filter: blur(48px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(234, 243, 250, 0.97);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 40px;
   margin: 16px auto;
   max-width: 900px;
@@ -2147,7 +2148,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   position: sticky;
   top: 16px;
   z-index: 50;
-  box-shadow: 0 4px 20px rgba(24, 84, 148, 0.08);
+  box-shadow: 0 4px 24px rgba(24, 84, 148, 0.12), 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .pvf-logo-link {
