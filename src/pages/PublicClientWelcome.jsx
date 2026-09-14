@@ -535,7 +535,7 @@ export default function PublicClientWelcome() {
                 </button>
               </div>
               <div className="pvf-privacy-policy" style={{ textAlign: 'center', fontSize: '0.8rem', color: '#718096', lineHeight: 1.5, maxWidth: '400px' }}>
-                🔒 <strong>Corporate Privacy Assured:</strong><br/>
+                🔒 <strong>Corporate Privacy Assured</strong><br/>
                 At Dikho, we value your time and confidentiality. Your information is strictly used for official communication only.
               </div>
             </div>
