@@ -5,6 +5,7 @@
   "observability": {
     "enabled": true
   },
+  "main": "src/worker.js",
   "assets": {
     "not_found_handling": "single-page-application"
   }

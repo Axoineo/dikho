@@ -36,3 +36,4 @@ dist-ssr
 # Supabase CLI local state
 supabase/.temp
 supabase/.branches
+scripts/output/

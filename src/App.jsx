@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import PurchaseOrdersPage from './pages/PurchaseOrders'
 import PublicVendorForm from './pages/PublicVendorForm'
 import PublicClientWelcome from './pages/PublicClientWelcome'
+import CorporateGiftingCatalogue from './pages/CorporateGiftingCatalogue'
 import { downloadXlsx } from './xlsx'
 import { generateTaxInvoice } from './generateTaxInvoice'
 import { Country, State, City } from 'country-state-city'
@@ -4953,6 +4954,9 @@ function App() {
   }, [])
   if (currentPath === '/vendor/register') {
     return <PublicVendorForm />
+  }
+  if (currentPath.toLowerCase().startsWith('/catalogue/corporategifting')) {
+    return <CorporateGiftingCatalogue />
   }
   if (currentPath.toLowerCase() === '/corporategifting') {
     return <PublicClientWelcome />

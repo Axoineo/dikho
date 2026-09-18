@@ -343,6 +343,7 @@ button:disabled { cursor: default; }
   align-items: center;
   gap: 11px;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
