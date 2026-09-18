@@ -110,7 +110,7 @@ export default {
       return json({ error: 'Not found' }, 404)
     }
 
-    // Fall back to Vite assets for Cloudflare Pages
+    // Fall back to Vite assets for Cloudflare Workers
     if (env.ASSETS) {
       const response = await env.ASSETS.fetch(request)
       if (response.status === 404 && request.method === 'GET') {
@@ -118,11 +118,11 @@ export default {
         if (accept && accept.includes('text/html')) {
           const url = new URL(request.url)
           url.pathname = '/index.html'
-          return env.ASSETS.fetch(new Request(url, request))
+          return env.ASSETS.fetch(new Request(url, { headers: request.headers }))
         }
       }
       return response
     }
-    return new Response('Not found', { status: 404 })
+    return new Response('API route not found or Asset missing', { status: 404 })
   }
 }
