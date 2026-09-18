@@ -19,7 +19,9 @@ export default {
       const SUPABASE_URL = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
       const SUPABASE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-      if (url.pathname === '/api/catalogue/leads' && request.method === 'POST') {
+      const path = url.pathname.replace(/\/$/, '') // remove trailing slash
+
+      if (path === '/api/catalogue/inquiries' && request.method === 'POST') {
         try {
           const body = await request.json()
           const { catalogue_id, name, company_name, email, mobile, city } = body
@@ -50,7 +52,7 @@ export default {
         }
       }
 
-      const match = url.pathname.match(/^\/api\/catalogue\/files\/([^/]+)\/(view|download)$/)
+      const match = path.match(/^\/api\/catalogue\/files\/([^/]+)\/(view|download)$/)
       if (match && request.method === 'GET') {
         const fileId = match[1]
         const action = match[2]
