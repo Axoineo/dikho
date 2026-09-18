@@ -1,4 +1,4 @@
-CREATE TABLE catalogues (
+CREATE TABLE IF NOT EXISTS catalogues (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
@@ -11,7 +11,7 @@ CREATE TABLE catalogues (
   updated_at timestamptz default now()
 );
 
-CREATE TABLE catalogue_files (
+CREATE TABLE IF NOT EXISTS catalogue_files (
   id uuid primary key default gen_random_uuid(),
   catalogue_id uuid references catalogues(id) on delete cascade,
   name text not null,
@@ -26,7 +26,7 @@ CREATE TABLE catalogue_files (
   updated_at timestamptz default now()
 );
 
-CREATE TABLE catalogue_leads (
+CREATE TABLE IF NOT EXISTS catalogue_leads (
   id uuid primary key default gen_random_uuid(),
   catalogue_id uuid references catalogues(id) on delete cascade,
   name text not null,
@@ -41,6 +41,11 @@ ALTER TABLE catalogues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalogue_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalogue_leads ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Catalogues are viewable by everyone." ON catalogues;
 CREATE POLICY "Catalogues are viewable by everyone." ON catalogues FOR SELECT USING (active = true);
+
+DROP POLICY IF EXISTS "Catalogue files are viewable by everyone." ON catalogue_files;
 CREATE POLICY "Catalogue files are viewable by everyone." ON catalogue_files FOR SELECT USING (active = true);
+
+DROP POLICY IF EXISTS "Anyone can insert leads." ON catalogue_leads;
 CREATE POLICY "Anyone can insert leads." ON catalogue_leads FOR INSERT WITH CHECK (true);
