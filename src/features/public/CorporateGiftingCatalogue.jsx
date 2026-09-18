@@ -70,14 +70,21 @@ export default function CorporateGiftingCatalogue() {
     setFormLoading(true)
     
     try {
-      const res = await fetch('/api/catalogue/leads', {
+      const res = await fetch('/api/catalogue/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, catalogue_id: catalogueId })
       })
       
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to submit lead')
+      const rawText = await res.text()
+      let data;
+      try {
+        data = rawText ? JSON.parse(rawText) : {}
+      } catch (parseErr) {
+        throw new Error(`Invalid server response (Status: ${res.status}): ${rawText.slice(0, 100)}`)
+      }
+
+      if (!res.ok) throw new Error(data.error || `Failed to submit lead (Status: ${res.status})`)
       
       localStorage.setItem('dikho_cg_access', 'true')
       setHasAccess(true)

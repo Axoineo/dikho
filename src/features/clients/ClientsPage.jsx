@@ -19,7 +19,6 @@ export default function ClientsPage() {
   const [selectedIds, setSelectedIds] = useState([])
   const [showSharePopover, setShowSharePopover] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
-
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuery(searchInput.trim())

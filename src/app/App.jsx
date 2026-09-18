@@ -10,8 +10,7 @@ import {
   PurchaseOrdersPage,
   SettingsPage,
   PublicVendorForm,
-  PublicClientWelcome,
-  CorporateGiftingCatalogue,
+  PublicClientWelcome
 } from '../routes'
 
 /* ── Wrapper components that read outlet context ────────────────────────── */
@@ -42,10 +41,6 @@ export default function App() {
           <Route path="/vendor/register" element={<PublicVendorForm />} />
           <Route path="/corporategifting" element={<PublicClientWelcome />} />
           <Route path="/Corporategifting" element={<PublicClientWelcome />} />
-          <Route path="/catalogue/corporategifting" element={<CorporateGiftingCatalogue />} />
-          <Route path="/catalogue/corporategifting/*" element={<CorporateGiftingCatalogue />} />
-          <Route path="/Catalogue/Corporategifting" element={<CorporateGiftingCatalogue />} />
-          <Route path="/Catalogue/Corporategifting/*" element={<CorporateGiftingCatalogue />} />
         </Route>
 
         {/* Authenticated routes — login required */}

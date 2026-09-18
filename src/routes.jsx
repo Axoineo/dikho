@@ -10,4 +10,3 @@ export const SettingsPage = lazy(() => import('./features/settings/SettingsPage'
 /* ── Public routes (lazy-loaded, no auth required) ─────────────────────── */
 export const PublicVendorForm = lazy(() => import('./features/public/PublicVendorForm'))
 export const PublicClientWelcome = lazy(() => import('./features/public/PublicClientWelcome'))
-export const CorporateGiftingCatalogue = lazy(() => import('./features/public/CorporateGiftingCatalogue'))

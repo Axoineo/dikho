@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabase';
 import PurchaseOrdersPage from './pages/PurchaseOrders'
 import PublicVendorForm from './pages/PublicVendorForm'
-import PublicClientWelcome from './pages/PublicClientWelcome'
-import CorporateGiftingCatalogue from './pages/CorporateGiftingCatalogue'
 import { downloadXlsx } from './xlsx'
 import { generateTaxInvoice } from './generateTaxInvoice'
 import { Country, State, City } from 'country-state-city'
@@ -1122,56 +1120,7 @@ function ClientsPage() {
           <p>Manage your client database</p>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
-          {showSharePopover && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 300,
-              background: 'var(--surface)', border: '1px solid var(--line)',
-              borderRadius: 10, padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-              minWidth: 320,
-            }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Corporate Gifting Welcome Link
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: 10, lineHeight: 1.5 }}>
-                Share this link with clients — no login required. Submissions will appear as <strong>Inactive</strong> pending your review.
-              </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input
-                  readOnly
-                  value={`${window.location.origin}/CorporateGifting`}
-                  style={{
-                    flex: 1, fontSize: '0.82rem', padding: '7px 10px',
-                    border: '1px solid var(--line)', borderRadius: 6,
-                    background: 'var(--page)', color: 'var(--text)',
-                    fontFamily: 'monospace', outline: 'none',
-                  }}
-                  onFocus={e => e.target.select()}
-                />
-                <button
-                  className="primary-button"
-                  style={{ padding: '7px 14px', fontSize: '0.82rem', flexShrink: 0 }}
-                  onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/CorporateGifting`)
-                      .then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000) })
-                  }}
-                >
-                  {shareCopied ? <><Icon name="check" size={14} /> Copied!</> : 'Copy'}
-                </button>
-              </div>
-            </div>
-          )}
-          <button
-            className="secondary-button"
-            onClick={() => { setShowSharePopover(v => !v); setShareCopied(false) }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-            Share
-          </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="primary-button add-button" onClick={() => setShowForm(true)}>
             <Icon name="plus" size={18} />
             Add
@@ -4955,13 +4904,6 @@ function App() {
   if (currentPath === '/vendor/register') {
     return <PublicVendorForm />
   }
-  if (currentPath.toLowerCase().startsWith('/catalogue/corporategifting')) {
-    return <CorporateGiftingCatalogue />
-  }
-  if (currentPath.toLowerCase() === '/corporategifting') {
-    return <PublicClientWelcome />
-  }
-  // ─────────────────────────────────────────────────────────────────────
 
   if (session === undefined) {
     return <div className="loading-screen">Loading...</div>
