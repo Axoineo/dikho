@@ -31,6 +31,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "oxlint": "^1.75.0",
+    "supabase": "^2.118.0-beta.55",
     "vite": "^8.2.0",
     "wrangler": "^4.135.0"
   },
