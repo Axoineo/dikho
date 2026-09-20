@@ -1,0 +1,201 @@
+/* ============================================================
+   ContactDetails component styles
+   Brand palette: --brand-blue #185494 | --accent #f9af1b
+   ============================================================ */
+
+/* ---- Card shell ---- */
+.cd-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 28px 28px 24px;
+  box-shadow: var(--shadow);
+  min-width: 320px;
+  max-width: 420px;
+  width: 100%;
+}
+
+.cd-card__heading {
+  margin: 0 0 20px;
+  font-family: "Google Sans", "Google Sans Text", system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- List & divider ---- */
+.cd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cd-divider {
+  height: 1px;
+  background: var(--line-soft);
+  margin: 2px 0;
+}
+
+/* ---- Row ---- */
+.cd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 4px;
+  border-radius: 12px;
+  /* Smooth background tint on hover */
+  transition: background 0.18s ease;
+}
+
+.cd-row:hover,
+.cd-row--touched {
+  background: var(--brand-blue-soft);
+}
+
+/* ---- Contact info text ---- */
+.cd-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cd-row__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.cd-row__value {
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+   Action button
+   Hidden by default; fades in when the row is hovered.
+   Uses @starting-style + transition-behavior: allow-discrete
+   so the button transitions from opacity:0 when it first
+   becomes visible (matches Baseline Widely Available support).
+   ============================================================ */
+
+.cd-action-btn {
+  /* Layout */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+
+  /* Typography */
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1;
+
+  /* Default: invisible but in the layout flow */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+
+  /* Smooth reveal */
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+/* Reveal when the parent row is hovered or touch-active */
+.cd-row:hover .cd-action-btn,
+.cd-row--touched .cd-action-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+/* Animate from hidden when first becoming visible (modern browsers) */
+@starting-style {
+  .cd-row:hover .cd-action-btn,
+  .cd-row--touched .cd-action-btn {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+}
+
+/* Press feedback */
+.cd-action-btn:active {
+  transform: translateX(0) scale(0.95);
+}
+
+/* Focus ring for keyboard users */
+.cd-action-btn:focus-visible {
+  outline: 2px solid var(--brand-blue);
+  outline-offset: 2px;
+}
+
+/* ---- Call button: brand blue ---- */
+.cd-action-btn--call {
+  background: var(--brand-blue);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(24, 84, 148, 0.28);
+}
+
+.cd-action-btn--call:hover {
+  background: var(--brand-blue-dark);
+  box-shadow: 0 4px 14px rgba(24, 84, 148, 0.38);
+}
+
+/* ---- Email button: accent gold ---- */
+.cd-action-btn--email {
+  background: var(--accent);
+  color: #1a1200;   /* dark text on yellow for WCAG AA */
+  box-shadow: 0 2px 8px rgba(249, 175, 27, 0.30);
+}
+
+.cd-action-btn--email:hover {
+  background: #e09a08;   /* slightly darker accent for depth */
+  box-shadow: 0 4px 14px rgba(249, 175, 27, 0.42);
+}
+
+/* ---- Reduced-motion preference ---- */
+@media (prefers-reduced-motion: reduce) {
+  .cd-action-btn {
+    transition: opacity 0.01ms;
+    transform: none;
+  }
+  .cd-row {
+    transition: none;
+  }
+}
+
+/* ---- Mobile / touch ---- */
+@media (max-width: 480px) {
+  .cd-card {
+    min-width: 0;
+    padding: 20px 16px 18px;
+    border-radius: 16px;
+  }
+  .cd-row__value {
+    font-size: 14.5px;
+  }
+}

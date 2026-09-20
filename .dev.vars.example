@@ -1,0 +1,17 @@
+# Copy to .dev.vars for local `wrangler dev` (gitignored, never commit real values).
+# In production these are set with `wrangler secret put <NAME>`.
+
+# Meta App Dashboard > WhatsApp > Configuration > Webhook > Verify token.
+# Must match exactly what you paste into the Meta dashboard.
+WHATSAPP_VERIFY_TOKEN=DikhoWebhook_DGMx2026
+
+# Meta App Dashboard > WhatsApp > API Setup (or a permanent System User token).
+WHATSAPP_ACCESS_TOKEN=
+
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_WABA_ID=
+WHATSAPP_APP_ID=
+WHATSAPP_APP_SECRET=
+
+# Comma-separated list of origins allowed to call authenticated /api routes.
+ALLOWED_ORIGINS=https://manage.dikho.in,http://localhost:5173
