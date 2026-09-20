@@ -3200,6 +3200,7 @@ select.pvf-input.has-error:focus,
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
+  z-index: 10;
 }
 
 @starting-style {

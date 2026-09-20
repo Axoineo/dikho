@@ -26,7 +26,15 @@ export function ContactHoverAction({ type, value }) {
         href={href}
         className={`cd-action-btn ${colorClass} cd-action-btn--sm`}
         aria-label={`${label} ${value}`}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          // Fallback if native href doesn't trigger
+          if (href.startsWith('mailto:')) {
+            window.location.href = href
+          } else if (href.startsWith('tel:')) {
+            window.open(href, '_self')
+          }
+        }}
         tabIndex={0}
       >
         {icon}

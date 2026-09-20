@@ -4,10 +4,9 @@ import { formatValue, getValue } from '../../lib/format'
 import { isActiveStatus } from '../../lib/status'
 import { Icon } from '../../components/Icon'
 import { ContactHoverAction } from '../../components/ContactHoverAction'
-import { downloadXlsx } from '../../lib/xlsx'
+import { SearchableSelect } from '../../components/SearchableSelect'
 import VendorDetails from './VendorDetails'
 import AddVendorModal from './AddVendorModal'
-import { vendorExportWorkbook } from './vendorExport'
 import {
   EMPTY_VENDOR_FILTERS, VENDOR_COLUMN_COUNT, VENDORS_PAGE_SIZE,
   vendorSelect, applyVendorFilters, primaryAddress,
@@ -53,7 +52,6 @@ export default function VendorsPage() {
   const [selectedVendorAddress, setSelectedVendorAddress] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [selectingAll, setSelectingAll] = useState(false)
-  const [exporting, setExporting] = useState('')
   const [showSharePopover, setShowSharePopover] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
 
@@ -445,47 +443,7 @@ export default function VendorsPage() {
     }
   }
 
-  async function exportVendors(mode) {
-    setExporting(mode)
-    setActionError('')
-    try {
-      let rows
-      if (mode === 'selected') {
-        rows = []
-        for (let index = 0; index < selectedIds.length; index += 300) {
-          const chunk = selectedIds.slice(index, index + 300)
-          const { data, error: fetchError } = await supabase
-            .from('vendors')
-            .select(`*,vendor_addresses(${VENDOR_ADDRESS_COLUMNS})`)
-            .in('id', chunk)
-            .order('id', { ascending: false })
-          if (fetchError) throw fetchError
-          rows.push(...(data || []))
-        }
-      } else {
-        rows = await fetchAllPaged((from, to) => applyVendorFilters(
-          supabase.from('vendors').select(vendorSelect('*', effectiveFilters)).order('id', { ascending: false }).range(from, to),
-          textQuery,
-          effectiveFilters,
-        ))
-      }
-
-      if (rows.length === 0) {
-        setActionError('There is nothing to export.')
-        return
-      }
-
-      const stamp = new Date().toISOString().slice(0, 10)
-      downloadXlsx(`dikho-vendors-${mode}-${stamp}.xlsx`, vendorExportWorkbook(rows, { mediaMap, subMediaMap }))
-    } catch (err) {
-      console.error(err)
-      setActionError(err?.message || 'Could not export vendors.')
-    } finally {
-      setExporting('')
-    }
-  }
-
-  const busy = Boolean(exporting) || selectingAll
+  const busy = selectingAll
 
   const emptyCopy = appliedSlash?.unmatched
     ? `No ${appliedSlash.unmatched.dimension.toLowerCase()} matches “${appliedSlash.unmatched.raw}”. Pick a suggestion from the search bar to correct that step.`
@@ -630,12 +588,6 @@ export default function VendorsPage() {
               Filters
               {activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}
               <span className="filter-toggle-caret"><Icon name="chevronDown" size={15} /></span>
-            </button>
-            <button className="secondary-button" onClick={() => exportVendors('all')} disabled={busy || loading || totalCount === 0}>
-              <Icon name="download" size={17} /> {exporting === 'all' ? 'Exporting…' : `Export All${totalCount > 0 ? ` (${totalCount.toLocaleString()})` : ''}`}
-            </button>
-            <button className="secondary-button" onClick={() => exportVendors('selected')} disabled={busy || selectedIds.length === 0}>
-              <Icon name="download" size={17} /> {exporting === 'selected' ? 'Exporting…' : `Export Selected${selectedIds.length > 0 ? ` (${selectedIds.length.toLocaleString()})` : ''}`}
             </button>
           </div>
         </div>

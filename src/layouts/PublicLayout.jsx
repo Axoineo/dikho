@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { Outlet, Navigate } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 
 export default function PublicLayout() {
   return (
