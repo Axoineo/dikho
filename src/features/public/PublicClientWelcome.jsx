@@ -382,22 +382,15 @@ export default function PublicClientWelcome() {
       const ph = form.contact.replace(/\D/g, '')
       const payload = {
         company_name: form.company_name.trim(),
-        contact_person: form.contact_person.trim(),
-        designation: null,
-        country_dialcode: form.country_dialcode,
-        contact: ph ? Number(ph) : null,
+        name: form.contact_person.trim(),
+        country_code: form.country_dialcode,
+        mobile: ph,
         email: form.email.trim() || null,
-        gstin: null,
-        address_line1: '-',
-        address_line2: null,
         city: form.city.trim(),
-        state: form.state.trim(),
-        pincode: form.pincode.trim(),
-        country: form.country_name,
-        status: 0, // Pending review
       }
 
-      const { error: insertError } = await supabase.from('clients').insert([payload]).select('id').single()
+      // Corporate-gifting leads go to their own table (not the CRM clients list).
+      const { error: insertError } = await supabase.from('cg_leads').insert([payload])
       if (insertError) throw insertError
 
       setSubmittedCompany(form.company_name.trim())

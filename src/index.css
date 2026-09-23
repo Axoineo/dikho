@@ -16,19 +16,72 @@
   --success: #647997;
   --danger: #b23b43;
   --shadow: 0 16px 44px rgba(24, 40, 65, 0.12);
+
+  /* Keyboard focus ring — one token so every control matches, and dark mode
+     can brighten it for contrast without touching each rule. */
+  --focus-ring: #185494;
+  --focus-ring-soft: rgba(24, 84, 148, 0.35);
+  /* Brand tint used by ::selection and native form controls. */
+  --select-bg: rgba(24, 84, 148, 0.16);
 }
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: "Google Sans Text", "Google Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: var(--page);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Native checkboxes, radios and range/progress inherit the brand colour. */
+  accent-color: var(--brand-blue);
 }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; }
+
+/* ============================================================
+   GLOBAL FOUNDATION & ACCESSIBILITY
+   Applies to every screen, including ones not individually styled.
+   ============================================================ */
+
+/* Keyboard-only focus ring. Uses :focus-visible so a mouse click never
+   paints a ring, but Tab always does. Inputs/selects that set their own
+   `outline: 0` keep their existing box-shadow focus (higher specificity);
+   buttons and links — which previously had no visible focus at all — get
+   this ring. The outline follows each element's border-radius. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* Inside the sidebar (overflow: hidden) an offset ring would clip at the
+   rounded edge, so inset it slightly instead. */
+.sidebar :focus-visible { outline-offset: -2px; }
+
+/* Text selection uses a brand tint instead of the OS default. */
+::selection { background: var(--select-bg); }
+
+/* Subtle, theme-aware scrollbars so long tables and modals feel of a piece
+   with the surfaces rather than showing raw OS chrome. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(24, 84, 148, 0.22) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(24, 84, 148, 0.20);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(24, 84, 148, 0.34); background-clip: content-box; }
+/* The sidebar deliberately hides its own scrollbar (see .sidebar-nav). */
+.sidebar-nav { scrollbar-width: none; }
 
 /* ---------- Login ---------- */
 .login-page {
@@ -206,7 +259,28 @@ button:disabled { cursor: default; }
 .auth-error strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .auth-error p { margin: 0; font-size: 12px; line-height: 1.45; color: #963b41; word-break: break-word; }
 .auth-error-icon, .page-error-icon { display: inline-flex; color: var(--danger); margin-top: 1px; }
-.loading-screen { min-height: 100vh; display: grid; place-items: center; background: var(--page); color: var(--muted); }
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--page);
+  color: var(--muted);
+  font-size: 13.5px;
+  letter-spacing: 0.2px;
+}
+/* Branded spinner shown on initial auth and every lazy route transition. */
+.loading-screen::before {
+  content: "";
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand-blue);
+  animation: spin 0.7s linear infinite;
+}
 
 /* ---------- App shell ---------- */
 .app-shell {
@@ -1459,7 +1533,17 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   --success: #4a8f6a;
   --danger: #d9534f;
   --shadow: 0 16px 44px rgba(0, 0, 0, 0.4);
+
+  /* Brighter ring + selection so focus and highlights read on dark surfaces. */
+  --focus-ring: #5ba0e0;
+  --focus-ring-soft: rgba(91, 160, 224, 0.4);
+  --select-bg: rgba(91, 160, 224, 0.28);
 }
+
+/* Dark-theme scrollbars: lift off the darker surface. */
+[data-theme="dark"] * { scrollbar-color: rgba(180, 200, 224, 0.22) transparent; }
+[data-theme="dark"] *::-webkit-scrollbar-thumb { background: rgba(180, 200, 224, 0.18); background-clip: content-box; }
+[data-theme="dark"] *::-webkit-scrollbar-thumb:hover { background: rgba(180, 200, 224, 0.32); background-clip: content-box; }
 
 /* Sidebar */
 [data-theme="dark"] .sidebar {
@@ -3220,4 +3304,20 @@ select.pvf-input.has-error:focus,
 .cd-action-btn--sm svg {
   width: 12px;
   height: 12px;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   Honour the OS "reduce motion" setting: neutralise the sidebar spring,
+   shimmer/spin/fade keyframes and every transition for users who are
+   sensitive to movement, without changing layout or visibility.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+  }
 }
