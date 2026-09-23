@@ -1,0 +1,6 @@
+/* Tailwind utilities for the WhatsApp Marketing screens.
+   `base` (preflight) is disabled in tailwind.config.js so the existing
+   dashboard styles are untouched — see the comment there.
+   Imported after index.css in main.jsx so utilities win on specificity ties. */
+@tailwind components;
+@tailwind utilities;

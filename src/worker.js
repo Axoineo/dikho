@@ -1,14 +1,7 @@
-import { createApiApp } from './api/app.js'
-
-const apiApp = createApiApp()
-
+// Dashboard SPA only. The API lives in a separate Worker
+// (wrangler.api.jsonc -> https://dikho-api.fineeurox.workers.dev).
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url)
-    if (url.pathname.startsWith('/api/')) {
-      return apiApp.fetch(request, env, ctx)
-    }
-
     // Fall back to Vite assets for Cloudflare Workers
     if (env.ASSETS) {
       const response = await env.ASSETS.fetch(request)

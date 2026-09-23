@@ -6,10 +6,9 @@ const webhook = new Hono()
 
 // --- GET /api/whatsapp/webhook — Meta verification handshake -------------
 //
-// Meta calls this once when you save the webhook config in the App
-// Dashboard. It must echo back hub.challenge as plain text/number with a
-// 200 status if hub.verify_token matches, or Meta will refuse to save the
-// subscription.
+// Meta calls this once when you save the webhook config. It must echo back
+// hub.challenge with a 200 when hub.verify_token matches, or Meta refuses to
+// save the subscription.
 webhook.get('/', (c) => {
   const mode = c.req.query('hub.mode')
   const token = c.req.query('hub.verify_token')
@@ -25,55 +24,135 @@ webhook.get('/', (c) => {
   return fail(c, 'WEBHOOK_VERIFICATION_FAILED', 'Verify token mismatch', 403)
 })
 
-// --- POST /api/whatsapp/webhook — event receiver --------------------------
+// Flattens the nested Meta envelope into individual sub-events, each with its
+// own idempotency key.
 //
-// IDEMPOTENCY STRATEGY (implemented fully once D1 lands in Phase 3/4):
+// A status update's key is `${wamid}:${status}` rather than just the wamid,
+// because one message legitimately produces sent -> delivered -> read over
+// time. Keying on the wamid alone would drop every receipt after the first.
+function extractEvents(payload) {
+  const events = []
+
+  for (const entry of payload?.entry ?? []) {
+    for (const change of entry?.changes ?? []) {
+      const value = change?.value ?? {}
+
+      for (const status of value.statuses ?? []) {
+        events.push({
+          type: 'status',
+          idempotencyKey: `${status.id}:${status.status}`,
+          messageId: status.id,
+          status: status.status,
+          timestamp: status.timestamp,
+          errorCode: status.errors?.[0]?.code ? String(status.errors[0].code) : null,
+          errorMessage: status.errors?.[0]?.title ?? null,
+          raw: status,
+        })
+      }
+
+      for (const message of value.messages ?? []) {
+        events.push({
+          type: 'message',
+          idempotencyKey: message.id,
+          messageId: message.id,
+          raw: message,
+        })
+      }
+    }
+  }
+
+  return events
+}
+
+const STATUS_COLUMN = {
+  sent: 'sent_at',
+  delivered: 'delivered_at',
+  read: 'read_at',
+  failed: 'failed_at',
+}
+
+// Never downgrade: a late "delivered" must not overwrite a "read" that already
+// arrived, since Meta does not guarantee receipt ordering. The stored status
+// is ranked inline in SQL so the comparison happens in a single statement.
+const STATUS_RANK = { pending: 0, sent: 1, delivered: 2, read: 3, failed: 4 }
+
+const STORED_RANK_SQL = `CASE status
+  WHEN 'pending' THEN 0
+  WHEN 'sent' THEN 1
+  WHEN 'delivered' THEN 2
+  WHEN 'read' THEN 3
+  WHEN 'failed' THEN 4
+  ELSE 0 END`
+
+async function processEvent(db, event) {
+  if (event.type !== 'status') return
+
+  const column = STATUS_COLUMN[event.status]
+  if (!column) return
+
+  const at = event.timestamp
+    ? new Date(Number(event.timestamp) * 1000).toISOString()
+    : new Date().toISOString()
+
+  await db.prepare(
+    `UPDATE messages
+     SET status = CASE WHEN ?1 > (${STORED_RANK_SQL}) THEN ?2 ELSE status END,
+         ${column} = COALESCE(${column}, ?3),
+         error_code = COALESCE(?4, error_code),
+         error_message = COALESCE(?5, error_message)
+     WHERE meta_message_id = ?6`,
+  ).bind(
+    STATUS_RANK[event.status] ?? 0,
+    event.status,
+    at,
+    event.errorCode,
+    event.errorMessage,
+    event.messageId,
+  ).run()
+}
+
+// --- POST /api/whatsapp/webhook — delivery/read receipts ------------------
 //
-// Meta retries webhook deliveries aggressively (network timeouts, non-200
-// responses, etc.), so the same payload can arrive more than once. A single
-// POST can also bundle several logically distinct sub-events in
-// entry[].changes[].value, so idempotency has to be decided per sub-event,
-// not per HTTP request:
-//
-//   - Incoming messages: value.messages[] — each has a stable Meta message
-//     id ("wamid..."). That id alone is the idempotency key.
-//   - Status updates: value.statuses[] — each has an id (the wamid the
-//     status refers to) *and* a status (sent/delivered/read/failed). The
-//     same wamid legitimately produces multiple status rows over time, so
-//     the idempotency key there is the composite `${id}:${status}`.
-//
-// On arrival, every sub-event is upserted into `webhook_events`
-// (idempotency_key TEXT UNIQUE) via `INSERT ... ON CONFLICT DO NOTHING`.
-// Only rows that were actually inserted (not skipped as duplicates) get
-// queued for processing — so replays are absorbed at the database layer
-// before any business logic (message status writes, campaign counters)
-// runs. A row's `processing_status` moves pending -> processed so a crash
-// mid-processing can be retried without re-queuing.
-//
-// For now (Phase 2) we just log the payload and return 200 immediately —
-// Meta requires a fast 200 regardless of whether processing succeeds, so
-// heavier work will move to a Queue consumer rather than running inline
-// here once it exists.
+// Always answers 200 quickly: a non-200 makes Meta retry the whole payload,
+// and a processing bug should not turn into a redelivery storm.
 webhook.post('/', async (c) => {
   let payload
   try {
     payload = await c.req.json()
   } catch {
-    // Still 200 — an unparseable retry from Meta should not be treated as
-    // a failure that triggers more retries.
     logError('whatsapp.webhook.invalid_json', 'Body was not valid JSON')
     return ok(c, { received: true })
   }
 
   try {
     logEvent('whatsapp.webhook.received', payload)
+    const events = extractEvents(payload)
 
-    // TODO(Phase 3/4): for each entry[].changes[].value.{messages,statuses}
-    // sub-event, compute its idempotency key (see strategy above), upsert
-    // into webhook_events, and enqueue new ones onto a Cloudflare Queue for
-    // async processing instead of handling them inline here.
+    for (const event of events) {
+      // The UNIQUE index on idempotency_key is what makes retries safe:
+      // a replayed event inserts 0 rows and is skipped before any state change.
+      const insert = await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO webhook_events (event_type, idempotency_key, payload)
+         VALUES (?, ?, ?)`,
+      ).bind(event.type, event.idempotencyKey, JSON.stringify(event.raw)).run()
+
+      if ((insert.meta?.changes ?? 0) === 0) continue
+
+      try {
+        await processEvent(c.env.DB, event)
+        await c.env.DB.prepare(
+          `UPDATE webhook_events
+           SET processing_status = 'processed', processed_at = datetime('now')
+           WHERE idempotency_key = ?`,
+        ).bind(event.idempotencyKey).run()
+      } catch (err) {
+        logError('whatsapp.webhook.event_failed', err)
+        await c.env.DB.prepare(
+          `UPDATE webhook_events SET processing_status = 'failed' WHERE idempotency_key = ?`,
+        ).bind(event.idempotencyKey).run()
+      }
+    }
   } catch (err) {
-    // Never let a processing error turn into a non-200 — log and move on.
     logError('whatsapp.webhook.processing_error', err)
   }
 

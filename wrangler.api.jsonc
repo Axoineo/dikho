@@ -1,0 +1,26 @@
+{
+  // Standalone API Worker -> https://dikho-api.fineeurox.workers.dev
+  // Deploy with:  npm run deploy:api
+  // Dev with:     npm run dev:api
+  //
+  // The dashboard SPA is a SEPARATE Worker (wrangler.jsonc) on
+  // manage.dikho.in. Keep the two configs distinct: this one must not
+  // serve assets, and that one must not carry API bindings.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dikho-api",
+  "compatibility_date": "2026-08-20",
+  "main": "src/api/worker.js",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  // The API code reads this as `c.env.DB`, so the binding name must stay "DB".
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dikho-whatsapp",
+      "database_id": "58bc3063-789d-412e-83e2-f282806fc606",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

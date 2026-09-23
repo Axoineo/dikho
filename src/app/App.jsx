@@ -10,7 +10,11 @@ import {
   PurchaseOrdersPage,
   SettingsPage,
   PublicVendorForm,
-  PublicClientWelcome
+  PublicClientWelcome,
+  WhatsAppDashboard,
+  WhatsAppContacts,
+  WhatsAppCampaigns,
+  WhatsAppTemplates
 } from '../routes'
 
 /* ── Wrapper components that read outlet context ────────────────────────── */
@@ -56,6 +60,10 @@ export default function App() {
           <Route path="/payment-receipts" element={<PlaceholderPage title="Payment Receipt" />} />
           <Route path="/payment-requests" element={<PlaceholderPage title="Payment Request" />} />
           <Route path="/courier" element={<PlaceholderPage title="Document Courier" />} />
+          <Route path="/whatsapp" element={<WhatsAppDashboard />} />
+          <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
+          <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
+          <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
           <Route path="/settings" element={<SettingsRoute />} />
           <Route path="*" element={<Navigate to="/clients" replace />} />
         </Route>

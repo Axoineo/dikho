@@ -13,5 +13,15 @@ WHATSAPP_WABA_ID=
 WHATSAPP_APP_ID=
 WHATSAPP_APP_SECRET=
 
+# Name/language of the single approved static template, used as a fallback
+# when the Meta Graph API cannot be reached.
+WHATSAPP_STATIC_TEMPLATE_NAME=september_offer
+WHATSAPP_STATIC_TEMPLATE_LANG=en
+
+# Used by the Worker to validate the dashboard's Supabase session tokens.
+# The anon/publishable key is safe here — it is already public in the browser.
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+
 # Comma-separated list of origins allowed to call authenticated /api routes.
 ALLOWED_ORIGINS=https://manage.dikho.in,http://localhost:5173

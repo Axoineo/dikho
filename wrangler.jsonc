@@ -1,13 +1,22 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dikho-so-po",
-  "compatibility_date": "2026-08-20",
-  "observability": {
-    "enabled": true
-  },
-  "main": "src/worker.js",
-  "assets": {
-    "directory": "dist",
-    "not_found_handling": "single-page-application"
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "dikho-so-po",
+	"compatibility_date": "2026-08-20",
+	"observability": {
+		"enabled": true
+	},
+	// Dashboard SPA on manage.dikho.in. The API is a separate Worker —
+	// see wrangler.api.jsonc. No D1 or WhatsApp bindings belong here.
+	"main": "src/worker.js",
+	"assets": {
+		"directory": "dist",
+		"not_found_handling": "single-page-application"
+	},
+	"d1_databases": [
+		{
+			"binding": "dikho_whatsapp",
+			"database_name": "dikho-whatsapp",
+			"database_id": "58bc3063-789d-412e-83e2-f282806fc606"
+		}
+	]
 }

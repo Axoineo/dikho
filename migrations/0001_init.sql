@@ -1,50 +1,46 @@
--- Phase 3 blueprint only — not wired to any D1 binding yet.
--- Apply later with: wrangler d1 execute <db-name> --file=migrations/0001_init.sql
+-- Dikho WhatsApp Marketing — D1 schema.
+-- Apply with: npx wrangler d1 execute dikho-whatsapp --remote --file=migrations/0001_init.sql
+--
+-- Phase constraint: the only approved template is STATIC (no variables), so
+-- there is no variable-mapping table here. When variable templates land, add
+-- a `campaign_variables` table rather than widening `campaigns`.
 
-CREATE TABLE contacts (
+CREATE TABLE IF NOT EXISTS contacts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT,
-  phone TEXT NOT NULL UNIQUE,        -- E.164, e.g. +919876543210
+  phone TEXT NOT NULL UNIQUE,        -- E.164 digits, e.g. 919876543210
   email TEXT,
   company TEXT,
-  tags TEXT,                         -- JSON array, e.g. ["vip","mumbai"]
   opted_out INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'manual', -- manual | import
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_contacts_phone ON contacts(phone);
+CREATE INDEX IF NOT EXISTS idx_contacts_created ON contacts(created_at DESC);
 
-CREATE TABLE campaigns (
+CREATE TABLE IF NOT EXISTS campaigns (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  template_name TEXT NOT NULL,       -- Meta template name
+  template_name TEXT NOT NULL,
   template_language TEXT NOT NULL DEFAULT 'en',
-  template_components TEXT,          -- JSON: header/body/button variable mapping
-  status TEXT NOT NULL DEFAULT 'draft', -- draft | scheduled | sending | completed | failed
-  scheduled_at TEXT,
+  status TEXT NOT NULL DEFAULT 'draft', -- draft | sending | completed | failed
+  total_count INTEGER NOT NULL DEFAULT 0,
+  sent_count INTEGER NOT NULL DEFAULT 0,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT,                   -- Supabase user id of the sender
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  completed_at TEXT
 );
 
-CREATE TABLE campaign_contacts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
-  contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending', -- pending | queued | sent | failed | skipped
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(campaign_id, contact_id)
-);
+CREATE INDEX IF NOT EXISTS idx_campaigns_created ON campaigns(created_at DESC);
 
-CREATE INDEX idx_campaign_contacts_campaign ON campaign_contacts(campaign_id);
-CREATE INDEX idx_campaign_contacts_contact ON campaign_contacts(contact_id);
-
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE SET NULL,
-  contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
+  contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+  phone TEXT NOT NULL,               -- denormalised: webhooks arrive by phone/wamid
   meta_message_id TEXT UNIQUE,       -- wamid returned by Meta on send
-  direction TEXT NOT NULL,           -- outbound | inbound
   status TEXT NOT NULL DEFAULT 'pending', -- pending | sent | delivered | read | failed
   error_code TEXT,
   error_message TEXT,
@@ -55,18 +51,19 @@ CREATE TABLE messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_messages_campaign ON messages(campaign_id);
-CREATE INDEX idx_messages_contact ON messages(contact_id);
-CREATE INDEX idx_messages_meta_id ON messages(meta_message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_campaign ON messages(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_messages_meta_id ON messages(meta_message_id);
 
-CREATE TABLE webhook_events (
+-- Idempotency ledger. Meta retries webhook deliveries, so every sub-event is
+-- keyed and inserted with ON CONFLICT DO NOTHING before any state changes.
+CREATE TABLE IF NOT EXISTS webhook_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  event_type TEXT NOT NULL,          -- message | status | other
-  idempotency_key TEXT NOT NULL UNIQUE, -- wamid, or `${wamid}:${status}` for status updates
-  payload TEXT NOT NULL,             -- raw JSON sub-event, for replay/debugging
+  event_type TEXT NOT NULL,          -- status | message | other
+  idempotency_key TEXT NOT NULL UNIQUE, -- `${wamid}:${status}` for receipts
+  payload TEXT NOT NULL,
   processing_status TEXT NOT NULL DEFAULT 'pending', -- pending | processed | failed
   received_at TEXT NOT NULL DEFAULT (datetime('now')),
   processed_at TEXT
 );
 
-CREATE INDEX idx_webhook_events_status ON webhook_events(processing_status);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(processing_status);
