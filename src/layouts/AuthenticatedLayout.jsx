@@ -15,6 +15,11 @@ export default function AuthenticatedLayout() {
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem('dikho-theme') || 'system')
 
   useEffect(() => {
+    // Internal app: show the full product name in the tab (public pages use "Dikho").
+    document.title = 'Dikho CRM'
+  }, [])
+
+  useEffect(() => {
     function applyTheme(mode) {
       let resolved = mode
       if (mode === 'system') {
