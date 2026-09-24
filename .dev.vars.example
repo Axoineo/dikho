@@ -18,6 +18,16 @@ WHATSAPP_APP_SECRET=
 WHATSAPP_STATIC_TEMPLATE_NAME=september_offer
 WHATSAPP_STATIC_TEMPLATE_LANG=en
 
+# Approved AUTHENTICATION-category template used to deliver login OTP codes.
+# Must match the template name/language configured on Meta (see docs/whatsapp-auth.md).
+WHATSAPP_AUTH_TEMPLATE_NAME=dikho_auth
+WHATSAPP_AUTH_TEMPLATE_LANG=en
+
+# Secret shown when you enable Supabase Auth > Hooks > "Send SMS hook" (HTTPS).
+# Shaped like `v1,whsec_...`. The Worker verifies every hook call's Standard
+# Webhooks signature against this, so only Supabase can trigger an OTP send.
+SUPABASE_SEND_SMS_HOOK_SECRET=
+
 # Used by the Worker to validate the dashboard's Supabase session tokens.
 # The anon/publishable key is safe here — it is already public in the browser.
 SUPABASE_URL=

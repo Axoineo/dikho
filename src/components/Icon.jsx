@@ -23,6 +23,8 @@ export function Icon({ name, size = 18, strokeWidth = 1.8 }) {
     filter: <><path d="M4 6h16M7 12h10M10 18h4" /></>,
     edit: <><path d="M4 20h4L19 9l-4-4L4 16v4Z" /><path d="m14 6 4 4" /></>,
     trash: <><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /></>,
+    mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 7 8.5 6 8.5-6" /></>,
+    whatsapp: <><path d="M20.5 11.5a8.5 8.5 0 0 1-12.6 7.5L3.5 20.5l1.5-4.3A8.5 8.5 0 1 1 20.5 11.5Z" /><path d="M8.8 8.2c1 2.4 2.6 4 5 5 .8.3 1.4-.2 1.8-.8" /></>,
   }
 
   return (
