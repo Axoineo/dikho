@@ -8,6 +8,7 @@ const SECRET_KEYS = new Set([
   'verify_token',
   'app_secret',
   'authorization',
+  'otp',
 ])
 
 function redact(value) {

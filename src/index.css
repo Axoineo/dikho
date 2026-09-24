@@ -130,6 +130,39 @@ button:disabled { cursor: default; }
   letter-spacing: 0.05px;
   line-height: 1.5;
 }
+.login-method-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 22px;
+  background: var(--brand-blue-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.login-method-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.login-method-btn:hover:not(.active) {
+  color: var(--text);
+}
+.login-method-btn.active {
+  background: var(--surface);
+  color: var(--brand-blue);
+  box-shadow: 0 1px 4px rgba(24, 40, 65, 0.12);
+}
 .login-box form {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,7 @@ import { errorHandler } from './middleware/errorHandler.js'
 import { requireAuth } from './middleware/requireAuth.js'
 import health from './routes/health.js'
 import whatsapp from './routes/whatsapp/index.js'
+import auth from './routes/auth/index.js'
 import contacts from './routes/contacts/index.js'
 import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
@@ -16,10 +17,12 @@ export function createApiApp() {
   app.use('*', corsMiddleware())
   app.onError(errorHandler)
 
-  // Public: uptime checks, and Meta's webhook (authenticated by verify token
-  // on GET, and by the payload's own signature contract on POST).
+  // Public: uptime checks, Meta's webhook (authenticated by verify token on
+  // GET, and by the payload's own signature contract on POST), and Supabase's
+  // Send-SMS auth hook (authenticated by its Standard Webhooks HMAC signature).
   app.route('/health', health)
   app.route('/whatsapp', whatsapp)
+  app.route('/auth', auth)
 
   // Dashboard routes — require a valid Supabase session. Both the bare path
   // and the wildcard are registered: Hono's `/x/*` does not match `/x`.
