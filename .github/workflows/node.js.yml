@@ -9,6 +9,12 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Least-privilege GITHUB_TOKEN. Both jobs only read the repo (checkout) and run
+# build/scan steps — no writes, PR comments, releases, or deployments — so the
+# whole workflow gets read-only contents access and nothing else.
+permissions:
+  contents: read
+
 jobs:
   build:
 
