@@ -99,7 +99,14 @@ export async function fetchApprovedTemplates(env) {
     graphUrl(`${env.WHATSAPP_WABA_ID}/message_templates?status=APPROVED&limit=100`),
     { headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}` } },
   )
-  if (!res.ok) throw new Error(`Template fetch failed with status ${res.status}`)
+  if (!res.ok) {
+    // Surface Meta's own error (code/message/fbtrace_id) rather than a bare
+    // HTTP status — code 190 => token, 100 => bad WABA id/param, 200 => missing
+    // permission. The token itself is never part of this body, so it is safe
+    // to log. Truncated to keep a single log line readable.
+    const detail = await res.text().catch(() => '')
+    throw new Error(`Template fetch failed (HTTP ${res.status}): ${detail.slice(0, 500)}`)
+  }
 
   const body = await res.json()
   return (body.data ?? []).map((template) => ({
