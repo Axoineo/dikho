@@ -381,7 +381,23 @@ export default function PublicVendorForm() {
 
     try {
       const ph = form.contact.replace(/\D/g, '')
-      const payload = {
+
+      // Upload the document FIRST under a random id, so the whole registration
+      // is a single atomic RPC. The anon role has no direct INSERT/SELECT/
+      // UPDATE/DELETE on vendors — see migration 20260925000000_public_write_rpcs.
+      // A failed RPC rolls the vendor+address back automatically; a document
+      // uploaded here but never referenced is harmlessly orphaned in storage.
+      let documentPath = null
+      if (documentFile) {
+        const safe = documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `vendors_documents/${crypto.randomUUID()}/${safe}`
+        const { error: upErr } = await supabase.storage.from('Dikho').upload(path, documentFile, {
+          cacheControl: '3600', upsert: false, contentType: documentFile.type || 'application/octet-stream',
+        })
+        if (!upErr) documentPath = path
+      }
+
+      const p_vendor = {
         alias: form.alias.trim() || null,
         contact_person: form.contact_person.trim() || null,
         company_name: form.company_name.trim(),
@@ -392,13 +408,12 @@ export default function PublicVendorForm() {
         vendor_type: form.vendor_type,
         country_dialcode: form.country_dialcode,
         country_code: form.country_code,
-        contact: ph ? Number(ph) : null,
+        contact: ph || null,
         email: form.email.trim() || null,
         media_id: Number(form.media_id),
         sub_media_id: Number(form.sub_media_id),
         registration: form.registration || null,
         pan_number: form.pan_number.trim().toUpperCase() || null,
-        opening_balance: 0,
         tds_percentage: form.tds_percentage === '' ? null : Number(form.tds_percentage),
         tds_section: form.tds_section.trim() || null,
         vendor_bank_name: form.vendor_bank_name.trim() || null,
@@ -406,38 +421,21 @@ export default function PublicVendorForm() {
         vendor_account_number: form.vendor_account_number.trim() || null,
         vendor_confirm_account_number: form.vendor_confirm_account_number.trim() || null,
         vendor_document_file_name: documentFile?.name || null,
-        status: 0, // Pending approval
+        vendor_document_file_path: documentPath,
+        // `status` and `opening_balance` are assigned server-side by the RPC.
       }
 
-      const { data: vendor, error: vErr } = await supabase.from('vendors').insert([payload]).select('id').single()
-      if (vErr) throw vErr
-      if (!vendor?.id) throw new Error('Vendor created but no ID returned.')
-
-      const { error: aErr } = await supabase.from('vendor_addresses').insert([{
-        vendor_id: vendor.id,
+      const p_address = {
         address: form.address.trim(),
         country: form.country_name,
         country_code: form.country_code,
         state: form.state.trim(),
         city: form.city.trim(),
         zipcode: form.zipcode.trim() || null,
-        is_default: true,
-      }])
-      if (aErr) {
-        await supabase.from('vendors').delete().eq('id', vendor.id)
-        throw aErr
       }
 
-      if (documentFile) {
-        const safe = documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-        const path = `vendors_documents/${vendor.id}/${Date.now()}-${safe}`
-        const { error: upErr } = await supabase.storage.from('Dikho').upload(path, documentFile, {
-          cacheControl: '3600', upsert: false, contentType: documentFile.type || 'application/octet-stream',
-        })
-        if (!upErr) {
-          await supabase.from('vendors').update({ vendor_document_file_path: path, vendor_document_file_name: documentFile.name }).eq('id', vendor.id)
-        }
-      }
+      const { error: rpcErr } = await supabase.rpc('public_register_vendor', { p_vendor, p_address })
+      if (rpcErr) throw rpcErr
 
       setSubmitted(true)
     } catch (err) {

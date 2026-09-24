@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit secret guard. Enabled by `git config core.hooksPath .githooks`,
+# which the package.json "prepare" script runs automatically on `npm install`.
+#
+# Two layers:
+#   1. gitleaks (if installed) — full ruleset over the staged diff.
+#   2. scripts/security/scan-secrets.sh — zero-dependency regex fallback so the
+#      guard still works when gitleaks isn't installed.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+
+# 1. gitleaks over staged changes.
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --redact --no-banner \
+        --config "$repo_root/.gitleaks.toml" 2>/dev/null; then
+    echo "✖ gitleaks flagged a potential secret in staged changes. Commit aborted." >&2
+    echo "  Review the finding above; if it is a false positive, allowlist it in .gitleaks.toml." >&2
+    exit 1
+  fi
+else
+  echo "ℹ gitleaks not installed — using the regex fallback only." >&2
+  echo "  Install it for stronger coverage: https://github.com/gitleaks/gitleaks" >&2
+fi
+
+# 2. Regex fallback over the staged (added/copied/modified) text files.
+staged=()
+while IFS= read -r line; do
+  [ -n "$line" ] && staged+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACM)
+
+if [ ${#staged[@]} -gt 0 ]; then
+  bash "$repo_root/scripts/security/scan-secrets.sh" "${staged[@]}"
+fi

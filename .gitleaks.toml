@@ -1,0 +1,23 @@
+# gitleaks configuration for dikho.
+# Used by the .githooks/pre-commit hook and the CI "secret-scan" job.
+title = "dikho gitleaks config"
+
+[extend]
+# Start from gitleaks' built-in rules (AWS, GCP, Slack, GitHub, JWT, PEM, ...).
+useDefault = true
+
+[allowlist]
+description = "Generated assets and lockfiles that produce false positives"
+# Paths are regexes matched against the file path.
+paths = [
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)dist/''',
+  '''(^|/)public/Temps/''',      # embedded fonts / PDF templates (base64 blobs)
+  '''(^|/)node_modules/''',
+  '''(^|/)\.wrangler/''',
+  '''(^|/)\.git/''',
+]
+# Example values that are documentation, not live secrets.
+regexes = [
+  '''DikhoWebhook_[A-Za-z0-9]+''',   # placeholder verify-token shape in *.example
+]

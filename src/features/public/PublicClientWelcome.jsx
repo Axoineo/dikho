@@ -389,8 +389,10 @@ export default function PublicClientWelcome() {
         city: form.city.trim(),
       }
 
-      // Corporate-gifting leads go to their own table (not the CRM clients list).
-      const { error: insertError } = await supabase.from('cg_leads').insert([payload])
+      // Corporate-gifting leads go to their own table (not the CRM clients list),
+      // through a SECURITY DEFINER RPC — the anon role has no direct INSERT on
+      // cg_leads. See migration 20260925000000_public_write_rpcs.
+      const { error: insertError } = await supabase.rpc('public_submit_cg_lead', { p_lead: payload })
       if (insertError) throw insertError
 
       setSubmittedCompany(form.company_name.trim())

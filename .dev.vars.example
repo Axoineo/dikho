@@ -3,7 +3,9 @@
 
 # Meta App Dashboard > WhatsApp > Configuration > Webhook > Verify token.
 # Must match exactly what you paste into the Meta dashboard.
-WHATSAPP_VERIFY_TOKEN=DikhoWebhook_DGMx2026
+# Generate a random one, e.g. `openssl rand -hex 16`, and set it as a Worker
+# secret with `wrangler secret put WHATSAPP_VERIFY_TOKEN`. Never commit the real value.
+WHATSAPP_VERIFY_TOKEN=<your-webhook-verify-token>
 
 # Meta App Dashboard > WhatsApp > API Setup (or a permanent System User token).
 WHATSAPP_ACCESS_TOKEN=

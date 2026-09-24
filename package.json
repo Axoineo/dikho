@@ -4,9 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "scan:secrets": "bash scripts/security/scan-secrets.sh src dist",
     "test": "echo \"No tests configured yet\"",
     "preview": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",

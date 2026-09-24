@@ -28,4 +28,21 @@ jobs:
         cache: 'npm'
     - run: npm ci
     - run: npm run build --if-present
+    - name: Scan source and build output for baked secrets
+      run: npm run scan:secrets
     - run: npm test --if-present
+
+  secret-scan:
+    # Full-tree secret scan with gitleaks. Runs without installing deps, so the
+    # working tree is just the tracked source (no node_modules / no dist).
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install gitleaks
+      run: |
+        GITLEAKS_VERSION=8.21.2
+        curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+          | tar -xz -C /usr/local/bin gitleaks
+        gitleaks version
+    - name: Run gitleaks
+      run: gitleaks detect --no-git --config .gitleaks.toml --redact --no-banner --verbose
