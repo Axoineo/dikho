@@ -1,34 +1,24 @@
 -- ============================================================================
--- Harden public (anonymous) writes: route them through SECURITY DEFINER RPCs
--- and remove ALL direct anon table access on vendors / vendor_addresses /
--- clients / cg_leads.
+-- PHASE 1 of 2 — ADDITIVE. Safe to apply at any time; changes nothing for the
+-- currently-deployed frontend.
 --
--- WHY:
---   The dashboard talks to Supabase directly with the public anon key, so the
---   only thing standing between the internet and these tables is RLS. The old
---   policies were broader than their names implied:
---     * "read own pending vendor/client" was USING (status = 0) with no owner
---       predicate  ->  any anon could read EVERY pending row (PII, bank name).
---     * anon UPDATE/DELETE on pending vendors, and an unconditional anon DELETE
---       on vendor_addresses (USING (true))  ->  any anon could tamper with or
---       wipe other people's rows.
---     * INSERT policies were WITH CHECK (true)  ->  anon could set ANY column,
---       including `status` (self-approve) and `opening_balance`.
+-- Creates the SECURITY DEFINER RPCs that public (anonymous) forms use to write,
+-- and grants anon EXECUTE on them. It does NOT yet remove any direct anon table
+-- access — that is Phase 2 (20260925000001_public_write_lockdown.sql), which
+-- you apply only AFTER the frontend that calls these RPCs is live.
 --
---   This migration replaces those direct-table grants with two SECURITY DEFINER
---   functions. anon keeps EXECUTE on the functions only; it has no SELECT,
---   INSERT, UPDATE or DELETE on the underlying tables. The functions hard-code
---   the security-sensitive columns (status, opening_balance) so they can never
---   be set by the client.
+-- WHY the split: this migration + the new frontend are compatible with the OLD
+-- database (old anon policies still present). The Phase-2 lockdown is compatible
+-- with the NEW frontend (which no longer touches these tables directly). Applying
+-- them at different times gives a zero-downtime rollout. See the deploy runbook.
 --
--- APPLY (from the repo root):
---   npx supabase db push
---   -- or paste this file into the Supabase SQL editor.
+-- This migration is idempotent (CREATE OR REPLACE + idempotent GRANT/REVOKE),
+-- so re-running it is harmless.
 --
--- NOTE: In Supabase, migrations run as the `postgres` role, so these functions
--- are owned by postgres and their inserts bypass RLS by design. If you apply
--- them as a different role, that role must own the functions and be able to
--- insert into the tables below.
+-- APPLY: paste this file into the Supabase SQL editor and run (do NOT run
+-- `supabase db push` yet — that would also apply Phase 2). In Supabase, run as
+-- the `postgres` role so the functions are owned by postgres and their inserts
+-- bypass RLS by design.
 -- ============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────
@@ -157,51 +147,6 @@ revoke all on function public.public_register_vendor(jsonb, jsonb) from public;
 revoke all on function public.public_submit_cg_lead(jsonb)        from public;
 grant execute on function public.public_register_vendor(jsonb, jsonb) to anon, authenticated;
 grant execute on function public.public_submit_cg_lead(jsonb)        to anon, authenticated;
-
--- ─────────────────────────────────────────────────────────────────────────
--- 4. Remove EVERY anon policy on these tables. RLS stays enabled, so with no
---    anon policy the default is deny — anon can reach these tables only via the
---    SECURITY DEFINER functions above.
--- ─────────────────────────────────────────────────────────────────────────
--- vendors
-drop policy if exists "Public can register as vendor"                on public.vendors;
-drop policy if exists "Public can read own pending vendor"           on public.vendors;
-drop policy if exists "Public can update pending vendor document path" on public.vendors;
-drop policy if exists "Public can delete pending vendor"             on public.vendors;
-
--- vendor_addresses
-drop policy if exists "Public can add vendor address"    on public.vendor_addresses;
-drop policy if exists "Public can delete vendor address" on public.vendor_addresses;
-
--- clients — the live public welcome form writes cg_leads, never clients, so the
--- clients table should have NO anonymous access at all.
-drop policy if exists "Public can submit client welcome"   on public.clients;
-drop policy if exists "Public can read own pending client" on public.clients;
-
--- cg_leads
-drop policy if exists "Anyone can insert cg leads." on public.cg_leads;
-
--- ─────────────────────────────────────────────────────────────────────────
--- 5. Defense in depth: strip the underlying table privileges from anon so that
---    even a future accidental "enable a permissive policy" or "disable RLS"
---    cannot re-open direct access. The RPCs run as their owner and do not rely
---    on these grants. (authenticated is intentionally left untouched.)
--- ─────────────────────────────────────────────────────────────────────────
-revoke all on table public.vendors           from anon;
-revoke all on table public.vendor_addresses  from anon;
-revoke all on table public.clients           from anon;
-revoke all on table public.cg_leads          from anon;
-
--- ─────────────────────────────────────────────────────────────────────────
--- 6. Storage: the public form still needs to upload the document, so keep the
---    folder-scoped anon INSERT ("Anon can upload vendor documents"). Drop the
---    anon DELETE — it let any anon delete ANY object under vendors_documents/,
---    and the new single-RPC flow no longer needs client-side rollback.
--- ─────────────────────────────────────────────────────────────────────────
-drop policy if exists "Anon can delete vendor documents" on storage.objects;
-
--- media / sub_media keep their anon SELECT: they are non-sensitive reference
--- lists that populate the public form's dropdowns (no PII).
 
 -- Tell PostgREST to reload the schema so the new functions are callable at once.
 notify pgrst, 'reload schema';
