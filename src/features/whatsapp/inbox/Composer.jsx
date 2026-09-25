@@ -67,7 +67,7 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
   }
 
   return (
-    <div className="relative border-t border-black/10 bg-[#f0f2f5] dark:border-white/10 dark:bg-[#202c33]">
+    <div className="relative border-t border-black/[0.07] bg-white dark:border-white/[0.08] dark:bg-[#0f1a20]">
       {/* low-session warning strip */}
       {msLeft < 60 * 60 * 1000 && (
         <div className="px-4 pt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
@@ -103,7 +103,7 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
         </div>
       )}
 
-      <form onSubmit={submitText} className="flex items-end gap-1.5 px-3 py-2">
+      <form onSubmit={submitText} className="flex items-end gap-1.5 px-4 py-3">
         <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
 
         <button type="button" title="Emoji" onClick={() => setMenu(menu === 'emoji' ? null : 'emoji')}
@@ -123,7 +123,7 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
           onChange={(e) => { setText(e.target.value); if (e.target.value.trim()) pingTyping() }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitText() } }}
           placeholder="Type a message"
-          className="max-h-32 flex-1 resize-none rounded-lg border-0 bg-white px-3 py-2.5 text-[14px] outline-none placeholder:text-gray-400 dark:bg-[#2a3942] dark:text-white"
+          className="max-h-32 flex-1 resize-none rounded-xl border border-black/[0.08] bg-[#f5f6f8] px-3.5 py-2.5 text-[14px] outline-none focus:border-[#185494]/40 placeholder:text-gray-400 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white"
         />
 
         <button type="submit" disabled={busy || !text.trim()} title="Send"
