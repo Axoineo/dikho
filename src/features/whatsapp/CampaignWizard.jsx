@@ -397,13 +397,15 @@ function PreviewStep({
 
 /* ── Step 4: send ───────────────────────────────────────────────────────── */
 
-function SendStep({ result, error, sending, template, recipientCount, campaignName, variableMap, sampleContact }) {
+function SendStep({ result, error, sending, sendProgress, template, recipientCount, campaignName, variableMap, sampleContact }) {
   if (sending) {
     return (
       <EmptyState>
         <Spinner className="text-brand" />
         <div className="mb-1.5 mt-3 text-[15px] font-semibold text-ink">Sending campaign…</div>
-        Delivering {recipientCount} message{recipientCount === 1 ? '' : 's'} through the Meta Cloud API.
+        {sendProgress
+          ? <>{sendProgress.sent + sendProgress.failed} / {recipientCount} processed (batch {sendProgress.batch})…</>
+          : <>Delivering {recipientCount} message{recipientCount === 1 ? '' : 's'} through the Meta Cloud API.</>}
       </EmptyState>
     )
   }
@@ -600,24 +602,61 @@ export function CampaignWizard({ onDone }) {
     return false
   }, [step, recipientCount, template, campaignName, allMapped])
 
+  const [sendProgress, setSendProgress] = useState(null)
+
   async function send() {
     setSending(true)
     setError(null)
+    setSendProgress(null)
     try {
-      const data = await apiPost('/campaigns/send', {
-        name: campaignName.trim(),
-        contactIds: [...selected],
+      const shared = {
         templateName: template.name,
         templateLanguage: template.language,
         templateHeader: template.headerText || '',
         templateBody: template.bodyText || '',
         variableMap,
+      }
+
+      // First request creates the campaign and sends the first batch.
+      let data = await apiPost('/campaigns/send', {
+        name: campaignName.trim(),
+        contactIds: [...selected],
+        ...shared,
       })
-      setResult(data)
+
+      let totalSent = data.sent
+      let totalFailed = data.failed
+      let firstError = data.firstError
+      let batch = 1
+
+      // If the API says there are more to send, keep calling /send-batch.
+      while (data.remaining?.length > 0) {
+        batch += 1
+        setSendProgress({ sent: totalSent, failed: totalFailed, batch })
+
+        data = await apiPost('/campaigns/send-batch', {
+          campaignId: data.campaignId,
+          contactIds: data.remaining,
+          ...shared,
+        })
+
+        totalSent += data.sent
+        totalFailed += data.failed
+        if (!firstError && data.firstError) firstError = data.firstError
+      }
+
+      setResult({
+        campaignId: data.campaignId,
+        total: totalSent + totalFailed,
+        sent: totalSent,
+        failed: totalFailed,
+        firstError,
+      })
     } catch (err) {
       setError(err.message)
     } finally {
       setSending(false)
+      setSendProgress(null)
     }
   }
 
@@ -667,6 +706,7 @@ export function CampaignWizard({ onDone }) {
             result={result}
             error={error}
             sending={sending}
+            sendProgress={sendProgress}
             template={template}
             recipientCount={recipientCount}
             campaignName={campaignName}
