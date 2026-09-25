@@ -30,7 +30,7 @@ function mediaTypeFor(mime = '') {
    Newest activity first, matching the WhatsApp Web left pane. */
 conversations.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT conv.*, ct.name AS contact_name
+    `SELECT conv.*, ct.name AS contact_name, ct.avatar_url AS avatar_url
      FROM conversations conv
      LEFT JOIN contacts ct ON ct.id = conv.contact_id
      WHERE conv.status = 'open'
@@ -61,18 +61,19 @@ conversations.post('/:id/read', async (c) => {
 // Persists a just-sent outbound message and advances the conversation summary,
 // then broadcasts it so every open tab (including the sender's) converges on the
 // same row. Returns the stored row.
-async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, mediaMime, filename }) {
+async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, mediaMime, filename, mediaSize }) {
   const user = c.get('user')
   const now = new Date().toISOString()
 
   await c.env.DB.prepare(
     `INSERT INTO messages
        (conversation_id, contact_id, phone, meta_message_id, direction, type,
-        body, media_url, media_mime, media_filename, status, sender, sent_at, wa_timestamp, created_at)
-     VALUES (?1, ?2, ?3, ?4, 'outbound', ?5, ?6, ?7, ?8, ?9, 'sent', ?10, ?11, ?11, ?11)`,
+        body, media_url, media_mime, media_filename, media_size, media_status, status, sender, sent_at, wa_timestamp, created_at)
+     VALUES (?1, ?2, ?3, ?4, 'outbound', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'sent', ?12, ?13, ?13, ?13)`,
   ).bind(
     conv.id, conv.contact_id, conv.phone, metaMessageId, type, body ?? null,
-    mediaUrl ?? null, mediaMime ?? null, filename ?? null, user?.id ?? null, now,
+    mediaUrl ?? null, mediaMime ?? null, filename ?? null, mediaSize ?? null, mediaUrl ? 'ready' : null,
+    user?.id ?? null, now,
   ).run()
 
   await c.env.DB.prepare(
@@ -131,7 +132,7 @@ conversations.post('/:id/media', async (c) => {
   // Upload to Meta (for sending) and keep our own copy (for display) in parallel.
   const [uploaded, mediaUrl] = await Promise.all([
     uploadMediaToMeta(c.env, { bytes, mime, filename }),
-    storeOutboundCopy(c.env, { bytes, mime, filename }),
+    storeOutboundCopy(c.env, { bytes, mime }),
   ])
   if (!uploaded.ok) return fail(c, 'MEDIA_UPLOAD_FAILED', uploaded.errorMessage, 502)
 
@@ -141,9 +142,37 @@ conversations.post('/:id/media', async (c) => {
   if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
 
   const row = await recordOutbound(c, conv, {
-    metaMessageId: sent.messageId, type, body: caption || null, mediaUrl, mediaMime: mime, filename,
+    metaMessageId: sent.messageId, type, body: caption || null,
+    mediaUrl, mediaMime: mime, filename, mediaSize: file.size ?? bytes.byteLength,
   })
   return ok(c, { message: row })
+})
+
+/* ── POST /api/whatsapp/conversations/:id/avatar — set contact photo ───────
+   The Cloud API does not expose WhatsApp profile pictures, so agents set one
+   here. Stored in R2 and served through the same auth-gated media route. */
+conversations.post('/:id/avatar', async (c) => {
+  const id = Number(c.req.param('id'))
+  const conv = await c.env.DB.prepare('SELECT * FROM conversations WHERE id = ?').bind(id).first()
+  if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
+  if (!conv.contact_id) return fail(c, 'NO_CONTACT', 'Conversation has no linked contact', 409)
+
+  const form = await c.req.formData().catch(() => null)
+  const file = form?.get('file')
+  if (!file || typeof file.arrayBuffer !== 'function') {
+    throw new HTTPException(400, { message: 'No file uploaded under the "file" field' })
+  }
+  const mime = file.type || 'image/jpeg'
+  if (!mime.startsWith('image/')) {
+    throw new HTTPException(400, { message: 'Avatar must be an image' })
+  }
+
+  const url = await storeOutboundCopy(c.env, { bytes: await file.arrayBuffer(), mime })
+  await c.env.DB.prepare('UPDATE contacts SET avatar_url = ?1, updated_at = datetime(\'now\') WHERE id = ?2')
+    .bind(url, conv.contact_id).run()
+
+  await broadcast(c.env, 'conversation:updated', { id: conv.id, avatar_url: url })
+  return ok(c, { avatar_url: url })
 })
 
 export default conversations

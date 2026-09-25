@@ -1,71 +1,115 @@
-function initials(name, phone) {
-  const src = (name || '').trim()
-  if (src) return src.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-  return (phone || '?').slice(-2)
-}
+import { useMemo, useState } from 'react'
+import { Avatar } from './Avatar'
+import { formatListTime, displayName } from './inboxUtils'
 
-function relativeTime(iso) {
-  if (!iso) return ''
-  const d = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`)
-  if (Number.isNaN(d.getTime())) return ''
-  const now = new Date()
-  const sameDay = d.toDateString() === now.toDateString()
-  if (sameDay) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  const yest = new Date(now); yest.setDate(now.getDate() - 1)
-  if (d.toDateString() === yest.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString([], { day: '2-digit', month: 'short' })
-}
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+]
 
-// Left pane. Conversations arrive pre-sorted by last_message_at from the API and
-// are kept sorted by the parent as realtime events bump them to the top.
 export function ChatList({ conversations, activeId, onSelect, loading }) {
-  return (
-    <div className="flex h-full flex-col overflow-y-auto">
-      {loading && conversations.length === 0 && (
-        <div className="p-4 text-sm text-gray-500">Loading conversations…</div>
-      )}
-      {!loading && conversations.length === 0 && (
-        <div className="p-4 text-sm text-gray-500">No conversations yet. They appear here when a customer messages your number.</div>
-      )}
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
 
-      {conversations.map((conv) => {
-        const name = conv.wa_name || conv.contact_name || conv.phone
-        const active = conv.id === activeId
-        const unread = conv.unread_count > 0
-        return (
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return conversations.filter((c) => {
+      if (filter === 'unread' && !(c.unread_count > 0)) return false
+      if (!q) return true
+      return (
+        (c.wa_name || '').toLowerCase().includes(q) ||
+        (c.contact_name || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q) ||
+        (c.last_message_preview || '').toLowerCase().includes(q)
+      )
+    })
+  }, [conversations, query, filter])
+
+  const unreadTotal = conversations.filter((c) => c.unread_count > 0).length
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Search */}
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-2 rounded-lg bg-black/[0.04] px-3 py-1.5 dark:bg-white/[0.06]">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-gray-400"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, number or message"
+            className="w-full bg-transparent text-[13.5px] outline-none placeholder:text-gray-400 dark:text-white"
+          />
+          {query && (
+            <button onClick={() => setQuery('')} className="text-gray-400 hover:text-gray-600" title="Clear">✕</button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex gap-2 px-3 pb-2">
+        {FILTERS.map((f) => (
           <button
-            key={conv.id}
-            onClick={() => onSelect(conv)}
-            className={`flex w-full items-center gap-3 border-b border-black/5 px-3 py-3 text-left transition-colors
-              dark:border-white/5
-              ${active ? 'bg-[#185494]/[0.06] dark:bg-white/[0.06]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'}`}
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors
+              ${filter === f.key
+                ? 'bg-[#185494]/12 text-[#185494] dark:bg-[#185494]/30 dark:text-[#7cb2ea]'
+                : 'bg-black/[0.04] text-gray-500 hover:bg-black/[0.07] dark:bg-white/[0.06] dark:text-gray-400'}`}
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#185494]/10 text-[13px] font-semibold text-[#185494] dark:bg-white/10 dark:text-[#5ba0e0]">
-              {initials(conv.wa_name || conv.contact_name, conv.phone)}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline justify-between gap-2">
-                <span className={`truncate text-[14px] ${unread ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-800 dark:text-gray-100'}`}>
-                  {name}
-                </span>
-                <span className={`shrink-0 text-[11px] ${unread ? 'text-[#25d366]' : 'text-gray-400'}`}>
-                  {relativeTime(conv.last_message_at)}
-                </span>
-              </span>
-              <span className="mt-0.5 flex items-center justify-between gap-2">
-                <span className="truncate text-[12.5px] text-gray-500 dark:text-gray-400">
-                  {conv.last_message_direction === 'outbound' ? '↩ ' : ''}{conv.last_message_preview || ''}
-                </span>
-                {unread && (
-                  <span className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-bold text-white">
-                    {conv.unread_count}
-                  </span>
-                )}
-              </span>
-            </span>
+            {f.label}{f.key === 'unread' && unreadTotal > 0 ? ` ${unreadTotal}` : ''}
           </button>
-        )
-      })}
+        ))}
+      </div>
+
+      {/* Rows */}
+      <div className="flex-1 overflow-y-auto">
+        {loading && conversations.length === 0 && <div className="p-4 text-sm text-gray-500">Loading conversations…</div>}
+        {!loading && shown.length === 0 && (
+          <div className="p-6 text-center text-sm text-gray-500">
+            {conversations.length === 0
+              ? 'No conversations yet. They appear here when a customer messages your number.'
+              : 'No conversations match.'}
+          </div>
+        )}
+
+        {shown.map((conv) => {
+          const active = conv.id === activeId
+          const unread = conv.unread_count > 0
+          return (
+            <button
+              key={conv.id}
+              onClick={() => onSelect(conv)}
+              className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors
+                ${active ? 'bg-[#185494]/[0.07] dark:bg-white/[0.06]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'}`}
+            >
+              <Avatar name={conv.wa_name || conv.contact_name} phone={conv.phone} avatarUrl={conv.avatar_url} size={48} />
+              <span className="min-w-0 flex-1 border-b border-black/5 pb-2.5 pt-0.5 dark:border-white/[0.06]">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className={`truncate text-[15px] ${unread ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-800 dark:text-gray-100'}`}>
+                    {displayName(conv)}
+                  </span>
+                  <span className={`shrink-0 text-[11.5px] ${unread ? 'font-semibold text-[#185494] dark:text-[#7cb2ea]' : 'text-gray-400'}`}>
+                    {formatListTime(conv.last_message_at)}
+                  </span>
+                </span>
+                <span className="mt-0.5 flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-1 text-[13px] text-gray-500 dark:text-gray-400">
+                    {conv.last_message_direction === 'outbound' && (
+                      <svg viewBox="0 0 18 12" width="15" height="10" className="shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 6.5l3.2 3.2L11 3" /><path d="M6.5 9.5L13.2 3" /></svg>
+                    )}
+                    <span className="truncate">{conv.last_message_preview || ''}</span>
+                  </span>
+                  {unread && (
+                    <span className="ml-auto flex h-[20px] min-w-[20px] shrink-0 items-center justify-center rounded-full bg-[#185494] px-1.5 text-[11px] font-bold text-white">
+                      {conv.unread_count}
+                    </span>
+                  )}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
