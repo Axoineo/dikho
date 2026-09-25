@@ -71,9 +71,61 @@ async function loadRecipients(db, ids) {
   return recipients
 }
 
-// Sends to a list of recipients and writes message rows, returning totals.
-async function sendAndLog(env, { campaignId, recipients, templateName, templateLanguage, template, hasVariables, variableMap }) {
-  const outcomes = await mapWithConcurrency(recipients, concurrency(env), async (recipient) => {
+// Atomically claims a fresh row for each recipient before any Meta call is
+// made. Backed by the unique (campaign_id, contact_id) index (migration
+// 0005): ON CONFLICT DO NOTHING means a request that gets replayed against
+// the same campaign — e.g. the frontend's retry-with-backoff firing again
+// after a dropped connection, or a double click — only ever proceeds with
+// whichever recipients it is the *first* to successfully claim. Anyone
+// already claimed by an earlier attempt is silently skipped here rather than
+// messaged a second time. Returns the subset of `recipients` that won.
+async function claimRecipients(db, campaignId, recipients) {
+  if (recipients.length === 0) return []
+  const insertClaim = db.prepare(
+    `INSERT INTO messages (campaign_id, contact_id, phone, status)
+     VALUES (?, ?, ?, 'pending')
+     ON CONFLICT(campaign_id, contact_id) DO NOTHING
+     RETURNING contact_id`,
+  )
+  const claimed = new Set()
+  // D1 limits batch() to ~100 statements.
+  for (let i = 0; i < recipients.length; i += 100) {
+    const chunk = recipients.slice(i, i + 100)
+    const results = await db.batch(chunk.map((r) => insertClaim.bind(campaignId, r.id, r.phone)))
+    for (const result of results) {
+      for (const row of result.results) claimed.add(row.contact_id)
+    }
+  }
+  return recipients.filter((r) => claimed.has(r.id))
+}
+
+// Same idea for a retry: claims by atomically flipping an existing `failed`
+// row to `pending` instead of inserting a new one. A concurrent/duplicate
+// retry racing on the same contact matches nothing (the row is no longer
+// `failed`) and gets 0 rows back, so it skips that contact entirely.
+async function claimFailedRecipients(db, campaignId, recipients) {
+  if (recipients.length === 0) return []
+  const claimUpdate = db.prepare(
+    `UPDATE messages SET status = 'pending', error_code = NULL, error_message = NULL, failed_at = NULL
+     WHERE campaign_id = ? AND contact_id = ? AND status = 'failed'
+     RETURNING contact_id`,
+  )
+  const claimed = new Set()
+  for (let i = 0; i < recipients.length; i += 100) {
+    const chunk = recipients.slice(i, i + 100)
+    const results = await db.batch(chunk.map((r) => claimUpdate.bind(campaignId, r.id)))
+    for (const result of results) {
+      for (const row of result.results) claimed.add(row.contact_id)
+    }
+  }
+  return recipients.filter((r) => claimed.has(r.id))
+}
+
+// Sends to a list of already-claimed recipients, returning per-recipient
+// outcomes. Persistence (finalizeMessages) is a separate step so callers
+// that claimed via INSERT vs UPDATE can share this.
+async function sendToRecipients(env, { recipients, templateName, templateLanguage, template, hasVariables, variableMap }) {
+  return mapWithConcurrency(recipients, concurrency(env), async (recipient) => {
     const contact = { ...recipient, attributes: parseAttributes(recipient.attributes) }
     const components = hasVariables ? buildComponents(template, variableMap, contact) : undefined
 
@@ -90,31 +142,36 @@ async function sendAndLog(env, { campaignId, recipients, templateName, templateL
     }
     return { recipient, result }
   })
+}
 
-  // D1 limits batch() to ~100 statements.
-  const insertMessage = env.DB.prepare(
-    `INSERT INTO messages
-       (campaign_id, contact_id, phone, meta_message_id, status, error_code, error_message, sent_at, failed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+// Writes the final outcome onto each claimed (`pending`) row.
+async function finalizeMessages(db, campaignId, outcomes) {
+  if (outcomes.length === 0) return
+  const updateMessage = db.prepare(
+    `UPDATE messages
+     SET meta_message_id = ?, status = ?, error_code = ?, error_message = ?, sent_at = ?, failed_at = ?
+     WHERE campaign_id = ? AND contact_id = ?`,
   )
   const now = new Date().toISOString()
 
-  const bindings = outcomes.map(({ recipient, result }) => insertMessage.bind(
-    campaignId,
-    recipient.id,
-    recipient.phone,
+  const bindings = outcomes.map(({ recipient, result }) => updateMessage.bind(
     result.ok ? result.messageId : null,
     result.ok ? 'sent' : 'failed',
     result.ok ? null : result.errorCode,
     result.ok ? null : result.errorMessage,
     result.ok ? now : null,
     result.ok ? null : now,
+    campaignId,
+    recipient.id,
   ))
 
+  // D1 limits batch() to ~100 statements.
   for (let i = 0; i < bindings.length; i += 100) {
-    await env.DB.batch(bindings.slice(i, i + 100))
+    await db.batch(bindings.slice(i, i + 100))
   }
+}
 
+function summarizeOutcomes(outcomes) {
   const sent = outcomes.filter(({ result }) => result.ok).length
   const failed = outcomes.length - sent
   const firstError = outcomes.find(({ result }) => !result.ok)?.result.errorMessage ?? null
@@ -160,20 +217,6 @@ async function loadFailedContactIds(db, campaignId) {
      WHERE campaign_id = ? AND status = 'failed' AND contact_id IS NOT NULL`,
   ).bind(campaignId).all()
   return results.map((row) => row.contact_id)
-}
-
-// Clears prior failed rows for exactly the contacts about to be re-sent, so
-// updateCampaignProgress's SUM over `messages` doesn't count both the old
-// failed attempt and the new one. Chunked at 99 (not 100) because campaignId
-// takes one of the 100 bound-param slots alongside the IN-list.
-async function deleteFailedMessages(db, campaignId, contactIds) {
-  for (let i = 0; i < contactIds.length; i += 99) {
-    const chunk = contactIds.slice(i, i + 99)
-    const placeholders = chunk.map(() => '?').join(',')
-    await db.prepare(
-      `DELETE FROM messages WHERE campaign_id = ? AND status = 'failed' AND contact_id IN (${placeholders})`,
-    ).bind(campaignId, ...chunk).run()
-  }
 }
 
 // The campaigns row only keeps template_name/template_language (+ the
@@ -293,9 +336,12 @@ campaigns.post('/send', async (c) => {
 
   const campaignId = campaign.id
 
-  const { sent, failed, firstError } = recipients.length > 0
-    ? await sendAndLog(c.env, { campaignId, recipients, templateName, templateLanguage, template, hasVariables, variableMap })
-    : { sent: 0, failed: 0, firstError: null }
+  const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
+  const outcomes = claimed.length > 0
+    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, hasVariables, variableMap })
+    : []
+  await finalizeMessages(c.env.DB, campaignId, outcomes)
+  const { sent, failed, firstError } = summarizeOutcomes(outcomes)
 
   await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
 
@@ -341,9 +387,12 @@ campaigns.post('/send-batch', async (c) => {
   const template = { headerText: templateHeader, bodyText: templateBody }
   const hasVariables = /\{\{/.test(templateHeader) || /\{\{/.test(templateBody)
 
-  const { sent, failed, firstError } = recipients.length > 0
-    ? await sendAndLog(c.env, { campaignId, recipients, templateName, templateLanguage, template, hasVariables, variableMap })
-    : { sent: 0, failed: 0, firstError: null }
+  const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
+  const outcomes = claimed.length > 0
+    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, hasVariables, variableMap })
+    : []
+  await finalizeMessages(c.env.DB, campaignId, outcomes)
+  const { sent, failed, firstError } = summarizeOutcomes(outcomes)
 
   await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
 
@@ -391,15 +440,15 @@ campaigns.post('/:id/retry', async (c) => {
   const variableMap = campaign.variables ? JSON.parse(campaign.variables) : {}
   const hasVariables = /\{\{/.test(template.headerText) || /\{\{/.test(template.bodyText)
 
-  const recipients = await loadRecipients(c.env.DB, batchIds)
-  // Only clear failed rows for contacts we're actually about to re-send to —
-  // e.g. someone who opted out since the original send is dropped by
-  // loadRecipients and should keep their old failed row, not lose it.
-  await deleteFailedMessages(c.env.DB, campaignId, recipients.map((r) => r.id))
+  // Filter to sendable contacts first (opted-out contacts are dropped by
+  // loadRecipients and should keep their old failed row untouched, not get
+  // claimed and left stuck at 'pending'), then atomically claim only those —
+  // see claimFailedRecipients for why this makes overlapping retries safe.
+  const candidates = await loadRecipients(c.env.DB, batchIds)
+  const recipients = await claimFailedRecipients(c.env.DB, campaignId, candidates)
 
-  const { sent, failed, firstError } = recipients.length > 0
-    ? await sendAndLog(c.env, {
-      campaignId,
+  const outcomes = recipients.length > 0
+    ? await sendToRecipients(c.env, {
       recipients,
       templateName: campaign.template_name,
       templateLanguage: campaign.template_language,
@@ -407,7 +456,9 @@ campaigns.post('/:id/retry', async (c) => {
       hasVariables,
       variableMap,
     })
-    : { sent: 0, failed: 0, firstError: null }
+    : []
+  await finalizeMessages(c.env.DB, campaignId, outcomes)
+  const { sent, failed, firstError } = summarizeOutcomes(outcomes)
 
   await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
 
