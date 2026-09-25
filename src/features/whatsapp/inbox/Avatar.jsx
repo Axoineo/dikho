@@ -1,21 +1,15 @@
-import { useEffect, useState } from 'react'
-import { getMediaUrl } from './mediaCache'
+import { useState } from 'react'
+import { useMediaSrc } from './MediaTicketContext'
 import { avatarColor, initials } from './inboxUtils'
 
 // Circular contact avatar. Shows the agent-uploaded photo when present
-// (avatar_url, served auth'd from R2), otherwise hash-colored initials — which is
-// what WhatsApp itself shows when a contact has no photo. The Cloud API cannot
-// provide real WhatsApp profile pictures, so uploaded photos are the only source.
+// (avatar_url, streamed via a signed ticket URL), otherwise hash-colored
+// initials — what WhatsApp itself shows when a contact has no photo. The Cloud
+// API cannot provide real WhatsApp profile pictures, so uploads are the source.
 export function Avatar({ name, phone, avatarUrl, size = 40, className = '' }) {
-  const [src, setSrc] = useState(null)
-
-  useEffect(() => {
-    setSrc(null)
-    if (!avatarUrl) return
-    let alive = true
-    getMediaUrl(avatarUrl).then((u) => { if (alive) setSrc(u) }).catch(() => {})
-    return () => { alive = false }
-  }, [avatarUrl])
+  const { srcFor } = useMediaSrc()
+  const [failed, setFailed] = useState(false)
+  const src = avatarUrl && !failed ? srcFor(avatarUrl) : null
 
   const dim = { width: size, height: size, fontSize: Math.round(size * 0.36) }
 
@@ -25,6 +19,7 @@ export function Avatar({ name, phone, avatarUrl, size = 40, className = '' }) {
         src={src}
         alt={name || phone || ''}
         style={dim}
+        onError={() => setFailed(true)}
         className={`shrink-0 rounded-full object-cover ${className}`}
       />
     )

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getMediaUrl } from './mediaCache'
+import { useMediaSrc } from './MediaTicketContext'
 import { formatFileSize, formatTime } from './inboxUtils'
 
 function IconBtn({ title, onClick, disabled, children }) {
@@ -17,21 +17,14 @@ function IconBtn({ title, onClick, disabled, children }) {
 }
 
 // Full-screen viewer for a conversation's media, with prev/next paging, zoom
-// (images), and download. PDFs render in a native <iframe> (free zoom/print);
-// other files show an icon + download. Mirrors WhatsApp Web's media viewer.
+// (images), and download. Media streams directly (signed ticket URL) so video
+// plays/seeks and PDFs render in a native <iframe> with free zoom/print.
 export function MediaLightbox({ items, index, onIndexChange, onClose }) {
   const item = items[index]
-  const [src, setSrc] = useState(null)
+  const { srcFor } = useMediaSrc()
   const [zoom, setZoom] = useState(1)
 
-  useEffect(() => {
-    setSrc(null)
-    setZoom(1)
-    if (!item?.media_url) return
-    let alive = true
-    getMediaUrl(item.media_url).then((u) => { if (alive) setSrc(u) }).catch(() => {})
-    return () => { alive = false }
-  }, [item?.media_url])
+  useEffect(() => { setZoom(1) }, [item?.media_url])
 
   const prev = useCallback(() => onIndexChange(Math.max(0, index - 1)), [index, onIndexChange])
   const next = useCallback(() => onIndexChange(Math.min(items.length - 1, index + 1)), [index, items.length, onIndexChange])
@@ -47,6 +40,7 @@ export function MediaLightbox({ items, index, onIndexChange, onClose }) {
   }, [onClose, prev, next])
 
   if (!item) return null
+  const src = srcFor(item.media_url)
   const mime = item.media_mime || ''
   const isImage = mime.startsWith('image/')
   const isVideo = mime.startsWith('video/')
@@ -54,10 +48,9 @@ export function MediaLightbox({ items, index, onIndexChange, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/90" onClick={onClose}>
-      {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-3 text-white" onClick={(e) => e.stopPropagation()}>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{item.media_filename || `${item.type}`}</div>
+          <div className="truncate text-sm font-medium">{item.media_filename || item.type}</div>
           <div className="text-xs text-white/60">
             {formatFileSize(item.media_size)}{item.media_size ? ' · ' : ''}{formatTime(item.wa_timestamp || item.created_at)}
           </div>
@@ -73,12 +66,8 @@ export function MediaLightbox({ items, index, onIndexChange, onClose }) {
           </>
         )}
         {src && (
-          <a
-            href={src}
-            download={item.media_filename || 'download'}
-            title="Download"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-white/90 hover:bg-white/15"
-          >
+          <a href={src} download={item.media_filename || 'download'} title="Download"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white/90 hover:bg-white/15">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" /></svg>
           </a>
         )}
@@ -87,7 +76,6 @@ export function MediaLightbox({ items, index, onIndexChange, onClose }) {
         </IconBtn>
       </div>
 
-      {/* Content */}
       <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4" onClick={(e) => e.stopPropagation()}>
         {items.length > 1 && (
           <IconBtn title="Previous (←)" onClick={prev} disabled={index === 0}>
@@ -100,7 +88,7 @@ export function MediaLightbox({ items, index, onIndexChange, onClose }) {
           {src && isImage && (
             <img src={src} alt={item.media_filename || ''} style={{ transform: `scale(${zoom})` }} className="max-h-[80vh] max-w-full origin-center object-contain transition-transform" />
           )}
-          {src && isVideo && <video src={src} controls autoPlay className="max-h-[80vh] max-w-full" />}
+          {src && isVideo && <video src={src} controls autoPlay preload="metadata" className="max-h-[80vh] max-w-full" />}
           {src && isPdf && <iframe src={src} title={item.media_filename || 'document'} className="h-[82vh] w-[min(900px,90vw)] rounded bg-white" />}
           {src && !isImage && !isVideo && !isPdf && (
             <a href={src} download={item.media_filename || 'download'} className="flex flex-col items-center gap-3 rounded-xl bg-white/10 px-8 py-10 text-white">
