@@ -103,15 +103,22 @@ campaigns.post('/send', async (c) => {
     })
   }
 
+  // SQLite limits bind parameters to 999 per statement, so chunk the SELECT
+  // when recipients exceed that.
   const ids = contactIds.map(Number).filter(Number.isInteger)
-  const placeholders = ids.map(() => '?').join(',')
-  const { results: recipients } = await c.env.DB
-    .prepare(
-      `SELECT id, name, phone, email, company, attributes
-       FROM contacts WHERE id IN (${placeholders}) AND opted_out = 0`,
-    )
-    .bind(...ids)
-    .all()
+  const recipients = []
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500)
+    const placeholders = chunk.map(() => '?').join(',')
+    const { results } = await c.env.DB
+      .prepare(
+        `SELECT id, name, phone, email, company, attributes
+         FROM contacts WHERE id IN (${placeholders}) AND opted_out = 0`,
+      )
+      .bind(...chunk)
+      .all()
+    recipients.push(...results)
+  }
 
   if (recipients.length === 0) {
     throw new HTTPException(400, { message: 'None of the selected contacts can be messaged' })
@@ -147,7 +154,7 @@ campaigns.post('/send', async (c) => {
     return { recipient, result }
   })
 
-  // One batched write rather than a round trip per recipient.
+  // D1 limits batch() to ~100 statements, so chunk the message inserts.
   const insertMessage = c.env.DB.prepare(
     `INSERT INTO messages
        (campaign_id, contact_id, phone, meta_message_id, status, error_code, error_message, sent_at, failed_at)
@@ -155,7 +162,7 @@ campaigns.post('/send', async (c) => {
   )
   const now = new Date().toISOString()
 
-  await c.env.DB.batch(outcomes.map(({ recipient, result }) => insertMessage.bind(
+  const bindings = outcomes.map(({ recipient, result }) => insertMessage.bind(
     campaignId,
     recipient.id,
     recipient.phone,
@@ -165,7 +172,11 @@ campaigns.post('/send', async (c) => {
     result.ok ? null : result.errorMessage,
     result.ok ? now : null,
     result.ok ? null : now,
-  )))
+  ))
+
+  for (let i = 0; i < bindings.length; i += 100) {
+    await c.env.DB.batch(bindings.slice(i, i + 100))
+  }
 
   const sent = outcomes.filter(({ result }) => result.ok).length
   const failed = outcomes.length - sent
@@ -187,3 +198,4 @@ campaigns.post('/send', async (c) => {
 })
 
 export default campaigns
+
