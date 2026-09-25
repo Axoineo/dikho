@@ -418,7 +418,7 @@ export default function PublicClientWelcome() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#718096', letterSpacing: '0.05em' }}>POWERED BY</span>
           <a href="https://dikho.in" title="Visit Dikho.in" className="pvf-logo-link">
-            <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
+            <img src="/dikho-logo.svg" alt="Dikho" className="pvf-logo" />
           </a>
         </div>
       </header>
@@ -454,7 +454,7 @@ export default function PublicClientWelcome() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#718096', letterSpacing: '0.05em' }}>POWERED BY</span>
           <a href="https://dikho.in" title="Visit Dikho.in" className="pvf-logo-link">
-            <img src="/dikho-logo.png" alt="Dikho" className="pvf-logo" />
+            <img src="/dikho-logo.svg" alt="Dikho" className="pvf-logo" />
           </a>
         </div>
       </header>

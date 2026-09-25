@@ -194,7 +194,7 @@ export default function CorporateGiftingCatalogue() {
       <aside className={`sidebar${collapsed ? ' sidebar-is-collapsed' : ''}`} aria-label="Main navigation">
         <div className="sidebar-logo-area">
           <div className="sidebar-logo-full">
-            <img src="/dikho-logo.png" alt="Dikho" className="sidebar-logo-img" style={{ height: '32px' }} />
+            <img src="/dikho-logo.svg" alt="Dikho" className="sidebar-logo-img" style={{ height: '32px' }} />
           </div>
         </div>
 

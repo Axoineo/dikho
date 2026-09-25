@@ -240,10 +240,10 @@ export function Sidebar({ collapsed, onOverlayClick, onLogout }) {
         {/* Logo area */}
         <div className="sidebar-logo-area">
           <div className="sidebar-logo-full">
-            <img src="/dikho-logo.png" alt="Dikho" className="sidebar-logo-img" />
+            <img src="/dikho-logo.svg" alt="Dikho" className="sidebar-logo-img" />
           </div>
           <div className="sidebar-logo-icon">
-            <img src="/fevicon.png" alt="Dikho" className="sidebar-favicon" />
+            <img src="/favicon.svg" alt="Dikho" className="sidebar-favicon" />
           </div>
         </div>
 

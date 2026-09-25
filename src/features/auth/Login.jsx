@@ -185,7 +185,7 @@ export default function Login({ onLogin }) {
       <div className="login-page">
         <div className="login-left">
           <div className="login-box">
-            <img src="/dikho-logo.png" alt="Dikho" className="login-logo" />
+            <img src="/dikho-logo.svg" alt="Dikho" className="login-logo" />
 
             <h1>{method === 'whatsapp' ? 'Check WhatsApp' : 'Check your email'}</h1>
             <p className="login-subtitle">
@@ -259,7 +259,7 @@ export default function Login({ onLogin }) {
     <div className="login-page">
       <div className="login-left">
         <div className="login-box">
-          <img src="/dikho-logo.png" alt="Dikho" className="login-logo" />
+          <img src="/dikho-logo.svg" alt="Dikho" className="login-logo" />
 
           <h1>Sign in to your account</h1>
           <p className="login-subtitle">Access your Dikho.</p>
