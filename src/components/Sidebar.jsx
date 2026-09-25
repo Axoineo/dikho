@@ -142,6 +142,7 @@ function SidebarIcon({ name, size = 20 }) {
 
 const WHATSAPP_ITEMS = [
   { to: '/whatsapp', label: 'Dashboard', icon: 'pulse', end: true },
+  { to: '/whatsapp/inbox', label: 'Inbox', icon: 'whatsapp' },
   { to: '/whatsapp/contacts', label: 'Contacts', icon: 'contacts' },
   { to: '/whatsapp/campaigns', label: 'Campaigns', icon: 'megaphone' },
   { to: '/whatsapp/templates', label: 'Templates', icon: 'template' },

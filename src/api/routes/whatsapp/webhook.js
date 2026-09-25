@@ -1,6 +1,9 @@
 import { Hono } from 'hono'
 import { ok, fail } from '../../utils/response.js'
 import { logEvent, logError } from '../../utils/logger.js'
+import { verifyMetaSignature } from '../../services/whatsapp/verifyMetaSignature.js'
+import { processInboundMessage } from '../../services/whatsapp/inbound.js'
+import { broadcast } from '../../services/whatsapp/realtime.js'
 
 const webhook = new Hono()
 
@@ -30,6 +33,7 @@ webhook.get('/', (c) => {
 // A status update's key is `${wamid}:${status}` rather than just the wamid,
 // because one message legitimately produces sent -> delivered -> read over
 // time. Keying on the wamid alone would drop every receipt after the first.
+// A message's key is its wamid, which Meta guarantees globally unique.
 function extractEvents(payload) {
   const events = []
 
@@ -50,11 +54,21 @@ function extractEvents(payload) {
         })
       }
 
+      // The customer's WhatsApp profile name lives on value.contacts, keyed by
+      // wa_id — not inside the message — so index it here and attach it below.
+      const profileByWaId = {}
+      for (const contact of value.contacts ?? []) {
+        profileByWaId[contact.wa_id] = contact.profile?.name ?? null
+      }
+
       for (const message of value.messages ?? []) {
         events.push({
           type: 'message',
           idempotencyKey: message.id,
           messageId: message.id,
+          from: message.from,
+          waName: profileByWaId[message.from] ?? null,
+          timestamp: message.timestamp,
           raw: message,
         })
       }
@@ -84,9 +98,9 @@ const STORED_RANK_SQL = `CASE status
   WHEN 'failed' THEN 4
   ELSE 0 END`
 
-async function processEvent(db, event) {
-  if (event.type !== 'status') return
-
+// Applies a delivery/read receipt to the matching outbound message, then pushes
+// the tick change to open agent tabs so the bubble's status icon updates live.
+async function processStatus(c, event) {
   const column = STATUS_COLUMN[event.status]
   if (!column) return
 
@@ -94,7 +108,7 @@ async function processEvent(db, event) {
     ? new Date(Number(event.timestamp) * 1000).toISOString()
     : new Date().toISOString()
 
-  await db.prepare(
+  const result = await c.env.DB.prepare(
     `UPDATE messages
      SET status = CASE WHEN ?1 > (${STORED_RANK_SQL}) THEN ?2 ELSE status END,
          ${column} = COALESCE(${column}, ?3),
@@ -109,16 +123,47 @@ async function processEvent(db, event) {
     event.errorMessage,
     event.messageId,
   ).run()
+
+  // Only broadcast when a row actually matched (ignores receipts for messages we
+  // never stored, e.g. legacy sends). The UI keys on the wamid.
+  if ((result.meta?.changes ?? 0) > 0) {
+    await broadcast(c.env, 'status:update', {
+      messageId: event.messageId,
+      status: event.status,
+      at,
+      errorMessage: event.errorMessage,
+    })
+  }
 }
 
-// --- POST /api/whatsapp/webhook — delivery/read receipts ------------------
+async function processEvent(c, event) {
+  if (event.type === 'status') return processStatus(c, event)
+  if (event.type === 'message') return processInboundMessage(c, event)
+}
+
+// --- POST /api/whatsapp/webhook — inbound messages + delivery receipts ----
 //
 // Always answers 200 quickly: a non-200 makes Meta retry the whole payload,
 // and a processing bug should not turn into a redelivery storm.
 webhook.post('/', async (c) => {
+  // Read the raw body once — the signature is computed over these exact bytes,
+  // and re-serialising parsed JSON would not reproduce them.
+  const raw = await c.req.text()
+
+  const signatureOk = await verifyMetaSignature(
+    raw,
+    c.req.header('x-hub-signature-256'),
+    c.env.WHATSAPP_APP_SECRET,
+  )
+  if (!signatureOk) {
+    logError('whatsapp.webhook.bad_signature', 'X-Hub-Signature-256 mismatch or missing')
+    // 200 (not 401) so a spoofer cannot probe, and Meta never retry-storms.
+    return ok(c, { received: true })
+  }
+
   let payload
   try {
-    payload = await c.req.json()
+    payload = JSON.parse(raw)
   } catch {
     logError('whatsapp.webhook.invalid_json', 'Body was not valid JSON')
     return ok(c, { received: true })
@@ -139,7 +184,7 @@ webhook.post('/', async (c) => {
       if ((insert.meta?.changes ?? 0) === 0) continue
 
       try {
-        await processEvent(c.env.DB, event)
+        await processEvent(c, event)
         await c.env.DB.prepare(
           `UPDATE webhook_events
            SET processing_status = 'processed', processed_at = datetime('now')

@@ -22,5 +22,14 @@
       "database_id": "58bc3063-789d-412e-83e2-f282806fc606",
       "migrations_dir": "migrations"
     }
+  ],
+  // Re-hosted WhatsApp media (inbound downloads + outbound copies). Read as
+  // `c.env.MEDIA`. Create the bucket once before first deploy:
+  //   npx wrangler r2 bucket create dikho-whatsapp-media
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "dikho-whatsapp-media"
+    }
   ]
 }
