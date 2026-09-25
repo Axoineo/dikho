@@ -7,9 +7,9 @@ import { buildComponents } from '../../../lib/templateVars.js'
 const campaigns = new Hono()
 
 // Each recipient costs one subrequest. Workers allows 1000 per request on the
-// paid plan (50 on free), so sends are capped well below that. Beyond this,
-// the send should move to a Cloudflare Queue consumer that fans out in chunks.
-const MAX_RECIPIENTS = 500
+// paid plan (50 on free), so large sends are fanned out across sub-batches via
+// the concurrency limiter below. Cap matches Meta's 2k/24h tier.
+const MAX_RECIPIENTS = 2000
 const CONCURRENCY = 8
 
 function parseAttributes(text) {

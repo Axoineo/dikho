@@ -76,7 +76,7 @@ function detectField(columns, field, phoneColumn) {
 
 contacts.get('/', async (c) => {
   const search = (c.req.query('search') || '').trim()
-  const limit = Math.min(Number(c.req.query('limit')) || 200, 1000)
+  const limit = Math.min(Number(c.req.query('limit')) || 2000, 5000)
 
   const where = search ? 'WHERE name LIKE ?1 OR phone LIKE ?1 OR company LIKE ?1' : ''
   const statement = c.env.DB.prepare(
@@ -195,6 +195,47 @@ contacts.post('/import', async (c) => {
     invalid,
     phoneColumn: phoneColumn || 'auto-detected per row',
   })
+})
+/* ── DELETE /api/contacts ───────────────────────────────────────────────── */
+
+// Accepts { contactIds: [1, 2, 3] } for selective deletion, or { all: true }
+// to wipe the entire contacts pool. Conversations/messages keep their history
+// (contact_id is SET NULL by the FK, but we also do it explicitly here for
+// safety in case the FK isn't enforced).
+contacts.delete('/', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
+
+  const { contactIds, all } = body
+
+  if (all === true) {
+    // Unlink conversations/messages first, then wipe contacts + reset autoincrement.
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE conversations SET contact_id = NULL WHERE contact_id IS NOT NULL'),
+      c.env.DB.prepare('UPDATE messages SET contact_id = NULL WHERE contact_id IS NOT NULL AND conversation_id IS NOT NULL'),
+      c.env.DB.prepare('DELETE FROM contacts'),
+      c.env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'contacts'"),
+    ])
+    return ok(c, { deleted: 'all' })
+  }
+
+  if (!Array.isArray(contactIds) || contactIds.length === 0) {
+    throw new HTTPException(400, { message: 'Provide contactIds (array) or { all: true }' })
+  }
+
+  const ids = contactIds.map(Number).filter(Number.isInteger)
+  if (ids.length === 0) {
+    throw new HTTPException(400, { message: 'No valid contact IDs provided' })
+  }
+
+  const placeholders = ids.map(() => '?').join(',')
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE conversations SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...ids),
+    c.env.DB.prepare(`UPDATE messages SET contact_id = NULL WHERE contact_id IN (${placeholders}) AND conversation_id IS NOT NULL`).bind(...ids),
+    c.env.DB.prepare(`DELETE FROM contacts WHERE id IN (${placeholders})`).bind(...ids),
+  ])
+
+  return ok(c, { deleted: ids.length })
 })
 
 export default contacts

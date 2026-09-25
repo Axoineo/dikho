@@ -34,6 +34,14 @@ export async function apiPost(path, payload) {
   }))
 }
 
+export async function apiDelete(path, payload) {
+  return unwrap(await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+}
+
 // Builds a direct, streamable URL for re-hosted media using a signed ticket, so
 // <img>/<video>/<iframe> can load it without an Authorization header. Returns
 // null until a ticket is available.
