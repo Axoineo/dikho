@@ -14,6 +14,21 @@
   "observability": {
     "enabled": true
   },
+  // WhatsApp campaign send sizing (src/api/routes/campaigns/index.js). Sized
+  // for the Workers FREE plan's 50-external-subrequest-per-invocation cap —
+  // CAMPAIGN_CONCURRENCY must stay ≤6 (Workers cap simultaneous in-flight
+  // connections at 6 regardless of plan) and CAMPAIGN_BATCH_LIMIT must stay
+  // comfortably under whatever the account's subrequest limit is.
+  // If this account moves to the Workers PAID plan (10,000+ subrequests per
+  // invocation by default, configurable up to 10M), raise these — e.g.
+  // CAMPAIGN_BATCH_LIMIT: "900", CAMPAIGN_CONCURRENCY: "6" — and redeploy
+  // with `npm run deploy:api`. No code change needed.
+  // Safe to commit as plain vars (unlike the Meta IDs elsewhere, these carry
+  // no secret value).
+  "vars": {
+    "CAMPAIGN_BATCH_LIMIT": "40",
+    "CAMPAIGN_CONCURRENCY": "5"
+  },
   // The API code reads this as `c.env.DB`, so the binding name must stay "DB".
   "d1_databases": [
     {

@@ -228,12 +228,17 @@ contacts.delete('/', async (c) => {
     throw new HTTPException(400, { message: 'No valid contact IDs provided' })
   }
 
-  const placeholders = ids.map(() => '?').join(',')
-  await c.env.DB.batch([
-    c.env.DB.prepare(`UPDATE conversations SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...ids),
-    c.env.DB.prepare(`UPDATE messages SET contact_id = NULL WHERE contact_id IN (${placeholders}) AND conversation_id IS NOT NULL`).bind(...ids),
-    c.env.DB.prepare(`DELETE FROM contacts WHERE id IN (${placeholders})`).bind(...ids),
-  ])
+  // D1 caps bound parameters at 100 per query, so large selections are
+  // deleted in chunks rather than one IN (...) list.
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
+    const placeholders = chunk.map(() => '?').join(',')
+    await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE conversations SET contact_id = NULL WHERE contact_id IN (${placeholders})`).bind(...chunk),
+      c.env.DB.prepare(`UPDATE messages SET contact_id = NULL WHERE contact_id IN (${placeholders}) AND conversation_id IS NOT NULL`).bind(...chunk),
+      c.env.DB.prepare(`DELETE FROM contacts WHERE id IN (${placeholders})`).bind(...chunk),
+    ])
+  }
 
   return ok(c, { deleted: ids.length })
 })

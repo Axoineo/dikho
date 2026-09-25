@@ -6,13 +6,28 @@ import { buildComponents } from '../../../lib/templateVars.js'
 
 const campaigns = new Hono()
 
-// Each Meta send is one Workers subrequest. Paid plan allows 1000 per
-// invocation, so a single request can handle ~900 recipients (leaving
-// headroom for D1 queries). For larger audiences the frontend calls
-// /send-batch repeatedly under the same campaignId.
-const BATCH_LIMIT = 900
+// Each Meta send is one Workers subrequest. D1 calls don't count against this
+// (they draw from a separate, much larger internal-services quota) — only the
+// fetch() calls to graph.facebook.com do. Cloudflare's Workers FREE plan caps
+// that at 50 per invocation (Paid raises it to 10,000+, configurable up to
+// 10M), so a single request only handles a small slice; the frontend calls
+// /send-batch repeatedly under the same campaignId to work through a larger
+// audience. Read from env (wrangler.api.jsonc `vars`) so moving to the Paid
+// plan is a config change + redeploy, not a code change — see that file for
+// the values to bump.
+const DEFAULT_BATCH_LIMIT = 40
+const DEFAULT_CONCURRENCY = 5
 const MAX_RECIPIENTS = 2000
-const CONCURRENCY = 8
+
+function batchLimit(env) {
+  return Number(env.CAMPAIGN_BATCH_LIMIT) || DEFAULT_BATCH_LIMIT
+}
+
+// Workers also cap simultaneous in-flight connections at 6 regardless of
+// plan, so this should stay ≤6 even after a plan upgrade raises BATCH_LIMIT.
+function concurrency(env) {
+  return Number(env.CAMPAIGN_CONCURRENCY) || DEFAULT_CONCURRENCY
+}
 
 function parseAttributes(text) {
   if (!text) return null
@@ -37,11 +52,12 @@ async function mapWithConcurrency(items, limit, worker) {
   return results
 }
 
-// Loads contacts by chunked IDs (SQLite max 999 bind params).
+// Loads contacts by chunked IDs. D1 caps bound parameters at 100 per query
+// (not SQLite's usual 999), so chunks must stay at or under that.
 async function loadRecipients(db, ids) {
   const recipients = []
-  for (let i = 0; i < ids.length; i += 500) {
-    const chunk = ids.slice(i, i + 500)
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
     const placeholders = chunk.map(() => '?').join(',')
     const { results } = await db
       .prepare(
@@ -57,7 +73,7 @@ async function loadRecipients(db, ids) {
 
 // Sends to a list of recipients and writes message rows, returning totals.
 async function sendAndLog(env, { campaignId, recipients, templateName, templateLanguage, template, hasVariables, variableMap }) {
-  const outcomes = await mapWithConcurrency(recipients, CONCURRENCY, async (recipient) => {
+  const outcomes = await mapWithConcurrency(recipients, concurrency(env), async (recipient) => {
     const contact = { ...recipient, attributes: parseAttributes(recipient.attributes) }
     const components = hasVariables ? buildComponents(template, variableMap, contact) : undefined
 
@@ -173,8 +189,9 @@ campaigns.post('/send', async (c) => {
   }
 
   const allIds = contactIds.map(Number).filter(Number.isInteger)
-  const batchIds = allIds.slice(0, BATCH_LIMIT)
-  const remainingIds = allIds.slice(BATCH_LIMIT)
+  const limit = batchLimit(c.env)
+  const batchIds = allIds.slice(0, limit)
+  const remainingIds = allIds.slice(limit)
 
   const recipients = await loadRecipients(c.env.DB, batchIds)
   // Count the full audience for the campaign row (not just this batch).
@@ -247,8 +264,9 @@ campaigns.post('/send-batch', async (c) => {
   }
 
   const allIds = contactIds.map(Number).filter(Number.isInteger)
-  const batchIds = allIds.slice(0, BATCH_LIMIT)
-  const remainingIds = allIds.slice(BATCH_LIMIT)
+  const limit = batchLimit(c.env)
+  const batchIds = allIds.slice(0, limit)
+  const remainingIds = allIds.slice(limit)
 
   const recipients = await loadRecipients(c.env.DB, batchIds)
   const template = { headerText: templateHeader, bodyText: templateBody }

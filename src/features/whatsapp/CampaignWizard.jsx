@@ -397,16 +397,31 @@ function PreviewStep({
 
 /* ── Step 4: send ───────────────────────────────────────────────────────── */
 
-function SendStep({ result, error, sending, sendProgress, template, recipientCount, campaignName, variableMap, sampleContact }) {
+function SendStep({
+  result, error, sending, sendProgress, partial, template, recipientCount, campaignName, variableMap, sampleContact,
+}) {
   if (sending) {
     return (
       <EmptyState>
         <Spinner className="text-brand" />
-        <div className="mb-1.5 mt-3 text-[15px] font-semibold text-ink">Sending campaign…</div>
+        <div className="mb-1.5 mt-3 text-[15px] font-semibold text-ink">
+          {partial ? 'Resuming campaign…' : 'Sending campaign…'}
+        </div>
         {sendProgress
           ? <>{sendProgress.sent + sendProgress.failed} / {recipientCount} processed (batch {sendProgress.batch})…</>
           : <>Delivering {recipientCount} message{recipientCount === 1 ? '' : 's'} through the Meta Cloud API.</>}
       </EmptyState>
+    )
+  }
+
+  if (error && partial) {
+    const done = partial.totalSent + partial.totalFailed
+    return (
+      <Alert tone="error">
+        {error} Campaign #{partial.campaignId} got through <strong>{done} / {done + partial.remaining.length}</strong> before
+        this failed — resuming will continue with the remaining {partial.remaining.length} rather than starting over, so
+        no one already messaged gets a duplicate.
+      </Alert>
     )
   }
 
@@ -603,61 +618,131 @@ export function CampaignWizard({ onDone }) {
   }, [step, recipientCount, template, campaignName, allMapped])
 
   const [sendProgress, setSendProgress] = useState(null)
+  // Snapshot of an in-progress campaign that stopped mid-way (a batch call
+  // threw). Kept in state — not a local var — so a transient failure can be
+  // resumed from where it left off instead of the recipient re-clicking
+  // "Send" and re-sending to everyone from scratch (real duplicate WhatsApp
+  // messages to whoever already got through, which risks the number's
+  // quality rating / messaging limits with Meta).
+  const [partial, setPartial] = useState(null)
+
+  function sharedSendPayload() {
+    return {
+      templateName: template.name,
+      templateLanguage: template.language,
+      templateHeader: template.headerText || '',
+      templateBody: template.bodyText || '',
+      variableMap,
+    }
+  }
+
+  // A single flaky round trip shouldn't force a manual resume — retry a
+  // couple of times with backoff before surfacing it as an error.
+  async function postWithRetry(path, payload, attempts = 3) {
+    for (let i = 1; i <= attempts; i += 1) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        return await apiPost(path, payload)
+      } catch (err) {
+        if (i === attempts) throw err
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, 1000 * i))
+      }
+    }
+    return undefined
+  }
+
+  // Drives /send-batch until `remaining` is empty, accumulating on top of
+  // whatever was already sent (0 for a fresh send, or a resumed campaign's
+  // running totals). Updates `partial` before every batch so a mid-loop
+  // failure always leaves enough to resume from exactly this point.
+  async function driveBatches(firstResponse, shared, seed = { sent: 0, failed: 0, firstError: null }) {
+    let data = firstResponse
+    let totalSent = seed.sent + data.sent
+    let totalFailed = seed.failed + data.failed
+    let firstError = seed.firstError || data.firstError
+    let batch = 1
+
+    while (data.remaining?.length > 0) {
+      batch += 1
+      setPartial({
+        campaignId: data.campaignId, remaining: data.remaining, totalSent, totalFailed, firstError,
+      })
+      setSendProgress({ sent: totalSent, failed: totalFailed, batch })
+
+      // eslint-disable-next-line no-await-in-loop
+      data = await postWithRetry('/campaigns/send-batch', {
+        campaignId: data.campaignId,
+        contactIds: data.remaining,
+        ...shared,
+      })
+
+      totalSent += data.sent
+      totalFailed += data.failed
+      if (!firstError && data.firstError) firstError = data.firstError
+    }
+
+    setPartial(null)
+    return {
+      campaignId: data.campaignId, total: totalSent + totalFailed, sent: totalSent, failed: totalFailed, firstError,
+    }
+  }
 
   async function send() {
+    if (sending) return
     setSending(true)
     setError(null)
     setSendProgress(null)
+    setPartial(null)
     try {
-      const shared = {
-        templateName: template.name,
-        templateLanguage: template.language,
-        templateHeader: template.headerText || '',
-        templateBody: template.bodyText || '',
-        variableMap,
-      }
-
+      const shared = sharedSendPayload()
       // First request creates the campaign and sends the first batch.
-      let data = await apiPost('/campaigns/send', {
+      const initial = await postWithRetry('/campaigns/send', {
         name: campaignName.trim(),
         contactIds: [...selected],
         ...shared,
       })
-
-      let totalSent = data.sent
-      let totalFailed = data.failed
-      let firstError = data.firstError
-      let batch = 1
-
-      // If the API says there are more to send, keep calling /send-batch.
-      while (data.remaining?.length > 0) {
-        batch += 1
-        setSendProgress({ sent: totalSent, failed: totalFailed, batch })
-
-        data = await apiPost('/campaigns/send-batch', {
-          campaignId: data.campaignId,
-          contactIds: data.remaining,
-          ...shared,
-        })
-
-        totalSent += data.sent
-        totalFailed += data.failed
-        if (!firstError && data.firstError) firstError = data.firstError
-      }
-
-      setResult({
-        campaignId: data.campaignId,
-        total: totalSent + totalFailed,
-        sent: totalSent,
-        failed: totalFailed,
-        firstError,
-      })
+      setResult(await driveBatches(initial, shared))
     } catch (err) {
       setError(err.message)
     } finally {
       setSending(false)
       setSendProgress(null)
     }
+  }
+
+  // Continues a campaign left mid-way by `partial`, instead of starting a
+  // new one over the full original recipient list.
+  async function resumeSend() {
+    if (sending || !partial) return
+    setSending(true)
+    setError(null)
+    try {
+      const shared = sharedSendPayload()
+      const next = await postWithRetry('/campaigns/send-batch', {
+        campaignId: partial.campaignId,
+        contactIds: partial.remaining,
+        ...shared,
+      })
+      setResult(await driveBatches(next, shared, {
+        sent: partial.totalSent, failed: partial.totalFailed, firstError: partial.firstError,
+      }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending(false)
+      setSendProgress(null)
+    }
+  }
+
+  function discardPartial() {
+    if (!window.confirm(
+      `Campaign #${partial.campaignId} already sent to ${partial.totalSent + partial.totalFailed} of `
+      + `${partial.totalSent + partial.totalFailed + partial.remaining.length} recipients. Starting a new `
+      + 'campaign will re-message everyone in your current selection, including those already sent to. Continue?',
+    )) return
+    setPartial(null)
+    setError(null)
   }
 
   return (
@@ -707,6 +792,7 @@ export function CampaignWizard({ onDone }) {
             error={error}
             sending={sending}
             sendProgress={sendProgress}
+            partial={partial}
             template={template}
             recipientCount={recipientCount}
             campaignName={campaignName}
@@ -749,6 +835,15 @@ export function CampaignWizard({ onDone }) {
                 >
                   Continue
                 </button>
+              ) : partial ? (
+                <>
+                  <button type="button" className="secondary-button" onClick={discardPartial} disabled={sending}>
+                    Start over instead
+                  </button>
+                  <button type="button" className="primary-button" onClick={resumeSend} disabled={sending}>
+                    {sending ? 'Resuming…' : `Resume — ${partial.remaining.length} left`}
+                  </button>
+                </>
               ) : (
                 <button type="button" className="primary-button" onClick={send} disabled={sending}>
                   {sending ? 'Sending…' : `Send campaign to ${recipientCount}`}
