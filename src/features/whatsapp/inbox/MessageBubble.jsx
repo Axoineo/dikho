@@ -1,8 +1,7 @@
 import { AuthedMedia } from './AuthedMedia'
 import { formatTime } from './inboxUtils'
 
-// Delivery ticks, matching WhatsApp: single grey (sent), double grey (delivered),
-// double blue (read). Failed shows a red warning; anything earlier is a clock.
+// Delivery ticks: single grey (sent), double grey (delivered), double blue (read).
 function Ticks({ status }) {
   const base = 'ml-0.5 inline-block align-middle'
   if (status === 'read' || status === 'delivered') {
@@ -26,32 +25,22 @@ export function MessageBubble({ message, onOpenMedia }) {
   const isImageOrVideo = (message.media_mime || '').startsWith('image/') || (message.media_mime || '').startsWith('video/')
 
   return (
-    <div className={`flex px-3 py-[3px] sm:px-8 ${outbound ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex px-2 py-[3px] sm:px-4 ${outbound ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`relative max-w-[75%] rounded-lg px-2 py-1.5 text-[14.2px] leading-[19px] shadow-sm
+        className={`max-w-[76%] rounded-2xl px-2.5 py-1.5 text-[14px] leading-[20px] sm:max-w-[68%]
           ${outbound
-            ? 'rounded-tr-none bg-[#d7e8fb] text-gray-900 dark:bg-[#12405f] dark:text-white'
-            : 'rounded-tl-none bg-white text-gray-900 dark:bg-[#202c33] dark:text-white'}`}
+            ? 'rounded-br-md bg-[#e8f1fc] text-gray-900 ring-1 ring-[#185494]/10 dark:bg-[#1d4e74] dark:text-white dark:ring-white/5'
+            : 'rounded-bl-md bg-white text-gray-900 ring-1 ring-black/[0.06] dark:bg-[#202c33] dark:text-white dark:ring-white/5'}`}
       >
-        {/* bubble tail */}
-        <span
-          className={`absolute top-0 h-3 w-3 ${outbound
-            ? 'right-[-7px] text-[#d7e8fb] dark:text-[#12405f]'
-            : 'left-[-7px] text-white dark:text-[#202c33]'}`}
-          aria-hidden="true"
-        >
-          <svg viewBox="0 0 8 12" width="8" height="12" className={outbound ? 'scale-x-[-1]' : ''} fill="currentColor"><path d="M8 0H0c2 2 6 3 8 12V0z" /></svg>
-        </span>
-
         {hasMedia && (
-          <div className={`mb-1 overflow-hidden ${isImageOrVideo ? '-mx-1 -mt-0.5' : ''}`}>
+          <div className={`overflow-hidden ${message.body ? 'mb-1' : ''} ${isImageOrVideo ? '-mx-1 -mt-0.5 rounded-xl' : ''}`}>
             <AuthedMedia message={message} onOpen={() => onOpenMedia?.(message)} />
           </div>
         )}
-        {message.body && <p className="whitespace-pre-wrap break-words pr-14">{message.body}</p>}
+        {message.body && <p className="whitespace-pre-wrap break-words pr-12">{message.body}</p>}
 
-        <span className={`float-right ml-2 mt-1 flex select-none items-center gap-0.5 text-[11px] leading-none
-          ${outbound ? 'text-[#185494]/70 dark:text-white/60' : 'text-gray-500 dark:text-gray-400'}`}>
+        <span className={`float-right ml-2 mt-1 flex select-none items-center gap-0.5 text-[10.5px] leading-none
+          ${outbound ? 'text-[#185494]/70 dark:text-white/60' : 'text-gray-400 dark:text-gray-400'}`}>
           {formatTime(message.wa_timestamp || message.created_at)}
           {outbound && <Ticks status={message.status} />}
         </span>

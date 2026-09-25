@@ -3,6 +3,7 @@ import { waApi } from '../../../lib/api'
 import { useInboxRealtime } from './useInboxRealtime'
 import { ChatList } from './ChatList'
 import { Conversation } from './Conversation'
+import { ContactPanel } from './ContactPanel'
 import { MediaLightbox } from './MediaLightbox'
 import { MediaTicketProvider } from './MediaTicketContext'
 
@@ -18,7 +19,6 @@ function upsertConv(list, conv) {
   return sortConvs(next)
 }
 
-// A media message is viewable in the lightbox if its bytes are re-hosted.
 function isViewable(m) {
   return m.type !== 'text' && m.media_status === 'ready' && m.media_url &&
     !(m.media_mime || '').startsWith('audio/')
@@ -31,12 +31,12 @@ export default function WhatsAppInbox() {
   const [messages, setMessages] = useState([])
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [lightboxId, setLightboxId] = useState(null)
-  const [, setTick] = useState(0) // forces session-countdown re-render
+  const [infoOpen, setInfoOpen] = useState(true)
+  const [, setTick] = useState(0)
 
   const activeIdRef = useRef(null)
   useEffect(() => { activeIdRef.current = activeId }, [activeId])
 
-  // Keep session chips / composer gate fresh as the 24h window ticks down.
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 30000)
     return () => clearInterval(t)
@@ -115,18 +115,18 @@ export default function WhatsAppInbox() {
     setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, avatar_url } : c)))
   }, [])
 
-  // Lightbox works over the conversation's viewable media, so ←/→ pages through them.
   const mediaItems = useMemo(() => messages.filter(isViewable), [messages])
   const lightboxIndex = mediaItems.findIndex((m) => m.id === lightboxId)
   const openMedia = useCallback((message) => setLightboxId(message.id), [])
 
   return (
    <MediaTicketProvider>
-    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-[#111b21]">
-      <aside className="flex w-full max-w-[400px] shrink-0 flex-col border-r border-black/10 dark:border-white/10">
-        <header className="flex items-center justify-between px-4 py-3">
-          <h1 className="text-[17px] font-semibold text-gray-900 dark:text-white">Inbox</h1>
-          <span className="rounded-full bg-[#185494]/10 px-2 py-0.5 text-[12px] font-medium text-[#185494] dark:bg-[#185494]/25 dark:text-[#7cb2ea]">
+    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden rounded-2xl border border-black/[0.07] bg-white shadow-sm dark:border-white/[0.08] dark:bg-[#0f1a20]">
+      {/* Left — conversation list */}
+      <aside className="flex w-full max-w-[360px] shrink-0 flex-col border-r border-black/[0.07] dark:border-white/[0.08]">
+        <header className="flex items-center justify-between px-5 pb-1 pt-4">
+          <h1 className="text-[19px] font-semibold tracking-tight text-gray-900 dark:text-white">Inbox</h1>
+          <span className="rounded-full bg-[#185494]/10 px-2 py-0.5 text-[12px] font-semibold text-[#185494] dark:bg-[#185494]/25 dark:text-[#7cb2ea]">
             {conversations.length}
           </span>
         </header>
@@ -135,7 +135,8 @@ export default function WhatsAppInbox() {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1">
+      {/* Middle — active conversation */}
+      <main className="flex min-w-0 flex-1">
         <Conversation
           conversation={activeConv}
           messages={messages}
@@ -144,8 +145,15 @@ export default function WhatsAppInbox() {
           onSendMedia={handleSendMedia}
           onOpenMedia={openMedia}
           onUploadAvatar={handleUploadAvatar}
+          infoOpen={infoOpen}
+          onToggleInfo={() => setInfoOpen((v) => !v)}
         />
       </main>
+
+      {/* Right — contact details (third pane) */}
+      {infoOpen && activeConv && (
+        <ContactPanel conversation={activeConv} messages={messages} onOpenMedia={openMedia} />
+      )}
 
       {lightboxIndex >= 0 && (
         <MediaLightbox
