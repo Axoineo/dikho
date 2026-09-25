@@ -70,4 +70,13 @@ export const waApi = {
       body: form,
     }))
   },
+  uploadAvatar: async (id, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return unwrap(await fetch(`${BASE}/whatsapp/conversations/${id}/avatar`, {
+      method: 'POST',
+      headers: await authHeader(),
+      body: form,
+    }))
+  },
 }

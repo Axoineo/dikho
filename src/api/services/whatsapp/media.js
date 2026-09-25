@@ -45,10 +45,11 @@ export async function ingestMedia(env, { messageId, mediaId }) {
   const bytes = await fileRes.arrayBuffer()
 
   const url = await putToR2(env, keyFor(mediaId), bytes, meta.mime_type)
+  const size = Number(meta.file_size) || bytes.byteLength || null
 
   await env.DB.prepare(
-    `UPDATE messages SET media_url = ?1, media_mime = ?2, media_status = 'ready' WHERE id = ?3`,
-  ).bind(url, meta.mime_type, messageId).run()
+    `UPDATE messages SET media_url = ?1, media_mime = ?2, media_size = ?3, media_status = 'ready' WHERE id = ?4`,
+  ).bind(url, meta.mime_type, size, messageId).run()
 
   const row = await env.DB.prepare('SELECT * FROM messages WHERE id = ?').bind(messageId).first()
   await broadcast(env, 'message:updated', { message: row })
