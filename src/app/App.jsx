@@ -11,6 +11,7 @@ import {
   SettingsPage,
   PublicVendorForm,
   PublicClientWelcome,
+  WhatsAppInbox,
   WhatsAppDashboard,
   WhatsAppContacts,
   WhatsAppCampaigns,
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/payment-requests" element={<PlaceholderPage title="Payment Request" />} />
           <Route path="/courier" element={<PlaceholderPage title="Document Courier" />} />
           <Route path="/whatsapp" element={<WhatsAppDashboard />} />
+          <Route path="/whatsapp/inbox" element={<WhatsAppInbox />} />
           <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
           <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
           <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />

@@ -44,3 +44,30 @@ export async function apiUpload(path, file) {
     body: form,
   }))
 }
+
+// Fetches a protected binary (re-hosted WhatsApp media) with the session token
+// and returns a Blob. The caller turns it into an object URL for <img>/<a>,
+// since those elements cannot send an Authorization header themselves.
+export async function apiBlob(path) {
+  const res = await fetch(`${BASE}${path}`, { headers: await authHeader() })
+  if (!res.ok) throw new Error(`Request failed (${res.status})`)
+  return res.blob()
+}
+
+/* ── WhatsApp inbox ─────────────────────────────────────────────────────── */
+export const waApi = {
+  conversations: () => apiGet('/whatsapp/conversations'),
+  messages: (id) => apiGet(`/whatsapp/conversations/${id}/messages`),
+  markRead: (id) => apiPost(`/whatsapp/conversations/${id}/read`),
+  sendText: (id, body) => apiPost(`/whatsapp/conversations/${id}/messages`, { body }),
+  sendMedia: async (id, file, caption = '') => {
+    const form = new FormData()
+    form.append('file', file)
+    if (caption) form.append('caption', caption)
+    return unwrap(await fetch(`${BASE}/whatsapp/conversations/${id}/media`, {
+      method: 'POST',
+      headers: await authHeader(),
+      body: form,
+    }))
+  },
+}

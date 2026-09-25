@@ -8,6 +8,7 @@ export const PurchaseOrdersPage = lazy(() => import('./features/purchase-orders/
 export const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
 
 /* ── WhatsApp Marketing ────────────────────────────────────────────────── */
+export const WhatsAppInbox = lazy(() => import('./features/whatsapp/inbox/WhatsAppInbox'))
 export const WhatsAppDashboard = lazy(() => import('./features/whatsapp/WhatsAppDashboard'))
 export const WhatsAppContacts = lazy(() => import('./features/whatsapp/WhatsAppContacts'))
 export const WhatsAppCampaigns = lazy(() => import('./features/whatsapp/WhatsAppCampaigns'))

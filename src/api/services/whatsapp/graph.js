@@ -92,6 +92,52 @@ export async function sendAuthTemplate(env, { to, code }) {
   return { ok: true, messageId: body?.messages?.[0]?.id ?? null }
 }
 
+// Shared sender for free-form (non-template) messages inside an open 24-hour
+// session. Same error contract as sendTemplateMessage: { ok, messageId } or
+// { ok:false, errorCode, errorMessage }. Never includes the token in an error.
+async function postMessage(env, message) {
+  const res = await fetch(graphUrl(`${env.WHATSAPP_PHONE_NUMBER_ID}/messages`), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      ...message,
+    }),
+  })
+
+  const body = await res.json().catch(() => ({}))
+
+  if (!res.ok) {
+    const error = body?.error ?? {}
+    return {
+      ok: false,
+      errorCode: String(error.code ?? res.status),
+      errorMessage: error.message ?? 'Meta API request failed',
+    }
+  }
+
+  return { ok: true, messageId: body?.messages?.[0]?.id ?? null }
+}
+
+// Sends a plain text reply. preview_url lets Meta render link previews.
+export async function sendTextMessage(env, { to, body }) {
+  return postMessage(env, { to, type: 'text', text: { preview_url: true, body } })
+}
+
+// Sends a media reply by Meta media id (obtained from uploadMediaToMeta). A
+// caption is allowed on image/document/video but not audio; documents may carry
+// a filename shown to the recipient.
+export async function sendMediaMessage(env, { to, type, mediaId, caption, filename }) {
+  const media = { id: mediaId }
+  if (caption && type !== 'audio') media.caption = caption
+  if (type === 'document' && filename) media.filename = filename
+  return postMessage(env, { to, type, [type]: media })
+}
+
 // Approved templates for the WABA. Callers fall back to a static definition
 // when this fails, so a Meta outage never blocks the campaign screen.
 export async function fetchApprovedTemplates(env) {
