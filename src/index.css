@@ -97,35 +97,35 @@ button:disabled { cursor: default; }
   padding: 48px 40px;
 }
 .login-box {
-  width: 460px;
+  width: 416px;
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(32px) saturate(1.5);
   -webkit-backdrop-filter: blur(32px) saturate(1.5);
   border: 1px solid rgba(24, 84, 148, 0.08);
-  border-radius: 22px;
-  padding: 52px 48px 48px;
+  border-radius: 20px;
+  padding: 38px 38px 34px;
   box-shadow:
     0 1px 2px rgba(24, 84, 148, 0.03),
     0 6px 24px rgba(24, 84, 148, 0.06),
     0 16px 48px rgba(24, 84, 148, 0.04);
 }
 .login-logo {
-  width: 140px;
+  width: 118px;
   height: auto;
-  margin-bottom: 44px;
+  margin-bottom: 26px;
 }
 .login-box h1 {
-  margin: 0 0 8px;
+  margin: 0 0 5px;
   font-family: "Google Sans", "Google Sans Text", sans-serif;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.4px;
   color: #122a48;
 }
 .login-subtitle {
-  margin: 0 0 36px;
-  color: rgba(24, 84, 148, 0.52);
-  font-size: 15px;
+  margin: 0 0 22px;
+  color: rgba(24, 84, 148, 0.55);
+  font-size: 14px;
   font-weight: 400;
   letter-spacing: 0.05px;
   line-height: 1.5;
@@ -134,7 +134,7 @@ button:disabled { cursor: default; }
   display: flex;
   gap: 4px;
   padding: 4px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
   background: var(--brand-blue-soft);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -163,32 +163,41 @@ button:disabled { cursor: default; }
   color: var(--brand-blue);
   box-shadow: 0 1px 4px rgba(24, 40, 65, 0.12);
 }
+/* WhatsApp glyph: always the recognisable brand green */
+.wa-mark { flex: none; color: #25d366; }
 .login-box form {
   display: flex;
   flex-direction: column;
 }
 .login-box label {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 13.5px;
   font-weight: 500;
   color: rgba(24, 84, 148, 0.7);
   letter-spacing: 0.1px;
 }
 .login-box input {
-  height: 50px;
+  height: 46px;
   border: 1px solid rgba(24, 84, 148, 0.15);
   border-radius: 12px;
   padding: 0 16px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   outline: none;
   color: var(--text);
   font-size: 15px;
   background: rgba(255, 255, 255, 0.7);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
 .login-box input::placeholder {
   color: rgba(24, 84, 148, 0.32);
   font-weight: 400;
+}
+/* Filled input: darker, slightly heavier text on a solid field for clear contrast */
+.login-box input:not(:placeholder-shown) {
+  color: #0e2137;
+  font-weight: 500;
+  background: #fff;
+  border-color: rgba(24, 84, 148, 0.3);
 }
 .login-box input:focus {
   border-color: var(--brand-blue);
@@ -222,8 +231,8 @@ button:disabled { cursor: default; }
   opacity: 0.5;
 }
 .login-button {
-  height: 50px;
-  margin-top: 8px;
+  height: 46px;
+  margin-top: 4px;
   background: var(--brand-blue);
   color: #fff;
   font-weight: 600;
@@ -757,7 +766,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   .login-page { flex-direction: column; }
   .login-left, .login-right { width: 100%; }
   .login-left { padding: 36px 24px; }
-  .login-box { width: 100%; max-width: 460px; padding: 40px 32px 36px; border-radius: 20px; }
+  .login-box { width: 100%; max-width: 420px; padding: 34px 30px 32px; border-radius: 20px; }
   .login-right { min-height: 260px; }
   .welcome-content h2 { font-size: 36px; }
 
@@ -843,10 +852,10 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 @media (max-width: 520px) {
   .login-left { padding: 24px 16px; }
-  .login-box { width: 100%; padding: 32px 24px 28px; border-radius: 18px; }
-  .login-logo { width: 115px; margin-bottom: 32px; }
-  .login-box h1 { font-size: 23px; }
-  .login-subtitle { font-size: 13.5px; margin-bottom: 28px; }
+  .login-box { width: 100%; padding: 28px 22px 26px; border-radius: 18px; }
+  .login-logo { width: 110px; margin-bottom: 22px; }
+  .login-box h1 { font-size: 22px; }
+  .login-subtitle { font-size: 13.5px; margin-bottom: 20px; }
   .background-logo { font-size: 170px; }
   .welcome-content { width: 85%; }
   .welcome-content h2 { font-size: 30px; }
@@ -1265,24 +1274,28 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .otp-row {
   display: flex;
   gap: 10px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 .otp-input {
   flex: 1;
   min-width: 0;
-  height: 56px;
+  height: 52px;
   border: 1px solid rgba(24, 84, 148, 0.15);
   border-radius: 12px;
   text-align: center;
   font-family: "Google Sans", "Google Sans Text", sans-serif;
   font-size: 22px;
   font-weight: 600;
-  color: var(--text);
+  color: #0e2137;
   background: rgba(255, 255, 255, 0.7);
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   caret-color: transparent;
   padding: 0;
+}
+.otp-input-filled {
+  background: #fff;
+  border-color: rgba(24, 84, 148, 0.3);
 }
 .otp-input:focus {
   border-color: var(--brand-blue);
