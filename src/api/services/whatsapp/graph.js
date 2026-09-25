@@ -7,10 +7,13 @@ function graphUrl(path) {
   return `https://graph.facebook.com/${GRAPH_VERSION}/${path}`
 }
 
-// Sends one approved STATIC template (no `components` — this phase has no
-// variables to map). When variable templates arrive, add a `components`
-// argument here rather than at the call site.
-export async function sendTemplateMessage(env, { to, templateName, languageCode = 'en' }) {
+// Sends one approved template. `components` carries per-recipient variable
+// values (header/body parameters) built by lib/templateVars.buildComponents;
+// omit it for a static template and Meta receives no `components` key.
+export async function sendTemplateMessage(env, { to, templateName, languageCode = 'en', components }) {
+  const template = { name: templateName, language: { code: languageCode } }
+  if (Array.isArray(components) && components.length > 0) template.components = components
+
   const res = await fetch(graphUrl(`${env.WHATSAPP_PHONE_NUMBER_ID}/messages`), {
     method: 'POST',
     headers: {
@@ -22,7 +25,7 @@ export async function sendTemplateMessage(env, { to, templateName, languageCode 
       recipient_type: 'individual',
       to,
       type: 'template',
-      template: { name: templateName, language: { code: languageCode } },
+      template,
     }),
   })
 

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
 import { sendTemplateMessage } from '../../services/whatsapp/graph.js'
+import { buildComponents } from '../../../lib/templateVars.js'
 
 const campaigns = new Hono()
 
@@ -10,6 +11,11 @@ const campaigns = new Hono()
 // the send should move to a Cloudflare Queue consumer that fans out in chunks.
 const MAX_RECIPIENTS = 500
 const CONCURRENCY = 8
+
+function parseAttributes(text) {
+  if (!text) return null
+  try { return JSON.parse(text) } catch { return null }
+}
 
 // Runs `worker` over `items` with a fixed number of parallel lanes, preserving
 // result order. Keeps the Meta API from being hit with 500 simultaneous calls.
@@ -78,7 +84,13 @@ campaigns.post('/send', async (c) => {
   const body = await c.req.json().catch(() => null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
-  const { name, contactIds, templateName, templateLanguage = 'en' } = body
+  const {
+    name, contactIds, templateName, templateLanguage = 'en',
+    // Header/body text define the template's placeholders; variableMap says
+    // where each one's value comes from. Both are optional — a static template
+    // sends with neither.
+    templateHeader = '', templateBody = '', variableMap = {},
+  } = body
 
   if (!name?.trim()) throw new HTTPException(400, { message: 'Campaign name is required' })
   if (!templateName?.trim()) throw new HTTPException(400, { message: 'Template name is required' })
@@ -94,7 +106,10 @@ campaigns.post('/send', async (c) => {
   const ids = contactIds.map(Number).filter(Number.isInteger)
   const placeholders = ids.map(() => '?').join(',')
   const { results: recipients } = await c.env.DB
-    .prepare(`SELECT id, phone FROM contacts WHERE id IN (${placeholders}) AND opted_out = 0`)
+    .prepare(
+      `SELECT id, name, phone, email, company, attributes
+       FROM contacts WHERE id IN (${placeholders}) AND opted_out = 0`,
+    )
     .bind(...ids)
     .all()
 
@@ -102,20 +117,32 @@ campaigns.post('/send', async (c) => {
     throw new HTTPException(400, { message: 'None of the selected contacts can be messaged' })
   }
 
+  const template = { headerText: templateHeader, bodyText: templateBody }
+  const hasVariables = /\{\{/.test(templateHeader) || /\{\{/.test(templateBody)
+
   const user = c.get('user')
   const campaign = await c.env.DB.prepare(
-    `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by)
-     VALUES (?, ?, ?, 'sending', ?, ?)
+    `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by, variables)
+     VALUES (?, ?, ?, 'sending', ?, ?, ?)
      RETURNING id`,
-  ).bind(name.trim(), templateName.trim(), templateLanguage, recipients.length, user?.id ?? null).first()
+  ).bind(
+    name.trim(), templateName.trim(), templateLanguage, recipients.length, user?.id ?? null,
+    hasVariables ? JSON.stringify(variableMap) : null,
+  ).first()
 
   const campaignId = campaign.id
 
   const outcomes = await mapWithConcurrency(recipients, CONCURRENCY, async (recipient) => {
+    // Each recipient's row already carries name/email/company/phone plus the
+    // parsed attributes, which is exactly the shape templateVars resolves against.
+    const contact = { ...recipient, attributes: parseAttributes(recipient.attributes) }
+    const components = hasVariables ? buildComponents(template, variableMap, contact) : undefined
+
     const result = await sendTemplateMessage(c.env, {
       to: recipient.phone,
       templateName: templateName.trim(),
       languageCode: templateLanguage,
+      components,
     })
     return { recipient, result }
   })

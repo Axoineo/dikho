@@ -3,8 +3,14 @@ import { Icon } from '../../components/Icon'
 import { apiGet, apiPost, apiUpload } from '../../lib/api'
 import { WhatsAppPreview } from './WhatsAppPreview'
 import {
+  CONTACT_FIELDS, autoMap, isMissing, templateTokens,
+} from '../../lib/templateVars'
+import {
   Alert, Avatar, Badge, EmptyState, Panel, PanelHead, Spinner, Table, Td, Th, inputClass,
 } from './ui'
+
+// Friendly labels for the standard contact fields in the mapping dropdown.
+const FIELD_LABEL = { name: 'Name', company: 'Company', email: 'Email', phone: 'Phone' }
 
 const STEPS = ['Audience', 'Template', 'Preview', 'Send']
 
@@ -31,16 +37,17 @@ function Dropzone({ onFile, uploading, compact = false }) {
         {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
       </div>
       <div className="mb-1 text-sm font-semibold">
-        {uploading ? 'Importing contacts…' : 'Drop an Excel (.xlsx) or CSV file here'}
+        {uploading ? 'Importing contacts…' : 'Drop an Excel, CSV or JSON file here'}
       </div>
       <div className="text-[12.5px] text-muted">
-        Needs a <strong>phone</strong> column. Optional: name, email, company. Duplicates are skipped.
+        We auto-detect the phone column (any name works) and add <strong>+91</strong> when the
+        country code is missing. Every other column is saved for use as a variable.
       </div>
       <input
         ref={inputRef}
         type="file"
         className="hidden"
-        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = '' }}
       />
     </div>
@@ -59,8 +66,10 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
       const result = await apiUpload('/contacts/import', file)
       setNotice({
         tone: 'success',
-        text: `Imported ${result.imported} new contact${result.imported === 1 ? '' : 's'}. `
-          + `${result.duplicates} already existed, ${result.invalid} row(s) had no usable phone number.`,
+        text: `Imported ${result.imported} new contact${result.imported === 1 ? '' : 's'}`
+          + `${result.updated ? `, refreshed ${result.updated}` : ''}. `
+          + `${result.invalid} row(s) had no usable phone number. `
+          + `Phone read from “${result.phoneColumn}”.`,
       })
       onImported()
     } catch (err) {
@@ -176,8 +185,8 @@ function TemplateStep({ templates, loading, selectedName, onSelect }) {
   return (
     <>
       <Alert tone="info">
-        This phase supports <strong>static templates only</strong>. Templates containing
-        variables are listed but cannot be selected until variable mapping ships.
+        Pick an approved template. Templates with <strong>{'{{variables}}'}</strong> are
+        supported — you'll map each one to a contact column on the next step.
       </Alert>
 
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
@@ -186,10 +195,7 @@ function TemplateStep({ templates, loading, selectedName, onSelect }) {
             type="button"
             key={`${template.name}-${template.language}`}
             onClick={() => onSelect(template)}
-            disabled={template.hasVariables}
-            title={template.hasVariables ? 'Contains variables — not supported yet' : undefined}
             className={`rounded-xl border-[1.5px] bg-surface p-[15px] text-left text-ink transition
-              disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0
               ${selectedName === template.name
                 ? 'border-brand bg-brand-soft'
                 : 'border-line hover:-translate-y-px hover:border-brand'}`}
@@ -199,7 +205,11 @@ function TemplateStep({ templates, loading, selectedName, onSelect }) {
               <Badge tone="success">{template.status}</Badge>
               <Badge>{template.language}</Badge>
               {template.category && <Badge tone="info">{template.category}</Badge>}
-              {template.hasVariables && <Badge tone="warn">Has variables</Badge>}
+              {template.hasVariables && (
+                <Badge tone="warn">
+                  {template.variables?.length ?? 0} variable{(template.variables?.length ?? 0) === 1 ? '' : 's'}
+                </Badge>
+              )}
             </div>
             <div className="line-clamp-3 text-[12.5px] leading-normal text-muted">
               {template.bodyText}
@@ -236,9 +246,101 @@ function SplitLayout({ children }) {
   )
 }
 
-/* ── Step 3: preview ────────────────────────────────────────────────────── */
+/* ── Step 3: preview + variable mapping ─────────────────────────────────── */
 
-function PreviewStep({ template, campaignName, onCampaignName, recipientCount }) {
+// The <select> value encodes where a variable's value comes from:
+// "attr:<header>" (an uploaded column), "field:<name>" (a contact field), or
+// "literal" (fixed text typed alongside).
+function sourceValue(entry) {
+  if (!entry) return ''
+  if (entry.source === 'literal') return 'literal'
+  return `${entry.source === 'attribute' ? 'attr' : 'field'}:${entry.key}`
+}
+
+function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availableFields }) {
+  return (
+    <div className="mb-4 overflow-hidden rounded-[10px] border border-line">
+      <div className="border-b border-line bg-line-soft px-3.5 py-2 text-[11px] font-bold
+        uppercase tracking-[0.5px] text-muted">
+        Map variables to your columns
+      </div>
+      {tokens.map((token) => {
+        const entry = variableMap[token]
+        return (
+          <div key={token} className="flex flex-wrap items-center gap-2.5 border-b border-line-soft
+            bg-surface px-3.5 py-2.5 last:border-b-0">
+            <code className="rounded bg-brand-soft px-1.5 py-0.5 text-[12.5px] font-semibold
+              text-brand dark:text-[#5ba0e0]">{`{{${token}}}`}</code>
+            <span className="text-muted" aria-hidden="true">→</span>
+            <select
+              className={`${inputClass} h-9 min-w-[150px] flex-1`}
+              value={sourceValue(entry)}
+              onChange={(e) => onChange(token, e.target.value)}
+            >
+              <option value="" disabled>Choose a source…</option>
+              {attributeKeys.length > 0 && (
+                <optgroup label="From your file">
+                  {attributeKeys.map((key) => <option key={key} value={`attr:${key}`}>{key}</option>)}
+                </optgroup>
+              )}
+              {availableFields.length > 0 && (
+                <optgroup label="Contact fields">
+                  {availableFields.map((field) => (
+                    <option key={field} value={`field:${field}`}>{FIELD_LABEL[field]}</option>
+                  ))}
+                </optgroup>
+              )}
+              <option value="literal">Custom text…</option>
+            </select>
+            {entry?.source === 'literal' && (
+              <input
+                className={`${inputClass} h-9 min-w-[150px] flex-1`}
+                placeholder="Same text for everyone"
+                value={entry.value || ''}
+                onChange={(e) => onChange(token, 'literal', e.target.value)}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function SamplePreview({ template, variableMap, sampleContacts, sampleIndex, onSampleIndex }) {
+  const total = sampleContacts.length
+  const index = Math.min(sampleIndex, Math.max(0, total - 1))
+  const contact = total ? sampleContacts[index] : null
+  const label = contact ? (contact.name || `+${contact.phone}`) : '—'
+
+  return (
+    <div className="grid place-items-center gap-2 py-2">
+      {total > 1 && (
+        <div className="flex items-center gap-2 text-[12px] text-muted">
+          <button type="button" className="secondary-button h-7 px-2"
+            onClick={() => onSampleIndex(index - 1)} disabled={index <= 0}>‹</button>
+          <span>Previewing <strong className="text-ink">{label}</strong> · {index + 1}/{total}</span>
+          <button type="button" className="secondary-button h-7 px-2"
+            onClick={() => onSampleIndex(index + 1)} disabled={index >= total - 1}>›</button>
+        </div>
+      )}
+      <WhatsAppPreview template={template} variableMap={variableMap} sampleContact={contact} />
+    </div>
+  )
+}
+
+function PreviewStep({
+  template, campaignName, onCampaignName, recipientCount,
+  tokens, variableMap, onVariableChange, attributeKeys, availableFields,
+  sampleContacts, sampleIndex, onSampleIndex,
+}) {
+  const hasVars = tokens.length > 0
+  const gaps = hasVars
+    ? tokens
+      .map((token) => ({ token, missing: sampleContacts.filter((ct) => isMissing(token, variableMap, ct)).length }))
+      .filter((gap) => gap.missing > 0)
+    : []
+
   return (
     <SplitLayout>
       <div>
@@ -256,24 +358,46 @@ function PreviewStep({ template, campaignName, onCampaignName, recipientCount })
           />
         </div>
 
+        {hasVars && (
+          <VariableMapper
+            tokens={tokens}
+            variableMap={variableMap}
+            onChange={onVariableChange}
+            attributeKeys={attributeKeys}
+            availableFields={availableFields}
+          />
+        )}
+
+        {gaps.length > 0 && (
+          <Alert tone="warn">
+            {gaps.map((gap) => `${gap.missing} recipient${gap.missing === 1 ? '' : 's'} `
+              + `have no value for {{${gap.token}}}`).join('; ')}
+            . They'll see a blank there unless you pick another column or add custom text.
+          </Alert>
+        )}
+
         <ReviewList rows={[
           ['Template', template?.name ?? '—'],
           ['Language', template?.language ?? '—'],
           ['Recipients', recipientCount],
-          ['Variables', 'None — static template'],
+          ['Variables', hasVars ? `${tokens.length} mapped to your columns` : 'None — static template'],
         ]} />
       </div>
 
-      <div className="grid place-items-center py-2">
-        <WhatsAppPreview template={template} />
-      </div>
+      <SamplePreview
+        template={template}
+        variableMap={variableMap}
+        sampleContacts={sampleContacts}
+        sampleIndex={sampleIndex}
+        onSampleIndex={onSampleIndex}
+      />
     </SplitLayout>
   )
 }
 
 /* ── Step 4: send ───────────────────────────────────────────────────────── */
 
-function SendStep({ result, error, sending, template, recipientCount, campaignName }) {
+function SendStep({ result, error, sending, template, recipientCount, campaignName, variableMap, sampleContact }) {
   if (sending) {
     return (
       <EmptyState>
@@ -316,7 +440,7 @@ function SendStep({ result, error, sending, template, recipientCount, campaignNa
         ]} />
       </div>
       <div className="grid place-items-center py-2">
-        <WhatsAppPreview template={template} />
+        <WhatsAppPreview template={template} variableMap={variableMap} sampleContact={sampleContact} />
       </div>
     </SplitLayout>
   )
@@ -369,9 +493,37 @@ export function CampaignWizard({ onDone }) {
   const [template, setTemplate] = useState(null)
 
   const [campaignName, setCampaignName] = useState('')
+  const [variableMap, setVariableMap] = useState({})
+  const [sampleIndex, setSampleIndex] = useState(0)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+
+  // The contacts backing the preview + variable options: those selected (falling
+  // back to the loaded list if a search has scrolled the selection out of view).
+  const sampleContacts = useMemo(() => {
+    const chosen = contacts.filter((contact) => selected.has(contact.id))
+    return chosen.length ? chosen : contacts
+  }, [contacts, selected])
+
+  // Distinct uploaded-column headers across those contacts — the file variables.
+  const attributeKeys = useMemo(() => {
+    const keys = []
+    const seen = new Set()
+    for (const contact of sampleContacts) {
+      for (const key of Object.keys(contact.attributes || {})) {
+        if (!seen.has(key)) { seen.add(key); keys.push(key) }
+      }
+    }
+    return keys
+  }, [sampleContacts])
+
+  const availableFields = useMemo(
+    () => CONTACT_FIELDS.filter((field) => sampleContacts.some((contact) => contact[field])),
+    [sampleContacts],
+  )
+
+  const tokens = useMemo(() => templateTokens(template), [template])
 
   async function loadContacts(term = search) {
     setContactsLoading(true)
@@ -397,13 +549,38 @@ export function CampaignWizard({ onDone }) {
     apiGet('/templates')
       .then((data) => {
         setTemplates(data.templates)
-        // One approved static template is the norm right now — preselect it.
-        const usable = data.templates.filter((t) => !t.hasVariables)
-        if (usable.length === 1) setTemplate(usable[0])
+        // Preselect when there is only one approved template to choose from.
+        if (data.templates.length === 1) setTemplate(data.templates[0])
       })
       .catch((err) => setError(err.message))
       .finally(() => setTemplatesLoading(false))
   }, [])
+
+  // Auto-map the template's variables to the best-matching columns whenever the
+  // chosen template changes. Keyed on the template only, so a later selection
+  // change (which shifts attributeKeys) never discards manual mappings.
+  useEffect(() => {
+    setSampleIndex(0)
+    if (template && tokens.length) {
+      setVariableMap(autoMap(tokens, { fields: availableFields, attributeKeys }))
+    } else {
+      setVariableMap({})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template])
+
+  function handleVariableChange(token, value, literalText) {
+    setVariableMap((prev) => {
+      const next = { ...prev }
+      if (value === 'literal') {
+        next[token] = { source: 'literal', value: literalText ?? prev[token]?.value ?? '' }
+      } else {
+        const [kind, ...rest] = value.split(':')
+        next[token] = { source: kind === 'attr' ? 'attribute' : 'field', key: rest.join(':') }
+      }
+      return next
+    })
+  }
 
   function toggle(id) {
     setSelected((prev) => {
@@ -415,12 +592,13 @@ export function CampaignWizard({ onDone }) {
   }
 
   const recipientCount = selected.size
+  const allMapped = tokens.every((token) => variableMap[token])
   const canAdvance = useMemo(() => {
     if (step === 0) return recipientCount > 0
     if (step === 1) return Boolean(template)
-    if (step === 2) return campaignName.trim().length > 0
+    if (step === 2) return campaignName.trim().length > 0 && allMapped
     return false
-  }, [step, recipientCount, template, campaignName])
+  }, [step, recipientCount, template, campaignName, allMapped])
 
   async function send() {
     setSending(true)
@@ -431,6 +609,9 @@ export function CampaignWizard({ onDone }) {
         contactIds: [...selected],
         templateName: template.name,
         templateLanguage: template.language,
+        templateHeader: template.headerText || '',
+        templateBody: template.bodyText || '',
+        variableMap,
       })
       setResult(data)
     } catch (err) {
@@ -471,6 +652,14 @@ export function CampaignWizard({ onDone }) {
             campaignName={campaignName}
             onCampaignName={setCampaignName}
             recipientCount={recipientCount}
+            tokens={tokens}
+            variableMap={variableMap}
+            onVariableChange={handleVariableChange}
+            attributeKeys={attributeKeys}
+            availableFields={availableFields}
+            sampleContacts={sampleContacts}
+            sampleIndex={sampleIndex}
+            onSampleIndex={setSampleIndex}
           />
         )}
         {step === 3 && (
@@ -481,6 +670,8 @@ export function CampaignWizard({ onDone }) {
             template={template}
             recipientCount={recipientCount}
             campaignName={campaignName}
+            variableMap={variableMap}
+            sampleContact={sampleContacts[Math.min(sampleIndex, Math.max(0, sampleContacts.length - 1))] || null}
           />
         )}
       </div>

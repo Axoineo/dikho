@@ -35,8 +35,9 @@ export default function WhatsAppContacts() {
       const result = await apiUpload('/contacts/import', file)
       setNotice({
         tone: 'success',
-        text: `Imported ${result.imported} of ${result.totalRows} rows. `
-          + `${result.duplicates} duplicate(s) skipped, ${result.invalid} invalid.`,
+        text: `Imported ${result.imported} new contact${result.imported === 1 ? '' : 's'}`
+          + `${result.updated ? `, refreshed ${result.updated}` : ''} from ${result.totalRows} rows. `
+          + `${result.invalid} had no usable phone. Phone read from “${result.phoneColumn}”.`,
       })
       load(search)
     } catch (err) {
@@ -51,7 +52,7 @@ export default function WhatsAppContacts() {
     <>
       <PageHeader
         title="Contacts"
-        subtitle="The audience pool for every campaign. Import from Excel or CSV."
+        subtitle="The audience pool for every campaign. Import from Excel, CSV or JSON."
       />
 
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
@@ -71,17 +72,17 @@ export default function WhatsAppContacts() {
           {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
         </div>
         <div className="mb-1 text-sm font-semibold">
-          {uploading ? 'Importing…' : 'Drop an Excel (.xlsx) or CSV file here'}
+          {uploading ? 'Importing…' : 'Drop an Excel, CSV or JSON file here'}
         </div>
         <div className="text-[12.5px] text-muted">
-          Needs a <strong>phone</strong> column. Optional: name, email, company.
-          Indian 10-digit numbers get the 91 country code automatically.
+          We auto-detect the phone column (any name works) and add <strong>+91</strong> when the
+          country code is missing. Every other column is saved for use as a variable.
         </div>
         <input
           ref={inputRef}
           type="file"
           className="hidden"
-          accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
       </div>

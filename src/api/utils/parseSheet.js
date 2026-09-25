@@ -154,20 +154,79 @@ export async function parseXlsx(bytes) {
   return rows.filter((r) => r.some((cell) => String(cell).trim() !== ''))
 }
 
+/* ── JSON ─────────────────────────────────────────────────────────────── */
+
+// Accepts a top-level array (of row objects or of arrays), or an object that
+// wraps the list under contacts/rows/data/records.
+export function parseJson(text) {
+  const data = JSON.parse(text)
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    const list = data.contacts ?? data.rows ?? data.data ?? data.records
+    if (Array.isArray(list)) return list
+  }
+  throw new Error('JSON must be an array of rows, or an object with a contacts/rows/data array')
+}
+
 /* ── Shared entry point ───────────────────────────────────────────────── */
 
-// Returns array-of-objects keyed by the (lowercased) header row.
-export async function parseContactFile(file) {
-  const buffer = new Uint8Array(await file.arrayBuffer())
-  const isXlsx = buffer[0] === 0x50 && buffer[1] === 0x4b // "PK" zip magic
+function nonEmpty(rows) {
+  return rows.filter((record) => Object.values(record).some((value) => String(value).trim() !== ''))
+}
 
-  const rows = isXlsx ? await parseXlsx(buffer) : parseCsv(new TextDecoder().decode(buffer))
-  if (rows.length === 0) return []
-
-  const headers = rows[0].map((h) => String(h).trim().toLowerCase())
-  return rows.slice(1).map((row) => {
+// Array-of-arrays (CSV/XLSX) -> { columns, rows }, first row treated as headers.
+function matrixToTable(matrix) {
+  if (matrix.length === 0) return { columns: [], rows: [] }
+  const headers = matrix[0].map((header) => String(header).trim())
+  const rows = matrix.slice(1).map((row) => {
     const record = {}
-    headers.forEach((header, index) => { record[header] = String(row[index] ?? '').trim() })
+    headers.forEach((header, index) => { if (header) record[header] = String(row[index] ?? '').trim() })
     return record
   })
+  return { columns: headers.filter(Boolean), rows: nonEmpty(rows) }
+}
+
+// A JSON list (objects or arrays) -> { columns, rows }.
+function listToTable(list) {
+  if (list.length === 0) return { columns: [], rows: [] }
+  if (Array.isArray(list[0])) return matrixToTable(list)
+
+  const columns = []
+  const seen = new Set()
+  const rows = list.map((item) => {
+    const record = {}
+    if (item && typeof item === 'object') {
+      for (const [key, value] of Object.entries(item)) {
+        const header = String(key).trim()
+        if (!header) continue
+        if (!seen.has(header)) { seen.add(header); columns.push(header) }
+        record[header] = value == null ? '' : String(value).trim()
+      }
+    }
+    return record
+  })
+  return { columns, rows: nonEmpty(rows) }
+}
+
+// Returns { columns: [original headers], rows: [{ header: value }] }. Headers
+// keep their original case so they read well as variable keys later. Detects
+// XLSX by the ZIP magic, JSON by extension or a leading { / [, else CSV.
+export async function parseContactFile(file) {
+  const buffer = new Uint8Array(await file.arrayBuffer())
+  const name = String(file.name || '').toLowerCase()
+
+  if (buffer[0] === 0x50 && buffer[1] === 0x4b) return matrixToTable(await parseXlsx(buffer))
+
+  const text = new TextDecoder().decode(buffer).replace(/^\uFEFF/, '')
+  const head = text.trimStart()[0]
+  if (name.endsWith('.json') || head === '{' || head === '[') {
+    try {
+      return listToTable(parseJson(text))
+    } catch (err) {
+      if (name.endsWith('.json')) throw err
+      // A CSV that merely starts with a brace: fall through to the CSV reader.
+    }
+  }
+
+  return matrixToTable(parseCsv(text))
 }

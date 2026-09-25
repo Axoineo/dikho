@@ -3,24 +3,73 @@ import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
 import { parseContactFile } from '../../utils/parseSheet.js'
 import { normalisePhone } from '../../utils/phone.js'
+import { normalizeKey } from '../../../lib/templateVars.js'
 
 const contacts = new Hono()
 
 const MAX_IMPORT_ROWS = 5000
 
-// Spreadsheets in the wild label the same column a dozen ways.
-const COLUMN_ALIASES = {
-  name: ['name', 'full name', 'contact name', 'customer name', 'client name'],
-  phone: ['phone', 'mobile', 'whatsapp', 'number', 'phone number', 'mobile number', 'contact'],
+// Header hints. Detection does not depend on these — the phone column is found
+// by which column actually holds phone numbers — but a matching name breaks ties
+// and picks the display fields (name/email/company) out of the other columns.
+const PHONE_HINTS = ['phone', 'mobile', 'whatsapp', 'number', 'contact', 'cell', 'tel', 'msisdn', 'wa']
+const FIELD_ALIASES = {
+  name: ['name', 'fullname', 'full name', 'contact name', 'customer name', 'client name', 'send list', 'person'],
   email: ['email', 'email id', 'e-mail', 'mail'],
-  company: ['company', 'organisation', 'organization', 'firm', 'business'],
+  company: ['company', 'organisation', 'organization', 'firm', 'business', 'account'],
 }
 
-function pick(record, field) {
-  for (const alias of COLUMN_ALIASES[field]) {
-    if (record[alias]) return record[alias]
+// The column whose values most look like phone numbers, requiring a clear
+// majority so a stray numeric column isn't mistaken for it. Returns null when
+// no column qualifies (the caller then scans each row cell-by-cell).
+function detectPhoneColumn(columns, rows) {
+  let best = null
+  let bestScore = 0
+
+  for (const column of columns) {
+    let filled = 0
+    let valid = 0
+    for (const row of rows) {
+      const value = row[column]
+      if (value == null || String(value).trim() === '') continue
+      filled += 1
+      if (normalisePhone(value)) valid += 1
+    }
+    if (filled === 0) continue
+
+    let score = valid / filled
+    if (PHONE_HINTS.some((hint) => normalizeKey(column).includes(hint))) score += 0.15
+    if (score > bestScore) { bestScore = score; best = column }
   }
-  return ''
+
+  return bestScore >= 0.6 ? best : null
+}
+
+// Fallback for files with no clear phone column: first cell that normalises.
+function phoneFromRow(row) {
+  for (const value of Object.values(row)) {
+    const phone = normalisePhone(value)
+    if (phone) return phone
+  }
+  return null
+}
+
+// Best display column for a standard field, excluding the phone column.
+function detectField(columns, field, phoneColumn) {
+  const candidates = columns
+    .filter((column) => column !== phoneColumn)
+    .map((column) => [column, normalizeKey(column)])
+  const aliases = FIELD_ALIASES[field].map(normalizeKey)
+
+  for (const alias of aliases) {
+    const exact = candidates.find(([, norm]) => norm === alias)
+    if (exact) return exact[0]
+  }
+  for (const alias of aliases) {
+    const partial = candidates.find(([, norm]) => norm.includes(alias))
+    if (partial) return partial[0]
+  }
+  return null
 }
 
 /* ── GET /api/contacts ─────────────────────────────────────────────────── */
@@ -31,15 +80,27 @@ contacts.get('/', async (c) => {
 
   const where = search ? 'WHERE name LIKE ?1 OR phone LIKE ?1 OR company LIKE ?1' : ''
   const statement = c.env.DB.prepare(
-    `SELECT id, name, phone, email, company, opted_out, created_at
+    `SELECT id, name, phone, email, company, attributes, opted_out, created_at
      FROM contacts ${where}
      ORDER BY created_at DESC
      LIMIT ${limit}`,
   )
 
   const { results } = await (search ? statement.bind(`%${search}%`) : statement).all()
-  return ok(c, { contacts: results })
+
+  // attributes is JSON text in D1; hand the client a parsed object so the
+  // campaign wizard can read variable keys and sample values directly.
+  const parsed = results.map((row) => ({
+    ...row,
+    attributes: row.attributes ? safeParse(row.attributes) : null,
+  }))
+
+  return ok(c, { contacts: parsed })
 })
+
+function safeParse(text) {
+  try { return JSON.parse(text) } catch { return null }
+}
 
 /* ── POST /api/contacts/import ─────────────────────────────────────────── */
 
@@ -50,65 +111,89 @@ contacts.post('/import', async (c) => {
     throw new HTTPException(400, { message: 'No file uploaded under the "file" field' })
   }
 
-  let records
+  let table
   try {
-    records = await parseContactFile(file)
+    table = await parseContactFile(file)
   } catch (err) {
     throw new HTTPException(400, { message: `Could not read the file: ${err.message}` })
   }
 
-  if (records.length === 0) {
-    throw new HTTPException(400, { message: 'The file has no data rows' })
-  }
-  if (records.length > MAX_IMPORT_ROWS) {
+  const { columns, rows } = table
+  if (rows.length === 0) throw new HTTPException(400, { message: 'The file has no data rows' })
+  if (rows.length > MAX_IMPORT_ROWS) {
     throw new HTTPException(400, {
-      message: `File has ${records.length} rows; the limit per import is ${MAX_IMPORT_ROWS}`,
+      message: `File has ${rows.length} rows; the limit per import is ${MAX_IMPORT_ROWS}`,
     })
   }
 
-  // Validate and de-duplicate within the file before touching the database,
-  // so one upload cannot fight itself over the UNIQUE(phone) constraint.
-  const seen = new Set()
-  const valid = []
+  const phoneColumn = detectPhoneColumn(columns, rows)
+  const nameColumn = detectField(columns, 'name', phoneColumn)
+  const emailColumn = detectField(columns, 'email', phoneColumn)
+  const companyColumn = detectField(columns, 'company', phoneColumn)
+
+  // Validate and de-duplicate within the file first, so one upload cannot fight
+  // itself over the UNIQUE(phone) constraint. Later rows win for a repeated phone.
+  const byPhone = new Map()
   let invalid = 0
 
-  for (const record of records) {
-    const phone = normalisePhone(pick(record, 'phone'))
+  for (const row of rows) {
+    const phone = phoneColumn ? normalisePhone(row[phoneColumn]) : phoneFromRow(row)
     if (!phone) { invalid += 1; continue }
-    if (seen.has(phone)) continue
-    seen.add(phone)
 
-    valid.push({
-      name: pick(record, 'name') || null,
+    // Every column except the detected phone column is retained as an attribute,
+    // keyed by its original header, so any template variable can resolve later.
+    const attributes = {}
+    for (const column of columns) {
+      if (column === phoneColumn) continue
+      const value = row[column]
+      if (value != null && String(value).trim() !== '') attributes[column] = String(value).trim()
+    }
+
+    byPhone.set(phone, {
+      name: (nameColumn && row[nameColumn]) || null,
       phone,
-      email: pick(record, 'email') || null,
-      company: pick(record, 'company') || null,
+      email: (emailColumn && row[emailColumn]) || null,
+      company: (companyColumn && row[companyColumn]) || null,
+      attributes: Object.keys(attributes).length ? JSON.stringify(attributes) : null,
     })
   }
 
+  const valid = [...byPhone.values()]
   if (valid.length === 0) {
     throw new HTTPException(400, {
-      message: 'No rows had a usable phone number. Check that a "phone" column exists.',
+      message: 'No rows had a usable phone number. Every column was checked; none held valid numbers.',
     })
   }
 
-  // INSERT OR IGNORE lets the UNIQUE(phone) index absorb contacts that are
-  // already in the database; meta.changes tells us which ones actually landed.
+  // Upsert: a re-uploaded list refreshes attributes and fills any blank fields
+  // without clobbering a name/email/company already on record.
   const insert = c.env.DB.prepare(
-    `INSERT OR IGNORE INTO contacts (name, phone, email, company, source)
-     VALUES (?, ?, ?, ?, 'import')`,
-  )
-  const results = await c.env.DB.batch(
-    valid.map((row) => insert.bind(row.name, row.phone, row.email, row.company)),
+    `INSERT INTO contacts (name, phone, email, company, attributes, source)
+     VALUES (?, ?, ?, ?, ?, 'import')
+     ON CONFLICT(phone) DO UPDATE SET
+       name = COALESCE(excluded.name, contacts.name),
+       email = COALESCE(excluded.email, contacts.email),
+       company = COALESCE(excluded.company, contacts.company),
+       attributes = excluded.attributes,
+       updated_at = datetime('now')`,
   )
 
-  const imported = results.reduce((total, result) => total + (result.meta?.changes ?? 0), 0)
+  // Count new vs updated by the change in total rows — an upsert reports one
+  // change whether it inserted or updated, so a before/after count is exact.
+  const before = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM contacts').first()
+  await c.env.DB.batch(
+    valid.map((row) => insert.bind(row.name, row.phone, row.email, row.company, row.attributes)),
+  )
+  const after = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM contacts').first()
+
+  const imported = (after?.n ?? 0) - (before?.n ?? 0)
 
   return ok(c, {
-    totalRows: records.length,
+    totalRows: rows.length,
     imported,
-    duplicates: valid.length - imported,
+    updated: valid.length - imported,
     invalid,
+    phoneColumn: phoneColumn || 'auto-detected per row',
   })
 })
 
