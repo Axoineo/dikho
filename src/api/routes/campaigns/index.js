@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
-import { sendTemplateMessage } from '../../services/whatsapp/graph.js'
+import { fetchApprovedTemplates, sendTemplateMessage } from '../../services/whatsapp/graph.js'
 import { buildComponents } from '../../../lib/templateVars.js'
 
 const campaigns = new Hono()
@@ -149,6 +149,51 @@ async function updateCampaignProgress(db, campaignId, { final }) {
      WHERE id = ?`,
   ).bind(sent, failed, sent > 0 ? 'completed' : 'failed', now, campaignId).run()
   return { sent, failed }
+}
+
+// Distinct contacts that currently have a failed message on this campaign —
+// the retryable set. Re-derived from `messages` (the source of truth) rather
+// than trusting campaigns.failed_count, which is just a cached rollup.
+async function loadFailedContactIds(db, campaignId) {
+  const { results } = await db.prepare(
+    `SELECT DISTINCT contact_id FROM messages
+     WHERE campaign_id = ? AND status = 'failed' AND contact_id IS NOT NULL`,
+  ).bind(campaignId).all()
+  return results.map((row) => row.contact_id)
+}
+
+// Clears prior failed rows for exactly the contacts about to be re-sent, so
+// updateCampaignProgress's SUM over `messages` doesn't count both the old
+// failed attempt and the new one. Chunked at 99 (not 100) because campaignId
+// takes one of the 100 bound-param slots alongside the IN-list.
+async function deleteFailedMessages(db, campaignId, contactIds) {
+  for (let i = 0; i < contactIds.length; i += 99) {
+    const chunk = contactIds.slice(i, i + 99)
+    const placeholders = chunk.map(() => '?').join(',')
+    await db.prepare(
+      `DELETE FROM messages WHERE campaign_id = ? AND status = 'failed' AND contact_id IN (${placeholders})`,
+    ).bind(campaignId, ...chunk).run()
+  }
+}
+
+// The campaigns row only keeps template_name/template_language (+ the
+// variable map that was used) — not the raw header/body text, which lives on
+// Meta's side and can change or be revoked between the original send and a
+// retry. Re-fetch it so buildComponents works off the current template.
+async function resolveCampaignTemplate(env, name, language) {
+  let list
+  try {
+    list = await fetchApprovedTemplates(env)
+  } catch (err) {
+    throw new HTTPException(502, { message: `Could not reach Meta to verify the template: ${err.message}` })
+  }
+  const template = list.find((t) => t.name === name && t.language === language)
+  if (!template) {
+    throw new HTTPException(400, {
+      message: `Template "${name}" (${language}) is no longer approved on Meta — cannot retry`,
+    })
+  }
+  return template
 }
 
 /* ── GET /api/campaigns ────────────────────────────────────────────────── */
@@ -303,6 +348,69 @@ campaigns.post('/send-batch', async (c) => {
   await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
 
   // More to go — frontend calls again with the remaining IDs.
+  if (remainingIds.length > 0) {
+    return ok(c, { campaignId, total: recipients.length, sent, failed, firstError, remaining: remainingIds })
+  }
+
+  return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
+})
+
+/* ── POST /api/campaigns/:id/retry ─────────────────────────────────────── */
+// Retries only the currently-failed recipients of a campaign — never the ones
+// who already got the message. Omit `contactIds` to start a fresh retry round
+// (the server looks up whoever is failed right now); pass it back with the
+// `remaining` from the previous response to continue one already in progress,
+// same batching shape as /send + /send-batch. Safe to call again after a
+// retry round still leaves failures — it just re-derives the (now smaller)
+// failed set and goes again.
+
+campaigns.post('/:id/retry', async (c) => {
+  const campaignId = Number(c.req.param('id'))
+  if (!Number.isInteger(campaignId)) throw new HTTPException(400, { message: 'Invalid campaign id' })
+
+  const campaign = await c.env.DB.prepare(
+    `SELECT id, template_name, template_language, variables FROM campaigns WHERE id = ?`,
+  ).bind(campaignId).first()
+  if (!campaign) throw new HTTPException(404, { message: 'Campaign not found' })
+
+  const body = await c.req.json().catch(() => ({}))
+  const explicitIds = Array.isArray(body?.contactIds)
+    ? body.contactIds.map(Number).filter(Number.isInteger)
+    : null
+
+  const failedIds = explicitIds ?? await loadFailedContactIds(c.env.DB, campaignId)
+  if (failedIds.length === 0) {
+    throw new HTTPException(400, { message: 'No failed messages to retry' })
+  }
+
+  const limit = batchLimit(c.env)
+  const batchIds = failedIds.slice(0, limit)
+  const remainingIds = failedIds.slice(limit)
+
+  const template = await resolveCampaignTemplate(c.env, campaign.template_name, campaign.template_language)
+  const variableMap = campaign.variables ? JSON.parse(campaign.variables) : {}
+  const hasVariables = /\{\{/.test(template.headerText) || /\{\{/.test(template.bodyText)
+
+  const recipients = await loadRecipients(c.env.DB, batchIds)
+  // Only clear failed rows for contacts we're actually about to re-send to —
+  // e.g. someone who opted out since the original send is dropped by
+  // loadRecipients and should keep their old failed row, not lose it.
+  await deleteFailedMessages(c.env.DB, campaignId, recipients.map((r) => r.id))
+
+  const { sent, failed, firstError } = recipients.length > 0
+    ? await sendAndLog(c.env, {
+      campaignId,
+      recipients,
+      templateName: campaign.template_name,
+      templateLanguage: campaign.template_language,
+      template,
+      hasVariables,
+      variableMap,
+    })
+    : { sent: 0, failed: 0, firstError: null }
+
+  await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
+
   if (remainingIds.length > 0) {
     return ok(c, { campaignId, total: recipients.length, sent, failed, firstError, remaining: remainingIds })
   }

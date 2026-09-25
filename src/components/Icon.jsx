@@ -25,6 +25,7 @@ export function Icon({ name, size = 18, strokeWidth = 1.8 }) {
     trash: <><path d="M4 7h16" /><path d="M9 7V4h6v3" /><path d="M6 7l1 13h10l1-13" /></>,
     mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 7 8.5 6 8.5-6" /></>,
     whatsapp: <><path d="M20.5 11.5a8.5 8.5 0 0 1-12.6 7.5L3.5 20.5l1.5-4.3A8.5 8.5 0 1 1 20.5 11.5Z" /><path d="M8.8 8.2c1 2.4 2.6 4 5 5 .8.3 1.4-.2 1.8-.8" /></>,
+    retry: <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 16h5v5" /></>,
   }
 
   return (
