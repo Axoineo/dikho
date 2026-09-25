@@ -121,6 +121,36 @@ async function sendAndLog(env, { campaignId, recipients, templateName, templateL
   return { sent, failed, firstError }
 }
 
+// Recomputes sent/failed from the messages table (the source of truth) and
+// writes them onto the campaign row after every batch, not just the last
+// one — so a campaign interrupted mid-send doesn't stay stuck at 0/0.
+// On the final batch it also flips status to completed/failed.
+async function updateCampaignProgress(db, campaignId, { final }) {
+  const totals = await db.prepare(
+    `SELECT SUM(CASE WHEN status IN ('sent','delivered','read') THEN 1 ELSE 0 END) AS sent,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
+     FROM messages WHERE campaign_id = ?`,
+  ).bind(campaignId).first()
+
+  const sent = totals?.sent ?? 0
+  const failed = totals?.failed ?? 0
+
+  if (!final) {
+    await db.prepare(
+      `UPDATE campaigns SET sent_count = ?, failed_count = ? WHERE id = ?`,
+    ).bind(sent, failed, campaignId).run()
+    return { sent, failed }
+  }
+
+  const now = new Date().toISOString()
+  await db.prepare(
+    `UPDATE campaigns
+     SET sent_count = ?, failed_count = ?, status = ?, completed_at = ?
+     WHERE id = ?`,
+  ).bind(sent, failed, sent > 0 ? 'completed' : 'failed', now, campaignId).run()
+  return { sent, failed }
+}
+
 /* ── GET /api/campaigns ────────────────────────────────────────────────── */
 
 campaigns.get('/', async (c) => {
@@ -222,6 +252,8 @@ campaigns.post('/send', async (c) => {
     ? await sendAndLog(c.env, { campaignId, recipients, templateName, templateLanguage, template, hasVariables, variableMap })
     : { sent: 0, failed: 0, firstError: null }
 
+  await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
+
   // If there are remaining IDs, tell the frontend to continue with /send-batch.
   if (remainingIds.length > 0) {
     return ok(c, {
@@ -233,14 +265,6 @@ campaigns.post('/send', async (c) => {
       remaining: remainingIds,
     })
   }
-
-  // Single-batch campaign: finalize immediately.
-  const now = new Date().toISOString()
-  await c.env.DB.prepare(
-    `UPDATE campaigns
-     SET sent_count = ?, failed_count = ?, status = ?, completed_at = ?
-     WHERE id = ?`,
-  ).bind(sent, failed, sent > 0 ? 'completed' : 'failed', now, campaignId).run()
 
   return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
 })
@@ -276,28 +300,12 @@ campaigns.post('/send-batch', async (c) => {
     ? await sendAndLog(c.env, { campaignId, recipients, templateName, templateLanguage, template, hasVariables, variableMap })
     : { sent: 0, failed: 0, firstError: null }
 
+  await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
+
   // More to go — frontend calls again with the remaining IDs.
   if (remainingIds.length > 0) {
     return ok(c, { campaignId, total: recipients.length, sent, failed, firstError, remaining: remainingIds })
   }
-
-  // Final batch: tally the full campaign and finalize.
-  const now = new Date().toISOString()
-  const totals = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS total,
-            SUM(CASE WHEN status IN ('sent','delivered','read') THEN 1 ELSE 0 END) AS sent,
-            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-     FROM messages WHERE campaign_id = ?`,
-  ).bind(campaignId).first()
-
-  await c.env.DB.prepare(
-    `UPDATE campaigns
-     SET sent_count = ?, failed_count = ?, status = ?, completed_at = ?
-     WHERE id = ?`,
-  ).bind(
-    totals?.sent ?? sent, totals?.failed ?? failed,
-    (totals?.sent ?? sent) > 0 ? 'completed' : 'failed', now, campaignId,
-  ).run()
 
   return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
 })
