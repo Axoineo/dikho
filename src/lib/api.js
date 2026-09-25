@@ -34,6 +34,15 @@ export async function apiPost(path, payload) {
   }))
 }
 
+// Builds a direct, streamable URL for re-hosted media using a signed ticket, so
+// <img>/<video>/<iframe> can load it without an Authorization header. Returns
+// null until a ticket is available.
+export function waMediaUrl(path, ticket) {
+  if (!path || !ticket) return null
+  const p = path.startsWith('/api/') ? path.slice(4) : path
+  return `${BASE}${p}?t=${encodeURIComponent(ticket)}`
+}
+
 export async function apiUpload(path, file) {
   const form = new FormData()
   form.append('file', file)
@@ -79,4 +88,6 @@ export const waApi = {
       body: form,
     }))
   },
+  mediaTicket: () => apiGet('/whatsapp/media-ticket'),
+  typing: (id) => apiPost(`/whatsapp/conversations/${id}/typing`),
 }

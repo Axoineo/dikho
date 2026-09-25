@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { getMediaUrl } from './mediaCache'
+import { useState } from 'react'
+import { useMediaSrc } from './MediaTicketContext'
 import { formatFileSize } from './inboxUtils'
 
 function extLabel(filename = '', mime = '') {
@@ -9,25 +9,19 @@ function extLabel(filename = '', mime = '') {
   return (mime.split('/')[1] || 'FILE').toUpperCase().slice(0, 4)
 }
 
-// Renders one message's media inside a bubble. Images/videos/documents open the
-// full-screen viewer via onOpen; audio plays inline. Bytes are fetched auth'd and
-// shared through mediaCache, so opening the viewer never re-downloads.
+// Renders one message's media inside a bubble. Media streams directly from the
+// media route via a signed ticket URL (no blob buffering), so large video seeks
+// and plays. Images/videos/documents open the full-screen viewer via onOpen;
+// audio plays inline.
 export function AuthedMedia({ message, onOpen }) {
   const { media_url: url, media_mime: mime = '', media_filename: filename, media_status: status, media_size: size } = message
-  const [src, setSrc] = useState(null)
+  const { srcFor } = useMediaSrc()
   const [failed, setFailed] = useState(false)
 
   const isImage = mime.startsWith('image/')
   const isVideo = mime.startsWith('video/')
   const isAudio = mime.startsWith('audio/')
-
-  useEffect(() => {
-    setSrc(null); setFailed(false)
-    if (!url || status !== 'ready') return
-    let alive = true
-    getMediaUrl(url).then((u) => { if (alive) setSrc(u) }).catch(() => { if (alive) setFailed(true) })
-    return () => { alive = false }
-  }, [url, status])
+  const src = status === 'ready' ? srcFor(url) : null
 
   if (status === 'pending') {
     return <div className="flex h-40 w-52 items-center justify-center rounded-lg bg-black/5 text-xs text-gray-500 dark:bg-white/10">Downloading…</div>
@@ -42,19 +36,20 @@ export function AuthedMedia({ message, onOpen }) {
   if (isImage) {
     return (
       <button type="button" onClick={onOpen} className="group relative block overflow-hidden rounded-lg">
-        <img src={src} alt={filename || 'image'} className="max-h-72 min-h-24 w-full max-w-[280px] cursor-pointer object-cover" />
+        <img src={src} alt={filename || 'image'} onError={() => setFailed(true)} className="max-h-72 min-h-24 w-full max-w-[280px] cursor-pointer object-cover" />
         <span className="pointer-events-none absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10" />
       </button>
     )
   }
   if (isVideo) {
-    return <video src={src} controls className="max-h-72 max-w-[280px] rounded-lg" />
+    // preload metadata only; playback streams via Range requests.
+    return <video src={src} controls preload="metadata" onError={() => setFailed(true)} className="max-h-72 max-w-[280px] rounded-lg" />
   }
   if (isAudio) {
-    return <audio src={src} controls className="w-60 max-w-full" />
+    return <audio src={src} controls preload="metadata" className="w-60 max-w-full" />
   }
 
-  // Document / any other file — WhatsApp-style card with type + size and download.
+  // Document / any other file — WhatsApp-style card with type + size; opens the viewer.
   return (
     <button
       type="button"

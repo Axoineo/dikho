@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { waApi } from '../../../lib/api'
 import { sessionMsLeft, formatCountdown, displayName } from './inboxUtils'
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤩','🥳','👍','👎','🙏','👏','🙌','💪','🔥','✨','🎉','✅','❌','⚠️','❤️','💙','💯','🤝','🙂','😉','😅','😢','😡','🤔','👌','👋','💰','📎','📄','📷','🕒']
@@ -18,9 +19,19 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
   const [menu, setMenu] = useState(null) // 'attach' | 'emoji' | null
   const fileRef = useRef(null)
   const acceptRef = useRef('*/*')
+  const lastTypingRef = useRef(0)
 
   const msLeft = sessionMsLeft(conversation.last_inbound_at)
   const withinWindow = msLeft > 0
+
+  // Tell Meta to show the customer a "typing…" indicator, at most once per ~12s
+  // while the agent types (Meta keeps it up for ~25s per call).
+  function pingTyping() {
+    const now = Date.now()
+    if (now - lastTypingRef.current < 12000) return
+    lastTypingRef.current = now
+    waApi.typing(conversation.id).catch(() => {})
+  }
 
   if (!withinWindow) {
     return (
@@ -109,7 +120,7 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
           rows={1}
           value={text}
           disabled={busy}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); if (e.target.value.trim()) pingTyping() }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitText() } }}
           placeholder="Type a message"
           className="max-h-32 flex-1 resize-none rounded-lg border-0 bg-white px-3 py-2.5 text-[14px] outline-none placeholder:text-gray-400 dark:bg-[#2a3942] dark:text-white"

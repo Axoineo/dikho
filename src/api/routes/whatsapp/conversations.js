@@ -1,9 +1,20 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok, fail } from '../../utils/response.js'
-import { sendTextMessage, sendMediaMessage } from '../../services/whatsapp/graph.js'
+import { sendTextMessage, sendMediaMessage, markMessageRead } from '../../services/whatsapp/graph.js'
 import { uploadMediaToMeta, storeOutboundCopy } from '../../services/whatsapp/media.js'
 import { broadcast } from '../../services/whatsapp/realtime.js'
+
+// Most recent inbound message id — the one Meta read-receipts and typing
+// indicators must reference (they attach to a received message).
+async function lastInboundWamid(db, conversationId) {
+  const row = await db.prepare(
+    `SELECT meta_message_id FROM messages
+     WHERE conversation_id = ? AND direction = 'inbound' AND meta_message_id IS NOT NULL
+     ORDER BY id DESC LIMIT 1`,
+  ).bind(conversationId).first()
+  return row?.meta_message_id ?? null
+}
 
 const conversations = new Hono()
 
@@ -51,10 +62,29 @@ conversations.get('/:id/messages', async (c) => {
   return ok(c, { messages: results })
 })
 
-/* ── POST /api/whatsapp/conversations/:id/read — clear the unread badge ──── */
+/* ── POST /api/whatsapp/conversations/:id/read — clear the unread badge ────
+   Also sends Meta a read receipt for the latest inbound message so the customer
+   sees your blue double-ticks. Best-effort via waitUntil. */
 conversations.post('/:id/read', async (c) => {
   const id = Number(c.req.param('id'))
   await c.env.DB.prepare('UPDATE conversations SET unread_count = 0 WHERE id = ?').bind(id).run()
+
+  const wamid = await lastInboundWamid(c.env.DB, id)
+  if (wamid) {
+    c.executionCtx.waitUntil(markMessageRead(c.env, { messageId: wamid }).catch(() => {}))
+  }
+  return ok(c, { ok: true })
+})
+
+/* ── POST /api/whatsapp/conversations/:id/typing — show "typing…" to customer ─
+   Meta shows it for ~25s or until a message is sent. The frontend throttles this
+   while the agent types. Returns immediately; the Meta call runs in the background. */
+conversations.post('/:id/typing', async (c) => {
+  const id = Number(c.req.param('id'))
+  const wamid = await lastInboundWamid(c.env.DB, id)
+  if (wamid) {
+    c.executionCtx.waitUntil(markMessageRead(c.env, { messageId: wamid, typing: true }).catch(() => {}))
+  }
   return ok(c, { ok: true })
 })
 

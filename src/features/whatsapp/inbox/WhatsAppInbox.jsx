@@ -4,6 +4,7 @@ import { useInboxRealtime } from './useInboxRealtime'
 import { ChatList } from './ChatList'
 import { Conversation } from './Conversation'
 import { MediaLightbox } from './MediaLightbox'
+import { MediaTicketProvider } from './MediaTicketContext'
 
 function sortConvs(list) {
   return [...list].sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''))
@@ -120,6 +121,7 @@ export default function WhatsAppInbox() {
   const openMedia = useCallback((message) => setLightboxId(message.id), [])
 
   return (
+   <MediaTicketProvider>
     <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-[#111b21]">
       <aside className="flex w-full max-w-[400px] shrink-0 flex-col border-r border-black/10 dark:border-white/10">
         <header className="flex items-center justify-between px-4 py-3">
@@ -154,5 +156,6 @@ export default function WhatsAppInbox() {
         />
       )}
     </div>
+   </MediaTicketProvider>
   )
 }

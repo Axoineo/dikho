@@ -138,6 +138,29 @@ export async function sendMediaMessage(env, { to, type, mediaId, caption, filena
   return postMessage(env, { to, type, [type]: media })
 }
 
+// Marks an inbound message as read (blue ticks on the customer's side) and,
+// optionally, shows a "typing…" indicator to the customer. Meta bundles typing
+// with the read receipt: it displays for up to ~25s or until a message is sent.
+// Best-effort — callers fire it via waitUntil and ignore failures.
+export async function markMessageRead(env, { messageId, typing = false }) {
+  const body = { messaging_product: 'whatsapp', status: 'read', message_id: messageId }
+  if (typing) body.typing_indicator = { type: 'text' }
+
+  const res = await fetch(graphUrl(`${env.WHATSAPP_PHONE_NUMBER_ID}/messages`), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const b = await res.json().catch(() => ({}))
+    return { ok: false, errorCode: String(b?.error?.code ?? res.status), errorMessage: b?.error?.message ?? 'read receipt failed' }
+  }
+  return { ok: true }
+}
+
 // Approved templates for the WABA. Callers fall back to a static definition
 // when this fails, so a Meta outage never blocks the campaign screen.
 export async function fetchApprovedTemplates(env) {
