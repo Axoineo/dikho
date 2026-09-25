@@ -68,11 +68,11 @@ async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, me
   await c.env.DB.prepare(
     `INSERT INTO messages
        (conversation_id, contact_id, phone, meta_message_id, direction, type,
-        body, media_url, media_mime, media_filename, status, sender, sent_at, wa_timestamp, created_at)
-     VALUES (?1, ?2, ?3, ?4, 'outbound', ?5, ?6, ?7, ?8, ?9, 'sent', ?10, ?11, ?11, ?11)`,
+        body, media_url, media_mime, media_filename, media_status, status, sender, sent_at, wa_timestamp, created_at)
+     VALUES (?1, ?2, ?3, ?4, 'outbound', ?5, ?6, ?7, ?8, ?9, ?10, 'sent', ?11, ?12, ?12, ?12)`,
   ).bind(
     conv.id, conv.contact_id, conv.phone, metaMessageId, type, body ?? null,
-    mediaUrl ?? null, mediaMime ?? null, filename ?? null, user?.id ?? null, now,
+    mediaUrl ?? null, mediaMime ?? null, filename ?? null, mediaUrl ? 'ready' : null, user?.id ?? null, now,
   ).run()
 
   await c.env.DB.prepare(
@@ -131,7 +131,7 @@ conversations.post('/:id/media', async (c) => {
   // Upload to Meta (for sending) and keep our own copy (for display) in parallel.
   const [uploaded, mediaUrl] = await Promise.all([
     uploadMediaToMeta(c.env, { bytes, mime, filename }),
-    storeOutboundCopy(c.env, { bytes, mime, filename }),
+    storeOutboundCopy(c.env, { bytes, mime }),
   ])
   if (!uploaded.ok) return fail(c, 'MEDIA_UPLOAD_FAILED', uploaded.errorMessage, 502)
 

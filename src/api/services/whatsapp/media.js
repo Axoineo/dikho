@@ -20,10 +20,12 @@ function keyFor(id, ext = '') {
   return `${day}/${id}${ext}`
 }
 
-// Stores raw bytes in R2 and returns the app-relative URL our media route serves.
+// Stores raw bytes in R2 and returns the path our media route serves, RELATIVE
+// to the API base. The frontend's api client already prefixes the origin + /api,
+// so this must NOT include /api or the request doubles up (`/api/api/...` → 404).
 async function putToR2(env, key, bytes, contentType) {
   await env.MEDIA.put(key, bytes, { httpMetadata: { contentType } })
-  return `/api/whatsapp/media/${key}`
+  return `/whatsapp/media/${key}`
 }
 
 // Downloads an inbound media object from Meta (two-step: resolve id -> signed
@@ -86,8 +88,8 @@ export async function uploadMediaToMeta(env, { bytes, mime, filename }) {
 }
 
 // Keeps a copy of an outbound file in R2 so the thread can render it. Returns the
-// app-relative URL our media route serves.
-export async function storeOutboundCopy(env, { bytes, mime, filename }) {
-  const id = crypto.randomUUID()
-  return putToR2(env, keyFor(id, filename ? `-${filename}` : ''), bytes, mime)
+// path our media route serves. The key is a plain UUID (no filename) to keep it
+// free of spaces/special characters — the display name lives in media_filename.
+export async function storeOutboundCopy(env, { bytes, mime }) {
+  return putToR2(env, keyFor(crypto.randomUUID()), bytes, mime)
 }

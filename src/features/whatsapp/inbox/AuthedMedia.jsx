@@ -14,7 +14,10 @@ export function AuthedMedia({ message }) {
     if (!url || status !== 'ready') return
     let revoked = false
     let created = null
-    apiBlob(url)
+    // apiBlob prefixes origin + /api, so a stored value that still carries a
+    // leading /api (older rows) would double up — normalise it here.
+    const path = url.startsWith('/api/') ? url.slice(4) : url
+    apiBlob(path)
       .then((blob) => {
         if (revoked) return
         created = URL.createObjectURL(blob)
