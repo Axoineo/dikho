@@ -176,15 +176,17 @@ function WhatsAppGroup({ collapsed, onNavigate }) {
             "WhatsApp Marketing", and the collapsed-rail tooltip keeps the
             full name. */}
         <span className="nav-label">WhatsApp</span>
-        {/* Amber rather than the brand blue used for the active state, so the
-            badge reads as "in progress" instead of looking like a selected
-            item. Hidden when the rail is collapsed, same as the chevron —
-            there is no room for it beside a bare icon. Contrast checked in
-            both themes (5.1:1 on white, 6.2:1 on the dark sidebar). */}
+        {/* WhatsApp green (#25d366, the same value as .wa-mark), so the badge
+            belongs to the module it sits on rather than to the brand blue used
+            for the active nav state. The green itself only works as text on
+            the dark sidebar — on white it is 1.98:1 — so light mode uses a
+            deeper green of the same family over the same tint. Measured:
+            5.9:1 on white, 6.3:1 on the dark sidebar. Hidden on the collapsed
+            rail like the chevron; there is no room beside a bare icon. */}
         <span
-          className={`ml-1.5 shrink-0 rounded-full bg-[#f9af1b]/15 px-1.5 py-[1px] text-[9.5px]
-            font-extrabold uppercase leading-[15px] tracking-[0.5px] text-[#8a5f0a]
-            dark:bg-[#f9af1b]/[0.18] dark:text-[#f9af1b]
+          className={`ml-1.5 shrink-0 rounded-full bg-[#25d366]/[0.14] px-1.5 py-[1px] text-[9.5px]
+            font-extrabold uppercase leading-[15px] tracking-[0.5px] text-[#0a6b40]
+            dark:bg-[#25d366]/[0.16] dark:text-[#25d366]
             ${collapsed ? 'hidden' : ''}`}
         >
           Beta
