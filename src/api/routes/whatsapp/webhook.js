@@ -143,8 +143,15 @@ async function processEvent(c, event) {
 
 // --- POST /api/whatsapp/webhook — inbound messages + delivery receipts ----
 //
-// Always answers 200 quickly: a non-200 makes Meta retry the whole payload,
-// and a processing bug should not turn into a redelivery storm.
+// Answers 200 for anything we have durably recorded — including an event we
+// stored but could not process, which stays replayable from its payload. A
+// processing bug must not turn into a redelivery storm.
+//
+// The one case that returns 503 is losing the event store itself: an
+// unrecorded event that we ACK is gone for good, and on 2026-09-25 that is
+// exactly how a day of delivery receipts was dropped when D1 hit its free-tier
+// daily row-write cap. A non-200 makes Meta redeliver the whole payload with
+// backoff for up to 7 days, which outlives a midnight-UTC quota reset.
 webhook.post('/', async (c) => {
   // Read the raw body once — the signature is computed over these exact bytes,
   // and re-serialising parsed JSON would not reproduce them.
@@ -169,36 +176,65 @@ webhook.post('/', async (c) => {
     return ok(c, { received: true })
   }
 
-  try {
-    logEvent('whatsapp.webhook.received', payload)
-    const events = extractEvents(payload)
+  const events = extractEvents(payload)
+  logEvent('whatsapp.webhook.received', payload)
 
-    for (const event of events) {
-      // The UNIQUE index on idempotency_key is what makes retries safe:
-      // a replayed event inserts 0 rows and is skipped before any state change.
-      const insert = await c.env.DB.prepare(
-        `INSERT OR IGNORE INTO webhook_events (event_type, idempotency_key, payload)
-         VALUES (?, ?, ?)`,
-      ).bind(event.type, event.idempotencyKey, JSON.stringify(event.raw)).run()
+  for (const event of events) {
+    // Claim the event. The UNIQUE index on idempotency_key is what makes
+    // retries safe, but the claim deliberately reaches rows that already
+    // exist and are *not* yet 'processed': an earlier attempt that died
+    // mid-flight (see the 503 paths below) leaves the row at 'pending', and
+    // skipping it on redelivery would strand it forever. Only a row we know
+    // reached 'processed' is a true duplicate, and DO UPDATE ... WHERE
+    // filters exactly those out — no row comes back, so we skip it.
+    let claim
+    try {
+      claim = await c.env.DB.prepare(
+        `INSERT INTO webhook_events (event_type, idempotency_key, payload)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(idempotency_key) DO UPDATE
+           SET payload = excluded.payload
+           WHERE webhook_events.processing_status <> 'processed'
+         RETURNING id`,
+      ).bind(event.type, event.idempotencyKey, JSON.stringify(event.raw)).first()
+    } catch (err) {
+      // The ledger write itself failed, so D1 is down or over its daily
+      // row-write quota and NOTHING about this event has been recorded.
+      // ACKing here is how inbound messages get lost silently, so hand the
+      // payload back instead: Meta redelivers with backoff for up to 7 days,
+      // which comfortably outlives a midnight-UTC quota reset. Events earlier
+      // in this same payload are already claimed and skip themselves.
+      logError('whatsapp.webhook.ledger_unavailable', err)
+      return fail(c, 'WEBHOOK_STORAGE_UNAVAILABLE', 'Event store unavailable; please retry', 503)
+    }
 
-      if ((insert.meta?.changes ?? 0) === 0) continue
+    if (!claim) continue
 
+    try {
+      await processEvent(c, event)
+      await c.env.DB.prepare(
+        `UPDATE webhook_events
+         SET processing_status = 'processed', processed_at = datetime('now')
+         WHERE idempotency_key = ?`,
+      ).bind(event.idempotencyKey).run()
+    } catch (err) {
+      // Processing failed. Park the row as 'failed' and keep going: one bad
+      // event (an unsupported shape, a media fetch that 404s) must not hold
+      // up the rest of the payload, and the stored payload stays replayable.
+      logError('whatsapp.webhook.event_failed', err)
       try {
-        await processEvent(c, event)
-        await c.env.DB.prepare(
-          `UPDATE webhook_events
-           SET processing_status = 'processed', processed_at = datetime('now')
-           WHERE idempotency_key = ?`,
-        ).bind(event.idempotencyKey).run()
-      } catch (err) {
-        logError('whatsapp.webhook.event_failed', err)
         await c.env.DB.prepare(
           `UPDATE webhook_events SET processing_status = 'failed' WHERE idempotency_key = ?`,
         ).bind(event.idempotencyKey).run()
+      } catch (markErr) {
+        // Even the bookkeeping write failed, which means the failure above was
+        // D1 being unavailable rather than a bad event. The row is stranded at
+        // 'pending' with its payload intact; ask for redelivery so the claim
+        // above picks it back up once writes work again.
+        logError('whatsapp.webhook.mark_failed_unavailable', markErr)
+        return fail(c, 'WEBHOOK_STORAGE_UNAVAILABLE', 'Event store unavailable; please retry', 503)
       }
     }
-  } catch (err) {
-    logError('whatsapp.webhook.processing_error', err)
   }
 
   return ok(c, { received: true })

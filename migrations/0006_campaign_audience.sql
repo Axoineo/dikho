@@ -1,0 +1,17 @@
+-- Records who a campaign was *supposed* to reach.
+--
+-- Until now the only trace of a campaign's audience was the message rows it
+-- managed to create, which makes "who never got this?" unanswerable whenever a
+-- send dies partway. That is not hypothetical: on 2026-09-25 campaign 13
+-- (proposal_cg_diwali) stopped at 1,679 of 1,835 recipients when D1 hit its
+-- free-tier daily row-write cap, and the 156 contacts it never reached left no
+-- record at all — no failed row to retry, nothing. They were invisible to
+-- /campaigns/:id/retry, which only ever looked for status = 'failed'.
+--
+-- Storing the intended audience up front means an interrupted send is always
+-- reconcilable afterwards: audience minus delivered = the retry list.
+--
+-- JSON array of contact ids, e.g. '[1,2,3]'. NULL on campaigns created before
+-- this migration, which the API reports as audienceSource='inferred' rather
+-- than guessing silently.
+ALTER TABLE campaigns ADD COLUMN audience TEXT;
