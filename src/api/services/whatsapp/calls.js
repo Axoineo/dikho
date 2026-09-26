@@ -42,11 +42,17 @@ function formatDuration(seconds) {
 
 // Contact + conversation upsert for a caller we may never have messaged.
 //
-// Deliberately NOT the same upsert as inbound.js: a call must not touch
-// last_inbound_at or unread_count. last_inbound_at is what gates free-form
-// replies, and a voice call does not open the 24-hour messaging window — moving
-// it here would make the composer offer sends that Meta then rejects.
-async function ensureConversation(db, { phone, waName }) {
+// A call DOES open the 24-hour customer service window. Meta's calling docs:
+// it "starts or refreshes when a user calls the business (whether or not the
+// business accepts)" — so an unanswered call counts exactly like an answered
+// one. last_inbound_at therefore moves here just as it does for an inbound
+// message.
+//
+// This is the whole point for a MISSED call: the customer rang, nobody was
+// free, and the agent can still write back free-form for 24h. Leaving the
+// window shut locked agents out of one Meta had already opened — the composer
+// offered templates only and conversations.js rejected the free-form send.
+async function ensureConversation(db, { phone, waName, at }) {
   await db.prepare(
     `INSERT INTO contacts (name, phone, source) VALUES (?1, ?2, 'inbound')
      ON CONFLICT(phone) DO UPDATE SET
@@ -55,15 +61,20 @@ async function ensureConversation(db, { phone, waName }) {
   ).bind(waName, phone).run()
   const contact = await db.prepare('SELECT id FROM contacts WHERE phone = ?').bind(phone).first()
 
+  // Only ever moves the window forward: a redelivered or out-of-order webhook
+  // must not drag last_inbound_at back and shorten a live session.
   await db.prepare(
-    `INSERT INTO conversations (contact_id, phone, wa_name, status)
-     VALUES (?1, ?2, ?3, 'open')
+    `INSERT INTO conversations (contact_id, phone, wa_name, status, last_inbound_at)
+     VALUES (?1, ?2, ?3, 'open', ?4)
      ON CONFLICT(phone) DO UPDATE SET
        contact_id = COALESCE(conversations.contact_id, ?1),
        wa_name = COALESCE(?3, conversations.wa_name),
        status = 'open',
+       last_inbound_at = CASE
+         WHEN conversations.last_inbound_at IS NULL OR conversations.last_inbound_at < ?4
+           THEN ?4 ELSE conversations.last_inbound_at END,
        updated_at = datetime('now')`,
-  ).bind(contact?.id ?? null, phone, waName).run()
+  ).bind(contact?.id ?? null, phone, waName, at).run()
   const conversation = await db.prepare('SELECT * FROM conversations WHERE phone = ?').bind(phone).first()
 
   return { contactId: contact?.id ?? null, conversation }
@@ -80,6 +91,7 @@ async function processConnect(c, event) {
   const { contactId, conversation } = await ensureConversation(db, {
     phone: event.phone,
     waName: event.waName,
+    at,
   })
 
   await db.prepare(
@@ -131,7 +143,9 @@ async function processTerminate(c, event) {
   // Backfill the thread link for a call whose connect webhook never landed.
   let conversationId = row.conversation_id
   if (!conversationId && row.phone) {
-    const { conversation } = await ensureConversation(db, { phone: row.phone, waName: row.wa_name })
+    const { conversation } = await ensureConversation(db, {
+      phone: row.phone, waName: row.wa_name, at: endedAt,
+    })
     conversationId = conversation?.id ?? null
     if (conversationId) {
       await db.prepare('UPDATE calls SET conversation_id = ?1, contact_id = COALESCE(contact_id, ?2) WHERE id = ?3')
@@ -148,7 +162,7 @@ async function processTerminate(c, event) {
   if (conversationId) {
     // Reuses meta_message_id to hold the wacid: the existing UNIQUE index then
     // makes a redelivered terminate a no-op instead of a duplicate bubble.
-    await db.prepare(
+    const logged = await db.prepare(
       `INSERT INTO messages
          (conversation_id, contact_id, phone, meta_message_id, direction, type,
           body, status, wa_timestamp, created_at)
@@ -159,14 +173,30 @@ async function processTerminate(c, event) {
       answered ? 'received' : row.status, endedAt,
     ).run()
 
-    // Only nudge the chat-list row — not unread_count or last_inbound_at, for
-    // the same session-window reason as ensureConversation above.
+    // A call nobody picked up is the one that still needs a human, so it badges
+    // the thread like an unread message. 'rejected' (an agent declined) and
+    // 'completed' (an agent talked to them) are already dealt with.
+    //
+    // Gated on the INSERT above having actually written: that statement is the
+    // idempotency guard for a redelivered terminate, and an unconditional
+    // increment here would let one call badge the thread twice.
+    const isNew = (logged.meta?.changes ?? 0) > 0
+    const unreadDelta = isNew && row.status === 'missed' ? 1 : 0
+
+    // Refresh the window here too. ensureConversation already opened it on the
+    // ring, but a call whose connect webhook never landed reaches the thread
+    // only through this path.
     await db.prepare(
       `UPDATE conversations
        SET last_message_at = ?1, last_message_preview = ?2,
-           last_message_direction = 'inbound', updated_at = datetime('now')
+           last_message_direction = 'inbound',
+           last_inbound_at = CASE
+             WHEN last_inbound_at IS NULL OR last_inbound_at < ?1
+               THEN ?1 ELSE last_inbound_at END,
+           unread_count = unread_count + ?4,
+           updated_at = datetime('now')
        WHERE id = ?3 AND (last_message_at IS NULL OR last_message_at < ?1)`,
-    ).bind(endedAt, preview, conversationId).run()
+    ).bind(endedAt, preview, conversationId, unreadDelta).run()
 
     const message = await db.prepare('SELECT * FROM messages WHERE meta_message_id = ?')
       .bind(row.wacid).first()
