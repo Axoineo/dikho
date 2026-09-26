@@ -3,8 +3,13 @@
 
 const GRAPH_VERSION = 'v21.0'
 
-function graphUrl(path) {
-  return `https://graph.facebook.com/${GRAPH_VERSION}/${path}`
+// The Calling API did not exist at v21, so call actions are pinned separately
+// rather than dragging every message send onto a newer version. Bump this alone
+// when Meta deprecates v23.
+const CALLING_GRAPH_VERSION = 'v23.0'
+
+function graphUrl(path, version = GRAPH_VERSION) {
+  return `https://graph.facebook.com/${version}/${path}`
 }
 
 // Sends one approved template. `components` carries per-recipient variable
@@ -191,4 +196,55 @@ export async function fetchApprovedTemplates(env) {
     footerText: template.components?.find((component) => component.type === 'FOOTER')?.text ?? '',
     buttons: template.components?.find((component) => component.type === 'BUTTONS')?.buttons ?? [],
   }))
+}
+
+/* ── Calling API ──────────────────────────────────────────────────────────
+   Signalling only. The audio itself never touches this Worker: the agent's
+   browser is the WebRTC peer and streams directly to Meta's media servers, so
+   all four actions below are small JSON round-trips that relay an SDP answer.
+
+   `action` is one of:
+     pre_accept — answer the offer so ICE/DTLS can finish while still ringing
+     accept     — actually pick up; media may only flow after this returns 200
+     reject     — decline a ringing call
+     terminate  — hang up a call that is already up
+
+   pre_accept/accept carry the browser's SDP *answer*. Echoing Meta's own offer
+   back instead is the classic failure here and produces a call that connects
+   and then sits in silence. */
+export async function sendCallAction(env, { callId, action, sdp }) {
+  const body = {
+    messaging_product: 'whatsapp',
+    call_id: callId,
+    action,
+  }
+  if (sdp) body.session = { sdp_type: 'answer', sdp }
+
+  const res = await fetch(
+    graphUrl(`${env.WHATSAPP_PHONE_NUMBER_ID}/calls`, CALLING_GRAPH_VERSION),
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  )
+
+  const payload = await res.json().catch(() => ({}))
+
+  if (!res.ok) {
+    const error = payload?.error ?? {}
+    return {
+      ok: false,
+      errorCode: String(error.code ?? res.status),
+      // Meta's message is safe to surface — it never contains the token — and
+      // it is the only way to tell "call already ended" from "calling is not
+      // enabled on this number" from the agent's side of the screen.
+      errorMessage: error.message ?? 'Meta call action failed',
+    }
+  }
+
+  return { ok: true }
 }

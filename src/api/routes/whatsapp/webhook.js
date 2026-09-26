@@ -3,6 +3,7 @@ import { ok, fail } from '../../utils/response.js'
 import { logEvent, logError } from '../../utils/logger.js'
 import { verifyMetaSignature } from '../../services/whatsapp/verifyMetaSignature.js'
 import { processInboundMessage } from '../../services/whatsapp/inbound.js'
+import { processCallEvent, callerPhone } from '../../services/whatsapp/calls.js'
 import { broadcast } from '../../services/whatsapp/realtime.js'
 
 const webhook = new Hono()
@@ -34,6 +35,9 @@ webhook.get('/', (c) => {
 // because one message legitimately produces sent -> delivered -> read over
 // time. Keying on the wamid alone would drop every receipt after the first.
 // A message's key is its wamid, which Meta guarantees globally unique.
+//
+// A call's key is `${wacid}:${event}` for the same reason as a status: one call
+// produces connect and then terminate, and both have to survive the ledger.
 function extractEvents(payload) {
   const events = []
 
@@ -70,6 +74,25 @@ function extractEvents(payload) {
           waName: profileByWaId[message.from] ?? null,
           timestamp: message.timestamp,
           raw: message,
+        })
+      }
+
+      // Voice calls (WhatsApp Business Calling API). Arrives only once the app
+      // is subscribed to the `calls` webhook field; until then this loop is
+      // simply never entered.
+      for (const call of value.calls ?? []) {
+        const phone = callerPhone(value, call)
+        events.push({
+          type: 'call',
+          idempotencyKey: `${call.id}:${call.event}`,
+          callId: call.id,
+          event: call.event,                       // connect | terminate
+          phone,
+          waName: profileByWaId[phone] ?? null,
+          // We never place outbound calls, so an absent direction is inbound.
+          inbound: call.direction !== 'BUSINESS_INITIATED',
+          timestamp: call.timestamp,
+          raw: call,
         })
       }
     }
@@ -139,6 +162,7 @@ async function processStatus(c, event) {
 async function processEvent(c, event) {
   if (event.type === 'status') return processStatus(c, event)
   if (event.type === 'message') return processInboundMessage(c, event)
+  if (event.type === 'call') return processCallEvent(c, event)
 }
 
 // --- POST /api/whatsapp/webhook — inbound messages + delivery receipts ----
@@ -178,6 +202,26 @@ webhook.post('/', async (c) => {
 
   const events = extractEvents(payload)
   logEvent('whatsapp.webhook.received', payload)
+
+  // Ring first, bookkeep second. A ringing call is live for ~30 seconds and has
+  // no second chance: Meta's redelivery backoff — the thing that makes every
+  // other event here recoverable — is worthless once the caller has hung up. So
+  // the SDP offer goes out to open agent tabs before the idempotency ledger and
+  // before any D1 write that could be slow or over its daily quota, and the
+  // durable record below catches up on its own time. A redelivered connect
+  // simply rings again; the UI keys on the call id and ignores the duplicate.
+  for (const event of events) {
+    if (event.type !== 'call' || event.event !== 'connect' || !event.inbound) continue
+    c.executionCtx.waitUntil(broadcast(c.env, 'call:incoming', {
+      callId: event.callId,
+      phone: event.phone,
+      waName: event.waName,
+      sdp: event.raw?.session?.sdp ?? null,
+      at: event.timestamp
+        ? new Date(Number(event.timestamp) * 1000).toISOString()
+        : new Date().toISOString(),
+    }))
+  }
 
   for (const event of events) {
     // Claim the event. The UNIQUE index on idempotency_key is what makes

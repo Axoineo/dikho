@@ -4,6 +4,7 @@ import { ok } from '../../utils/response.js'
 import { signMediaTicket } from '../../services/whatsapp/mediaTicket.js'
 import webhook from './webhook.js'
 import conversations from './conversations.js'
+import calls from './calls.js'
 import media from './media.js'
 
 const whatsapp = new Hono()
@@ -26,5 +27,11 @@ whatsapp.get('/media-ticket', requireAuth, async (c) => {
 whatsapp.use('/conversations', requireAuth)
 whatsapp.use('/conversations/*', requireAuth)
 whatsapp.route('/conversations', conversations)
+
+// Voice-call signalling. Dashboard-only for the same reason as /conversations:
+// these actions decide who picks up a live call and spend real call capacity.
+whatsapp.use('/calls', requireAuth)
+whatsapp.use('/calls/*', requireAuth)
+whatsapp.route('/calls', calls)
 
 export default whatsapp
