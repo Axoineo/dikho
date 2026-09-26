@@ -43,12 +43,12 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
 
   if (!conversation) {
     return (
-      <div className="flex h-full flex-1 flex-col items-center justify-center bg-[#f5f6f8] text-center dark:bg-[#0b141a]">
-        <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white text-[#185494] shadow-sm dark:bg-white/5">
+      <div className="flex h-full flex-1 flex-col items-center justify-center bg-chat-canvas text-center">
+        <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-chat-raised text-brand shadow-sm dark:text-[#5ba0e0]">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" /></svg>
         </div>
-        <p className="text-[16px] font-semibold text-gray-700 dark:text-gray-200">Dikho WhatsApp Inbox</p>
-        <p className="mt-1 max-w-xs text-[13.5px] text-gray-500">Select a conversation from the left to view the thread and reply.</p>
+        <p className="text-[16px] font-semibold text-ink">Dikho WhatsApp Inbox</p>
+        <p className="mt-1 max-w-xs text-[13.5px] text-muted">Select a conversation from the left to view the thread and reply.</p>
       </div>
     )
   }
@@ -62,16 +62,16 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
   }
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-[#f5f6f8] dark:bg-[#0b141a]">
+    <div className="flex h-full flex-1 flex-col bg-chat-canvas">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-black/[0.07] bg-white px-5 py-3 dark:border-white/[0.08] dark:bg-[#0f1a20]">
+      <div className="flex items-center gap-3 border-b border-line bg-chat-shell px-5 py-3">
         <div className="relative">
           <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={42} />
           <button
             type="button"
             title="Set photo"
             onClick={() => avatarInput.current?.click()}
-            className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[#185494] text-white dark:border-[#0f1a20]"
+            className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-chat-shell bg-brand text-white"
           >
             {uploading
               ? <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
@@ -81,10 +81,10 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[15.5px] font-semibold leading-tight text-gray-900 dark:text-white">{displayName(conversation)}</div>
-          <div className="mt-0.5 flex items-center gap-2 text-[12.5px] text-gray-500 dark:text-gray-400">
+          <div className="truncate text-[15.5px] font-semibold leading-tight text-ink">{displayName(conversation)}</div>
+          <div className="mt-0.5 flex items-center gap-2 text-[12.5px] text-muted">
             <span className="truncate">+{conversation.phone}</span>
-            <span className="text-gray-300 dark:text-gray-600">•</span>
+            <span className="text-muted">•</span>
             <HeaderStatus conversation={conversation} />
           </div>
         </div>
@@ -94,7 +94,7 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
           title={infoOpen ? 'Hide details' : 'Show details'}
           onClick={onToggleInfo}
           className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors
-            ${infoOpen ? 'bg-[#185494]/10 text-[#185494] dark:bg-[#185494]/25 dark:text-[#7cb2ea]' : 'text-gray-400 hover:bg-black/5 dark:hover:bg-white/10'}`}
+            ${infoOpen ? 'bg-brand-soft text-brand dark:text-[#5ba0e0]' : 'text-muted hover:bg-line-soft'}`}
         >
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><path d="M12 11v5" strokeLinecap="round" /><circle cx="12" cy="8" r="0.6" fill="currentColor" /></svg>
         </button>
@@ -102,11 +102,11 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
 
       {/* Thread */}
       <div className="flex-1 overflow-y-auto px-2 py-4 sm:px-4">
-        {loading && messages.length === 0 && <div className="p-4 text-center text-sm text-gray-500">Loading messages…</div>}
+        {loading && messages.length === 0 && <div className="p-4 text-center text-sm text-muted">Loading messages…</div>}
         {rows.map((row) =>
           row.separator ? (
             <div key={row.id} className="flex justify-center py-3">
-              <span className="rounded-full border border-black/5 bg-white px-3 py-1 text-[11.5px] font-medium text-gray-500 shadow-sm dark:border-white/10 dark:bg-[#182229] dark:text-gray-300">
+              <span className="rounded-full border border-line bg-chat-raised px-3 py-1 text-[11.5px] font-medium text-muted shadow-sm">
                 {formatDaySeparator(row.at)}
               </span>
             </div>

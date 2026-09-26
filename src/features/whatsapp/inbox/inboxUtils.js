@@ -73,9 +73,14 @@ export function formatCountdown(ms) {
   return `${h}h ${m}m`
 }
 
+// Every one of these carries white initials, so each has to clear 4.5:1
+// against white on its own — the label is ~14px semibold, under the size
+// WCAG lets off at 3:1. The lighter 500/600-weight sky, cyan, teal and orange
+// that used to sit here ranged from 2.77 to 3.74 and were unreadable at a
+// glance; these are the 700/800 steps of the same hues, 5.2 to 5.9:1.
 const AVATAR_COLORS = [
-  '#185494', '#2563eb', '#0ea5e9', '#0891b2', '#0d9488',
-  '#7c3aed', '#4f46e5', '#c026d3', '#db2777', '#ea580c',
+  '#185494', '#2563eb', '#0369a1', '#0e7490', '#0f766e',
+  '#7c3aed', '#4f46e5', '#c026d3', '#db2777', '#c2410c',
 ]
 
 export function avatarColor(seed = '') {

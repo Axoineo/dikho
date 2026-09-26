@@ -10,7 +10,11 @@
   --page: #f6f8fb;
   --surface: #ffffff;
   --text: #263247;
-  --muted: #718098;
+  /* #718098 rendered at 3.5:1 on --line-soft and 4.0:1 on white, under the
+     4.5:1 WCAG AA needs for body text — every muted label in the app was
+     failing. This is the lightest step of the same blue-grey that clears 4.5
+     on white, --page, --surface and --line-soft alike (worst case 4.65). */
+  --muted: #5f6c82;
   --line: #dfe5ed;
   --line-soft: #edf0f4;
   --success: #647997;
@@ -23,6 +27,19 @@
   --focus-ring-soft: rgba(24, 84, 148, 0.35);
   /* Brand tint used by ::selection and native form controls. */
   --select-bg: rgba(24, 84, 148, 0.16);
+
+  /* WhatsApp inbox surfaces. A chat needs one more depth level than the rest
+     of the dashboard — a canvas set back from the chrome so bubbles lift off
+     it — which the generic --surface/--page pair cannot express. Kept as
+     tokens rather than literals in the components so dark mode is defined in
+     one place instead of a `dark:` hex on every element. */
+  --chat-shell: #ffffff;
+  --chat-canvas: #f5f6f8;
+  --chat-bubble-in: #ffffff;
+  --chat-bubble-out: #e8f1fc;
+  --chat-bubble-out-text: #263247;
+  --chat-raised: #ffffff;
+  --chat-ring: rgba(0, 0, 0, 0.06);
 }
 
 * { box-sizing: border-box; }
@@ -1584,6 +1601,19 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   --focus-ring: #5ba0e0;
   --focus-ring-soft: rgba(91, 160, 224, 0.4);
   --select-bg: rgba(91, 160, 224, 0.28);
+
+  /* The inbox used to carry WhatsApp Web's own dark palette (#0b141a canvas,
+     #0f1a20 chrome, #202c33 bubbles). Those are green-teal blacks and sat
+     visibly wrong next to this app's neutral --page/--surface, so the inbox
+     read as a different product in dark mode. These keep the extra depth a
+     chat needs but on the same neutral-cool ramp as everything else. */
+  --chat-shell: #1a1d23;
+  --chat-canvas: #0f1216;
+  --chat-bubble-in: #232831;
+  --chat-bubble-out: #1e4a72;
+  --chat-bubble-out-text: #eaf1fa;
+  --chat-raised: #242a33;
+  --chat-ring: rgba(255, 255, 255, 0.06);
 }
 
 /* Dark-theme scrollbars: lift off the darker surface. */
