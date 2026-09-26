@@ -108,9 +108,13 @@ export const waApi = {
   /* ── Voice calls ──────────────────────────────────────────────────────
      Signalling only. The audio never goes through the Worker — these just
      relay the browser's SDP answer to Meta. See inbox/useWhatsAppCall.js. */
-  calls: (conversationId) => apiGet(
-    `/whatsapp/calls${conversationId ? `?conversationId=${conversationId}` : ''}`,
-  ),
+  calls: ({ conversationId, status } = {}) => {
+    const params = new URLSearchParams()
+    if (conversationId) params.set('conversationId', conversationId)
+    if (status) params.set('status', status)
+    const query = params.toString()
+    return apiGet(`/whatsapp/calls${query ? `?${query}` : ''}`)
+  },
   callPreAccept: (wacid, sdp, phone) =>
     apiPost(`/whatsapp/calls/${encodeURIComponent(wacid)}/pre-accept`, { sdp, phone }),
   callAccept: (wacid, sdp, phone) =>

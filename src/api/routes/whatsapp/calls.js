@@ -69,15 +69,42 @@ calls.post('/:wacid/:verb{reject|terminate}', async (c) => {
   return ok(c, res)
 })
 
-/* ── GET /api/whatsapp/calls?conversationId=123 — call history ───────────── */
+/* ── GET /api/whatsapp/calls — call history ──────────────────────────────
+   ?conversationId=123  one thread's calls
+   ?status=missed       the follow-up queue
+
+   Each row carries who called and whether anyone has answered them since, so
+   the missed-calls screen can rank by "still unhandled" rather than just by
+   time. `followed_up` is an outbound message *after* the call ended — an
+   agent's reply or the automatic acknowledgement both count, which is the
+   point: either way the customer has heard from us. */
 calls.get('/', async (c) => {
   const conversationId = Number(c.req.query('conversationId'))
+  const status = c.req.query('status')
 
-  const query = Number.isInteger(conversationId) && conversationId > 0
-    ? c.env.DB.prepare(
-        `SELECT * FROM calls WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 100`,
-      ).bind(conversationId)
-    : c.env.DB.prepare(`SELECT * FROM calls ORDER BY created_at DESC LIMIT 100`)
+  const select = `
+    SELECT calls.*,
+           COALESCE(contacts.name, calls.wa_name) AS display_name,
+           contacts.avatar_url AS avatar_url,
+           EXISTS (
+             SELECT 1 FROM messages m
+             WHERE m.conversation_id = calls.conversation_id
+               AND m.direction = 'outbound'
+               AND m.created_at > COALESCE(calls.ended_at, calls.ring_at)
+           ) AS followed_up
+    FROM calls
+    LEFT JOIN contacts ON contacts.id = calls.contact_id`
+
+  let query
+  if (Number.isInteger(conversationId) && conversationId > 0) {
+    query = c.env.DB.prepare(`${select} WHERE calls.conversation_id = ?
+      ORDER BY calls.created_at DESC LIMIT 100`).bind(conversationId)
+  } else if (status) {
+    query = c.env.DB.prepare(`${select} WHERE calls.status = ?
+      ORDER BY calls.created_at DESC LIMIT 200`).bind(status)
+  } else {
+    query = c.env.DB.prepare(`${select} ORDER BY calls.created_at DESC LIMIT 100`)
+  }
 
   const { results } = await query.all()
   return ok(c, { calls: results })

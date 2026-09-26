@@ -14,6 +14,7 @@ import {
   WhatsAppInbox,
   WhatsAppDashboard,
   WhatsAppContacts,
+  WhatsAppCalls,
   WhatsAppCampaigns,
   WhatsAppTemplates
 } from '../routes'
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/whatsapp" element={<WhatsAppDashboard />} />
           <Route path="/whatsapp/inbox" element={<WhatsAppInbox />} />
           <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
+          <Route path="/whatsapp/calls" element={<WhatsAppCalls />} />
           <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
           <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
           <Route path="/settings" element={<SettingsRoute />} />

@@ -11,6 +11,7 @@ export const SettingsPage = lazy(() => import('./features/settings/SettingsPage'
 export const WhatsAppInbox = lazy(() => import('./features/whatsapp/inbox/WhatsAppInbox'))
 export const WhatsAppDashboard = lazy(() => import('./features/whatsapp/WhatsAppDashboard'))
 export const WhatsAppContacts = lazy(() => import('./features/whatsapp/WhatsAppContacts'))
+export const WhatsAppCalls = lazy(() => import('./features/whatsapp/WhatsAppCalls'))
 export const WhatsAppCampaigns = lazy(() => import('./features/whatsapp/WhatsAppCampaigns'))
 export const WhatsAppTemplates = lazy(() => import('./features/whatsapp/WhatsAppTemplates'))
 

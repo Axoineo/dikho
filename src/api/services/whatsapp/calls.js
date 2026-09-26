@@ -6,7 +6,26 @@
 // answer back to Meta.
 
 import { broadcast } from './realtime.js'
-import { sendCallAction } from './graph.js'
+import { sendCallAction, sendTextMessage } from './graph.js'
+import { logError } from '../../utils/logger.js'
+
+// Sent the instant a call goes unanswered, so a customer who rang out of hours
+// is never left in silence waiting for someone to notice. The call itself
+// opened the 24-hour service window (see ensureConversation), which is what
+// makes this a free-form service message — no template, no approval.
+//
+// Override per deployment with WHATSAPP_MISSED_CALL_REPLY; set that to "off"
+// to disable auto-replies entirely. The default lives here rather than in a
+// var so a deploy that wipes vars degrades to a sane message instead of
+// silence.
+const DEFAULT_MISSED_CALL_REPLY =
+  'Sorry we missed your call. Our team will get back to you shortly — '
+  + 'or reply here and we will help you right away.'
+
+// A customer who rings three times in a row must not receive three identical
+// apologies. Production already shows exactly that pattern: two declined calls
+// and a missed one inside 20 minutes on the same thread.
+const AUTO_REPLY_THROTTLE_MS = 30 * 60 * 1000
 
 // Meta gives roughly 30-60s from the connect webhook before it gives up on an
 // unanswered call. Rows still 'ringing' well past that were never terminated
@@ -205,6 +224,17 @@ async function processTerminate(c, event) {
     if (message && conversation) {
       await broadcast(c.env, 'message:new', { conversation, message })
     }
+
+    // Acknowledge after the call bubble has landed, so the thread reads in the
+    // order it happened: missed call, then our reply. Gated on the same isNew
+    // flag as the badge — a redelivered terminate must not apologise twice.
+    if (unreadDelta > 0 && conversation) {
+      try {
+        await sendMissedCallReply(c, conversation)
+      } catch (err) {
+        logError('whatsapp.call.auto_reply_error', err)
+      }
+    }
   }
 
   await broadcast(c.env, 'call:ended', {
@@ -220,6 +250,64 @@ export async function processCallEvent(c, event) {
   if (event.event === 'terminate') return processTerminate(c, event)
   // Meta may add further call events; the ledger row keeps the payload so an
   // unhandled shape is replayable rather than lost.
+}
+
+// Acknowledges a missed call in the thread. Best-effort throughout: a failure
+// here must never break call bookkeeping, so every path returns rather than
+// throws, and the caller is already past its own writes.
+async function sendMissedCallReply(c, conversation) {
+  const configured = c.env.WHATSAPP_MISSED_CALL_REPLY ?? DEFAULT_MISSED_CALL_REPLY
+  const text = String(configured).trim()
+  if (!text || text.toLowerCase() === 'off') return
+
+  // Only auto-replies are compared, and this module always writes them with
+  // toISOString(), so this stays clear of the mixed created_at formats in
+  // `messages` (campaign rows use datetime('now'), which sorts differently).
+  const since = new Date(Date.now() - AUTO_REPLY_THROTTLE_MS).toISOString()
+  const recent = await c.env.DB.prepare(
+    `SELECT 1 FROM messages
+     WHERE conversation_id = ?1 AND direction = 'outbound'
+       AND sender = 'auto' AND created_at > ?2
+     LIMIT 1`,
+  ).bind(conversation.id, since).first()
+  if (recent) return
+
+  const result = await sendTextMessage(c.env, { to: conversation.phone, body: text })
+  if (!result.ok) {
+    // The likeliest cause is Meta disagreeing that the window is open. Logged
+    // rather than surfaced: nobody is watching a screen when this runs.
+    logError('whatsapp.call.auto_reply_failed', `${result.errorCode}: ${result.errorMessage}`)
+    return
+  }
+
+  const now = new Date().toISOString()
+  // sender='auto' is what marks this as machine-sent — agent rows carry the
+  // user's uuid — and it is also what the throttle above reads.
+  await c.env.DB.prepare(
+    `INSERT INTO messages
+       (conversation_id, contact_id, phone, meta_message_id, direction, type,
+        body, status, sender, sent_at, wa_timestamp, created_at)
+     VALUES (?1, ?2, ?3, ?4, 'outbound', 'text', ?5, 'sent', 'auto', ?6, ?6, ?6)
+     ON CONFLICT(meta_message_id) DO NOTHING`,
+  ).bind(
+    conversation.id, conversation.contact_id, conversation.phone,
+    result.messageId, text, now,
+  ).run()
+
+  await c.env.DB.prepare(
+    `UPDATE conversations
+     SET last_message_at = ?1, last_message_preview = ?2,
+         last_message_direction = 'outbound', updated_at = datetime('now')
+     WHERE id = ?3`,
+  ).bind(now, text.slice(0, 120), conversation.id).run()
+
+  const message = await c.env.DB.prepare('SELECT * FROM messages WHERE meta_message_id = ?')
+    .bind(result.messageId).first()
+  const freshConv = await c.env.DB.prepare('SELECT * FROM conversations WHERE id = ?')
+    .bind(conversation.id).first()
+  if (message && freshConv) {
+    await broadcast(c.env, 'message:new', { conversation: freshConv, message })
+  }
 }
 
 /* ── Agent side ───────────────────────────────────────────────────────── */

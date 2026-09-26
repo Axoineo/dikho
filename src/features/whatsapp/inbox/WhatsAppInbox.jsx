@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { waApi } from '../../../lib/api'
 import { useInboxRealtime } from './useInboxRealtime'
 import { ChatList } from './ChatList'
@@ -64,6 +65,19 @@ export default function WhatsAppInbox() {
       setLoadingMsgs(false)
     }
   }, [])
+
+  // ?c=<id> deep link, used by the missed-calls screen's Reply button. Opens
+  // that thread once the list has loaded, then clears the param so a later
+  // manual navigation isn't yanked back to the same conversation.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkId = Number(searchParams.get('c'))
+  useEffect(() => {
+    if (!Number.isInteger(deepLinkId) || deepLinkId <= 0) return
+    const conv = conversations.find((c) => c.id === deepLinkId)
+    if (!conv) return
+    openConversation(conv)
+    setSearchParams({}, { replace: true })
+  }, [deepLinkId, conversations, openConversation, setSearchParams])
 
   const appendMessage = useCallback((message) => {
     setMessages((prev) => {
