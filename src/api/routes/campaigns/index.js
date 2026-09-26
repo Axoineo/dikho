@@ -219,6 +219,93 @@ async function loadFailedContactIds(db, campaignId) {
   return results.map((row) => row.contact_id)
 }
 
+// Everyone on this campaign who has no successful message, split by why.
+//
+// Two different holes have to be filled, and only one of them used to be
+// visible. A `failed` row means Meta rejected the send and said why. A
+// *missing* row means the send never got that far at all — the batch loop
+// died, the tab closed, or D1 stopped accepting writes mid-campaign — and
+// leaves nothing behind to find. Reconciling against the recorded audience is
+// what surfaces the second kind.
+//
+// `audience` is NULL for campaigns created before migration 0006. Those can
+// still report their failed rows exactly; the never-attempted set is only
+// computable by assuming the audience was every eligible contact, which is
+// right for a send-to-everyone campaign and wrong for a targeted one. So it
+// stays behind `includeUnrecorded` and is reported as inferred, never guessed
+// at silently.
+async function loadUnsentRecipients(db, campaign, { includeUnrecorded = false } = {}) {
+  const audienceIds = campaign.audience ? JSON.parse(campaign.audience) : null
+  const audienceSource = audienceIds ? 'stored' : 'inferred'
+
+  const { results: failed } = await db.prepare(
+    `SELECT m.contact_id AS id, c.name, c.phone, m.error_code, m.error_message, m.failed_at
+     FROM messages m
+     JOIN contacts c ON c.id = m.contact_id
+     WHERE m.campaign_id = ? AND m.status = 'failed' AND m.contact_id IS NOT NULL
+     ORDER BY c.name`,
+  ).bind(campaign.id).all()
+
+  const contacts = failed.map((row) => ({
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    reason: 'failed',
+    errorCode: row.error_code,
+    errorMessage: row.error_message,
+    at: row.failed_at,
+  }))
+
+  // Never-attempted: in the audience, but with no message row on this campaign.
+  if (audienceIds || includeUnrecorded) {
+    let missing = []
+    if (audienceIds) {
+      // Chunked at 100 — D1 caps bound parameters per query at 100, not
+      // SQLite's usual 999.
+      for (let i = 0; i < audienceIds.length; i += 100) {
+        const chunk = audienceIds.slice(i, i + 100)
+        const placeholders = chunk.map(() => '?').join(',')
+        const { results } = await db.prepare(
+          `SELECT c.id, c.name, c.phone FROM contacts c
+           WHERE c.id IN (${placeholders}) AND c.opted_out = 0
+             AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.campaign_id = ? AND m.contact_id = c.id)`,
+        ).bind(...chunk, campaign.id).all()
+        missing.push(...results)
+      }
+    } else {
+      const { results } = await db.prepare(
+        `SELECT c.id, c.name, c.phone FROM contacts c
+         WHERE c.opted_out = 0
+           AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.campaign_id = ? AND m.contact_id = c.id)
+         ORDER BY c.name`,
+      ).bind(campaign.id).all()
+      missing = results
+    }
+
+    for (const row of missing) {
+      contacts.push({
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        reason: 'never_attempted',
+        errorCode: null,
+        errorMessage: null,
+        at: null,
+      })
+    }
+  }
+
+  return {
+    audienceSource,
+    contacts,
+    counts: {
+      total: contacts.length,
+      failed: contacts.filter((x) => x.reason === 'failed').length,
+      neverAttempted: contacts.filter((x) => x.reason === 'never_attempted').length,
+    },
+  }
+}
+
 // The campaigns row only keeps template_name/template_language (+ the
 // variable map that was used) — not the raw header/body text, which lives on
 // Meta's side and can change or be revoked between the original send and a
@@ -325,13 +412,17 @@ campaigns.post('/send', async (c) => {
   const hasVariables = /\{\{/.test(templateHeader) || /\{\{/.test(templateBody)
 
   const user = c.get('user')
+  // Store the whole intended audience, not just this first batch. If the send
+  // is interrupted later, this is the only record of who was meant to get it
+  // — see migration 0006 and loadUnsentRecipients.
   const campaign = await c.env.DB.prepare(
-    `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by, variables)
-     VALUES (?, ?, ?, 'sending', ?, ?, ?)
+    `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by, variables, audience)
+     VALUES (?, ?, ?, 'sending', ?, ?, ?, ?)
      RETURNING id`,
   ).bind(
     name.trim(), templateName.trim(), templateLanguage, totalRecipients, user?.id ?? null,
     hasVariables ? JSON.stringify(variableMap) : null,
+    JSON.stringify([...batchIds, ...remainingIds]),
   ).first()
 
   const campaignId = campaign.id
@@ -404,21 +495,61 @@ campaigns.post('/send-batch', async (c) => {
   return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
 })
 
+/* ── GET /api/campaigns/:id/unsent ─────────────────────────────────────── */
+// Who still hasn't received this campaign, and why. Powers the retry list in
+// the UI: every contact here either failed or was never attempted, so the
+// list empties itself as retries succeed — a contact that goes through gets a
+// 'sent' row and stops matching.
+//
+// `?includeUnrecorded=1` opts into reconciling a pre-0006 campaign (one with
+// no stored audience) against every eligible contact. Off by default because
+// for a campaign that targeted a subset, that comparison would report every
+// contact it deliberately skipped as a missed recipient.
+
+campaigns.get('/:id/unsent', async (c) => {
+  const campaignId = Number(c.req.param('id'))
+  if (!Number.isInteger(campaignId)) throw new HTTPException(400, { message: 'Invalid campaign id' })
+
+  const campaign = await c.env.DB.prepare(
+    `SELECT id, name, total_count, audience FROM campaigns WHERE id = ?`,
+  ).bind(campaignId).first()
+  if (!campaign) throw new HTTPException(404, { message: 'Campaign not found' })
+
+  const includeUnrecorded = c.req.query('includeUnrecorded') === '1'
+  const { audienceSource, contacts, counts } = await loadUnsentRecipients(
+    c.env.DB, campaign, { includeUnrecorded },
+  )
+
+  // A pre-0006 campaign that has more intended recipients than message rows is
+  // hiding never-attempted contacts the caller can only see by opting in.
+  const recorded = await c.env.DB.prepare(
+    `SELECT COUNT(DISTINCT contact_id) AS n FROM messages WHERE campaign_id = ?`,
+  ).bind(campaignId).first()
+  const unaccounted = audienceSource === 'inferred' && !includeUnrecorded
+    ? Math.max(0, (campaign.total_count ?? 0) - (recorded?.n ?? 0))
+    : 0
+
+  return ok(c, { campaignId, audienceSource, unaccounted, counts, contacts })
+})
+
 /* ── POST /api/campaigns/:id/retry ─────────────────────────────────────── */
-// Retries only the currently-failed recipients of a campaign — never the ones
-// who already got the message. Omit `contactIds` to start a fresh retry round
-// (the server looks up whoever is failed right now); pass it back with the
-// `remaining` from the previous response to continue one already in progress,
-// same batching shape as /send + /send-batch. Safe to call again after a
-// retry round still leaves failures — it just re-derives the (now smaller)
-// failed set and goes again.
+// Retries everyone this campaign hasn't reached — never the ones who already
+// got the message. That covers both a recipient Meta rejected (a `failed`
+// row) and one the send never attempted at all (no row), which is what an
+// interrupted campaign leaves behind; see loadUnsentRecipients.
+//
+// Omit `contactIds` to start a fresh round (the server re-derives who is
+// outstanding right now); pass it back with the `remaining` from the previous
+// response to continue one already in progress, same batching shape as /send
+// + /send-batch. Safe to call again after a round still leaves failures — the
+// outstanding set is recomputed each time, so it only ever shrinks.
 
 campaigns.post('/:id/retry', async (c) => {
   const campaignId = Number(c.req.param('id'))
   if (!Number.isInteger(campaignId)) throw new HTTPException(400, { message: 'Invalid campaign id' })
 
   const campaign = await c.env.DB.prepare(
-    `SELECT id, template_name, template_language, variables FROM campaigns WHERE id = ?`,
+    `SELECT id, template_name, template_language, variables, audience, total_count FROM campaigns WHERE id = ?`,
   ).bind(campaignId).first()
   if (!campaign) throw new HTTPException(404, { message: 'Campaign not found' })
 
@@ -427,14 +558,20 @@ campaigns.post('/:id/retry', async (c) => {
     ? body.contactIds.map(Number).filter(Number.isInteger)
     : null
 
-  const failedIds = explicitIds ?? await loadFailedContactIds(c.env.DB, campaignId)
-  if (failedIds.length === 0) {
-    throw new HTTPException(400, { message: 'No failed messages to retry' })
+  let outstandingIds = explicitIds
+  if (!outstandingIds) {
+    const { contacts } = await loadUnsentRecipients(c.env.DB, campaign, {
+      includeUnrecorded: body?.includeUnrecorded === true,
+    })
+    outstandingIds = contacts.map((contact) => contact.id)
+  }
+  if (outstandingIds.length === 0) {
+    throw new HTTPException(400, { message: 'Nothing left to retry on this campaign' })
   }
 
   const limit = batchLimit(c.env)
-  const batchIds = failedIds.slice(0, limit)
-  const remainingIds = failedIds.slice(limit)
+  const batchIds = outstandingIds.slice(0, limit)
+  const remainingIds = outstandingIds.slice(limit)
 
   const template = await resolveCampaignTemplate(c.env, campaign.template_name, campaign.template_language)
   const variableMap = campaign.variables ? JSON.parse(campaign.variables) : {}
@@ -442,10 +579,21 @@ campaigns.post('/:id/retry', async (c) => {
 
   // Filter to sendable contacts first (opted-out contacts are dropped by
   // loadRecipients and should keep their old failed row untouched, not get
-  // claimed and left stuck at 'pending'), then atomically claim only those —
-  // see claimFailedRecipients for why this makes overlapping retries safe.
+  // claimed and left stuck at 'pending'), then atomically claim only those.
+  //
+  // The two kinds of outstanding recipient need opposite claims: one already
+  // has a row to flip back to 'pending', the other has no row to flip and
+  // needs one inserted. Both claims are atomic and both no-op against a row
+  // that some overlapping retry already took, so whichever request gets there
+  // first is the only one that sends — see claimFailedRecipients /
+  // claimRecipients.
   const candidates = await loadRecipients(c.env.DB, batchIds)
-  const recipients = await claimFailedRecipients(c.env.DB, campaignId, candidates)
+  const failedSet = new Set(await loadFailedContactIds(c.env.DB, campaignId))
+  const [reclaimed, freshlyClaimed] = await Promise.all([
+    claimFailedRecipients(c.env.DB, campaignId, candidates.filter((r) => failedSet.has(r.id))),
+    claimRecipients(c.env.DB, campaignId, candidates.filter((r) => !failedSet.has(r.id))),
+  ])
+  const recipients = [...reclaimed, ...freshlyClaimed]
 
   const outcomes = recipients.length > 0
     ? await sendToRecipients(c.env, {

@@ -45,6 +45,7 @@ const ALERT_TONES = {
   error: { cls: 'bg-tint-danger border-tint-danger-line text-danger', icon: 'alert' },
   success: { cls: 'bg-tint-ok border-tint-ok-line text-ok', icon: 'check' },
   info: { cls: 'bg-brand-soft border-tint-brand-line text-ink', icon: 'alert' },
+  warn: { cls: 'bg-tint-warn border-tint-warn-line text-[#b8830f] dark:text-accent', icon: 'alert' },
 }
 
 export function Alert({ tone = 'info', children }) {
