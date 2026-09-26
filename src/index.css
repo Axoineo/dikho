@@ -63,7 +63,15 @@ body {
    because sibling text carrying its own colour class still looks fine.
    Every WhatsApp inbox conversation row is a <button>, so inherit here. */
 button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
+/* Same preflight gap as the colour above, and the one that actually shows:
+   without a reset a <button> keeps the UA default `background-color:
+   buttonface` — a light grey (#efefef) that ignores the theme entirely. Every
+   WhatsApp inbox conversation row is a <button> whose resting state sets no
+   background class, so the whole chat list rendered as white boxes in dark
+   mode. Tailwind-styled buttons across the app are all written assuming this
+   reset exists; the legacy .primary-button/.icon-button/.secondary-button
+   family each set their own background and are unaffected. */
+button { cursor: pointer; background-color: transparent; background-image: none; }
 button:disabled { cursor: default; }
 
 /* ============================================================
