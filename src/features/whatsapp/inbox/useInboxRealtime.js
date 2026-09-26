@@ -7,7 +7,9 @@ import { supabase } from '../../../lib/supabase'
 //
 // This is the whole "WebSocket engine" on the client — Supabase Realtime rides a
 // single multiplexed WS connection, so there is no server to run by hand.
-export function useInboxRealtime({ onNewMessage, onMessageUpdated, onStatus, onConversationUpdated }) {
+export function useInboxRealtime({
+  onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync,
+}) {
   useEffect(() => {
     const channel = supabase
       .channel('wa-inbox')
@@ -15,8 +17,12 @@ export function useInboxRealtime({ onNewMessage, onMessageUpdated, onStatus, onC
       .on('broadcast', { event: 'message:updated' }, ({ payload }) => onMessageUpdated?.(payload))
       .on('broadcast', { event: 'status:update' }, ({ payload }) => onStatus?.(payload))
       .on('broadcast', { event: 'conversation:updated' }, ({ payload }) => onConversationUpdated?.(payload))
-      .subscribe()
+      // Broadcasts are fire-and-forget: anything sent while the socket was
+      // down is simply gone, never replayed. SUBSCRIBED fires on the initial
+      // connect *and* on every reconnect, which is exactly when the client
+      // has to reconcile against D1 rather than assume it kept up.
+      .subscribe((status) => { if (status === 'SUBSCRIBED') onResync?.() })
 
     return () => { supabase.removeChannel(channel) }
-  }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated])
+  }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync])
 }

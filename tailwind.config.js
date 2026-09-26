@@ -43,6 +43,19 @@ export default {
           'brand-line': 'rgba(56, 128, 200, 0.28)',
         },
 
+        // Inbox surfaces, defined in src/index.css for both themes. The inbox
+        // needs a depth level the generic surface/page pair doesn't cover: a
+        // canvas set back from the chrome so message bubbles lift off it.
+        chat: {
+          shell: 'var(--chat-shell)',
+          canvas: 'var(--chat-canvas)',
+          'bubble-in': 'var(--chat-bubble-in)',
+          'bubble-out': 'var(--chat-bubble-out)',
+          'bubble-out-text': 'var(--chat-bubble-out-text)',
+          raised: 'var(--chat-raised)',
+          ring: 'var(--chat-ring)',
+        },
+
         // WhatsApp's own client colours, for the message preview only.
         // Deliberately not themed: it mimics their app, not this dashboard.
         wa: {

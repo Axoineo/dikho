@@ -29,8 +29,8 @@ export function MessageBubble({ message, onOpenMedia }) {
       <div
         className={`max-w-[76%] rounded-2xl px-2.5 py-1.5 text-[14px] leading-[20px] sm:max-w-[68%]
           ${outbound
-            ? 'rounded-br-md bg-[#e8f1fc] text-gray-900 ring-1 ring-[#185494]/10 dark:bg-[#1d4e74] dark:text-white dark:ring-white/5'
-            : 'rounded-bl-md bg-white text-gray-900 ring-1 ring-black/[0.06] dark:bg-[#202c33] dark:text-white dark:ring-white/5'}`}
+            ? 'rounded-br-md bg-chat-bubble-out text-chat-bubble-out-text ring-1 ring-chat-ring'
+            : 'rounded-bl-md bg-chat-bubble-in text-ink ring-1 ring-chat-ring'}`}
       >
         {hasMedia && (
           <div className={`overflow-hidden ${message.body ? 'mb-1' : ''} ${isImageOrVideo ? '-mx-1 -mt-0.5 rounded-xl' : ''}`}>
@@ -40,7 +40,7 @@ export function MessageBubble({ message, onOpenMedia }) {
         {message.body && <p className="whitespace-pre-wrap break-words pr-12">{message.body}</p>}
 
         <span className={`float-right ml-2 mt-1 flex select-none items-center gap-0.5 text-[10.5px] leading-none
-          ${outbound ? 'text-[#185494]/70 dark:text-white/60' : 'text-gray-400 dark:text-gray-400'}`}>
+          ${outbound ? 'text-[#185494]/70 dark:text-white/70' : 'text-muted'}`}>
           {formatTime(message.wa_timestamp || message.created_at)}
           {outbound && <Ticks status={message.status} />}
         </span>

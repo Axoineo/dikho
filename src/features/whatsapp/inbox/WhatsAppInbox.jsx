@@ -94,7 +94,48 @@ export default function WhatsAppInbox() {
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, avatar_url } : c)))
   }, [])
 
-  useInboxRealtime({ onNewMessage, onMessageUpdated, onStatus, onConversationUpdated })
+  // Re-read the inbox from D1, which is the source of truth. The realtime
+  // broadcast is best-effort and is never replayed, so every event sent while
+  // the socket was down — a sleeping laptop, a network hop, a Supabase
+  // reconnect — is lost for good. Until now nothing recovered from that: the
+  // list was fetched once on mount and afterwards only ever patched by
+  // broadcasts, so a dropped socket left the inbox frozen on stale
+  // conversations until someone reloaded the page by hand.
+  const refresh = useCallback(async () => {
+    const openId = activeIdRef.current
+    const [convs, thread] = await Promise.all([
+      waApi.conversations().catch(() => null),
+      openId ? waApi.messages(openId).catch(() => null) : null,
+    ])
+    if (convs) {
+      setConversations(sortConvs((convs.conversations || []).map((conv) => (
+        // Don't let the server resurrect a badge on the thread the agent is
+        // already reading — markRead may not have landed yet.
+        conv.id === openId ? { ...conv, unread_count: 0 } : conv
+      ))))
+    }
+    // Guard against a thread switch mid-flight clobbering the new one.
+    if (thread && activeIdRef.current === openId) setMessages(thread.messages || [])
+  }, [])
+
+  useInboxRealtime({ onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync: refresh })
+
+  // Reconcile whenever we might have missed something: coming back to the tab,
+  // and on a slow timer as a backstop for a socket that is nominally up but
+  // silently dropping events. Paused while hidden so a backgrounded tab costs
+  // nothing. These are D1 reads, which are cheap — the free-tier limit that
+  // bites is row *writes*.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', refresh)
+    const poll = setInterval(onVisible, 25000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', refresh)
+      clearInterval(poll)
+    }
+  }, [refresh])
 
   const activeConv = conversations.find((c) => c.id === activeId) || null
 
@@ -121,12 +162,12 @@ export default function WhatsAppInbox() {
 
   return (
    <MediaTicketProvider>
-    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden rounded-2xl border border-black/[0.07] bg-white shadow-sm dark:border-white/[0.08] dark:bg-[#0f1a20]">
+    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden rounded-2xl border border-line bg-chat-shell shadow-sm">
       {/* Left — conversation list */}
-      <aside className="flex w-full max-w-[360px] shrink-0 flex-col border-r border-black/[0.07] dark:border-white/[0.08]">
+      <aside className="flex w-full max-w-[360px] shrink-0 flex-col border-r border-line">
         <header className="flex items-center justify-between px-5 pb-1 pt-4">
-          <h1 className="text-[19px] font-semibold tracking-tight text-gray-900 dark:text-white">Inbox</h1>
-          <span className="rounded-full bg-[#185494]/10 px-2 py-0.5 text-[12px] font-semibold text-[#185494] dark:bg-[#185494]/25 dark:text-[#7cb2ea]">
+          <h1 className="text-[19px] font-semibold tracking-tight text-ink">Inbox</h1>
+          <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[12px] font-semibold text-brand dark:text-[#5ba0e0]">
             {conversations.length}
           </span>
         </header>
