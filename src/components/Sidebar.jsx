@@ -169,7 +169,26 @@ function WhatsAppGroup({ collapsed, onNavigate }) {
         title={collapsed ? 'WhatsApp Marketing' : undefined}
       >
         <span className="nav-icon"><SidebarIcon name="whatsapp" size={20} /></span>
-        <span className="nav-label">WhatsApp Marketing</span>
+        {/* "WhatsApp", not "WhatsApp Marketing": the full name needs 137px and
+            the 248px row leaves ~155px for label *and* badge, so the two
+            together truncated the label to "WhatsApp Marketi…". The six
+            sub-items below make the module obvious, page titles still read
+            "WhatsApp Marketing", and the collapsed-rail tooltip keeps the
+            full name. */}
+        <span className="nav-label">WhatsApp</span>
+        {/* Amber rather than the brand blue used for the active state, so the
+            badge reads as "in progress" instead of looking like a selected
+            item. Hidden when the rail is collapsed, same as the chevron —
+            there is no room for it beside a bare icon. Contrast checked in
+            both themes (5.1:1 on white, 6.2:1 on the dark sidebar). */}
+        <span
+          className={`ml-1.5 shrink-0 rounded-full bg-[#f9af1b]/15 px-1.5 py-[1px] text-[9.5px]
+            font-extrabold uppercase leading-[15px] tracking-[0.5px] text-[#8a5f0a]
+            dark:bg-[#f9af1b]/[0.18] dark:text-[#f9af1b]
+            ${collapsed ? 'hidden' : ''}`}
+        >
+          Beta
+        </span>
         <span
           className={`inline-flex shrink-0 items-center text-[#185494]/35 transition-transform duration-200 dark:text-[#b4c3d7]/30
             ${expanded ? 'rotate-90' : ''}
