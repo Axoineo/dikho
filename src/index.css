@@ -56,7 +56,13 @@ body {
   /* Native checkboxes, radios and range/progress inherit the brand colour. */
   accent-color: var(--brand-blue);
 }
-button, input, select, textarea { font: inherit; }
+/* Tailwind's preflight is off (see tailwind.config.js), so nothing resets the
+   UA default `color: buttontext` on a <button>. Text inside one therefore
+   falls back to BLACK rather than the theme's --text the moment a colour
+   class fails to apply — invisible on a dark surface, and hard to trace
+   because sibling text carrying its own colour class still looks fine.
+   Every WhatsApp inbox conversation row is a <button>, so inherit here. */
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; }
 
