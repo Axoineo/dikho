@@ -17,7 +17,13 @@ async function authHeader() {
 async function unwrap(res) {
   const body = await res.json().catch(() => null)
   if (!res.ok || body?.success === false) {
-    throw new Error(body?.error?.message || `Request failed (${res.status})`)
+    const err = new Error(body?.error?.message || `Request failed (${res.status})`)
+    // The envelope's machine-readable code, so a caller can tell an ordinary
+    // outcome (CALL_UNAVAILABLE — another tab picked up) from a real failure
+    // without string-matching the message.
+    err.code = body?.error?.code ?? null
+    err.status = res.status
+    throw err
   }
   return body.data
 }
@@ -98,4 +104,17 @@ export const waApi = {
   },
   mediaTicket: () => apiGet('/whatsapp/media-ticket'),
   typing: (id) => apiPost(`/whatsapp/conversations/${id}/typing`),
+
+  /* ── Voice calls ──────────────────────────────────────────────────────
+     Signalling only. The audio never goes through the Worker — these just
+     relay the browser's SDP answer to Meta. See inbox/useWhatsAppCall.js. */
+  calls: (conversationId) => apiGet(
+    `/whatsapp/calls${conversationId ? `?conversationId=${conversationId}` : ''}`,
+  ),
+  callPreAccept: (wacid, sdp, phone) =>
+    apiPost(`/whatsapp/calls/${encodeURIComponent(wacid)}/pre-accept`, { sdp, phone }),
+  callAccept: (wacid, sdp, phone) =>
+    apiPost(`/whatsapp/calls/${encodeURIComponent(wacid)}/accept`, { sdp, phone }),
+  callReject: (wacid) => apiPost(`/whatsapp/calls/${encodeURIComponent(wacid)}/reject`),
+  callHangUp: (wacid) => apiPost(`/whatsapp/calls/${encodeURIComponent(wacid)}/terminate`),
 }

@@ -1,4 +1,5 @@
 import { AuthedMedia } from './AuthedMedia'
+import { Icon } from '../../../components/Icon'
 import { formatTime } from './inboxUtils'
 
 // Delivery ticks: single grey (sent), double grey (delivered), double blue (read).
@@ -19,7 +20,33 @@ function Ticks({ status }) {
   return <svg viewBox="0 0 24 24" width="12" height="11" className={base} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></svg>
 }
 
+// A finished voice call, written into the thread by the calls webhook. Its
+// `status` carries the outcome (completed | missed | rejected | failed) and
+// `body` the label the Worker already formatted ("Voice call · 2:05").
+function CallBubble({ message }) {
+  const answered = message.status === 'received' || message.status === 'completed'
+  return (
+    <div className="flex justify-start px-2 py-[3px] sm:px-4">
+      <div className="flex max-w-[76%] items-center gap-2.5 rounded-2xl rounded-bl-md bg-chat-bubble-in
+        px-3 py-2 text-[14px] text-ink ring-1 ring-chat-ring sm:max-w-[68%]">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full
+          ${answered ? 'bg-tint-ok text-ok' : 'bg-tint-danger text-danger'}`}>
+          <Icon name={answered ? 'phone' : 'phoneMissed'} size={16} />
+        </span>
+        <span className="leading-tight">
+          {message.body || 'Voice call'}
+          <span className="ml-2 select-none text-[10.5px] text-muted">
+            {formatTime(message.wa_timestamp || message.created_at)}
+          </span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function MessageBubble({ message, onOpenMedia }) {
+  if (message.type === 'call') return <CallBubble message={message} />
+
   const outbound = message.direction === 'outbound'
   const hasMedia = message.type !== 'text' && (message.media_url || message.media_status)
   const isImageOrVideo = (message.media_mime || '').startsWith('image/') || (message.media_mime || '').startsWith('video/')

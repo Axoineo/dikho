@@ -9,6 +9,7 @@ import { supabase } from '../../../lib/supabase'
 // single multiplexed WS connection, so there is no server to run by hand.
 export function useInboxRealtime({
   onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync,
+  onCallIncoming, onCallEnded, onCallClaimed,
 }) {
   useEffect(() => {
     const channel = supabase
@@ -17,6 +18,13 @@ export function useInboxRealtime({
       .on('broadcast', { event: 'message:updated' }, ({ payload }) => onMessageUpdated?.(payload))
       .on('broadcast', { event: 'status:update' }, ({ payload }) => onStatus?.(payload))
       .on('broadcast', { event: 'conversation:updated' }, ({ payload }) => onConversationUpdated?.(payload))
+      // Voice calls. `call:incoming` carries Meta's SDP offer and is the one
+      // event here with a deadline — the Worker sends it before it does any
+      // bookkeeping, because a ringing call is dead in ~30 seconds and
+      // redelivery cannot save it the way it saves a message.
+      .on('broadcast', { event: 'call:incoming' }, ({ payload }) => onCallIncoming?.(payload))
+      .on('broadcast', { event: 'call:ended' }, ({ payload }) => onCallEnded?.(payload))
+      .on('broadcast', { event: 'call:claimed' }, ({ payload }) => onCallClaimed?.(payload))
       // Broadcasts are fire-and-forget: anything sent while the socket was
       // down is simply gone, never replayed. SUBSCRIBED fires on the initial
       // connect *and* on every reconnect, which is exactly when the client
@@ -24,5 +32,6 @@ export function useInboxRealtime({
       .subscribe((status) => { if (status === 'SUBSCRIBED') onResync?.() })
 
     return () => { supabase.removeChannel(channel) }
-  }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync])
+  }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync,
+      onCallIncoming, onCallEnded, onCallClaimed])
 }

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
 import { Icon } from '../components/Icon'
 import { MAX_SESSION_MS, INACTIVITY_MS, WARN_BEFORE_MS } from '../app/constants'
+import { WhatsAppCallCenter } from '../features/whatsapp/inbox/WhatsAppCallCenter'
 import Login from '../features/auth/Login'
 
 export default function AuthenticatedLayout() {
@@ -167,6 +168,10 @@ export default function AuthenticatedLayout() {
           </Suspense>
         </main>
       </div>
+
+      {/* Inbound WhatsApp voice calls. Mounted at the layout so a call rings on
+          every CRM screen, not just the Inbox. */}
+      <WhatsAppCallCenter />
 
       {showSessionWarning && (
         <div className="session-warning-overlay" role="dialog" aria-modal="true" aria-label="Session expiry warning">

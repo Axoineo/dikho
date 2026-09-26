@@ -21,6 +21,7 @@
 | **[Database Schema](docs/DATABASE.md)** | Tables, columns, RLS policies, views, migrations, money invariants |
 | **[Contributing](CONTRIBUTING.md)** | Setup, development workflow, coding conventions, security guidelines |
 | **[Deployment](docs/DEPLOYMENT.md)** | Cloudflare, Docker, Edge Functions, CI/CD, production checklist |
+| **[WhatsApp calling](docs/whatsapp-calling.md)** | Receiving inbound WhatsApp voice calls in the CRM: setup, architecture, limits |
 
 ---
 
