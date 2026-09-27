@@ -11,6 +11,12 @@
   "compatibility_date": "2026-08-20",
   "main": "src/api/worker.js",
   "workers_dev": true,
+  // Drains the delivery-receipt backlog (src/api/services/whatsapp/reconcile.js).
+  // Receipts that beat their own wamid into the database are parked as
+  // 'unmatched' by the webhook; this sweep applies them minutes later.
+  "triggers": {
+    "crons": ["*/10 * * * *"]
+  },
   "observability": {
     "enabled": true
   },

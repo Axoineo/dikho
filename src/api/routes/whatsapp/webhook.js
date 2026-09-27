@@ -4,6 +4,7 @@ import { logEvent, logError } from '../../utils/logger.js'
 import { verifyMetaSignature } from '../../services/whatsapp/verifyMetaSignature.js'
 import { processInboundMessage } from '../../services/whatsapp/inbound.js'
 import { broadcast } from '../../services/whatsapp/realtime.js'
+import { STATUS_COLUMN, STATUS_RANK, storedRankSql } from '../../services/whatsapp/messageStatus.js'
 
 const webhook = new Hono()
 
@@ -78,31 +79,14 @@ function extractEvents(payload) {
   return events
 }
 
-const STATUS_COLUMN = {
-  sent: 'sent_at',
-  delivered: 'delivered_at',
-  read: 'read_at',
-  failed: 'failed_at',
-}
-
-// Never downgrade: a late "delivered" must not overwrite a "read" that already
-// arrived, since Meta does not guarantee receipt ordering. The stored status
-// is ranked inline in SQL so the comparison happens in a single statement.
-const STATUS_RANK = { pending: 0, sent: 1, delivered: 2, read: 3, failed: 4 }
-
-const STORED_RANK_SQL = `CASE status
-  WHEN 'pending' THEN 0
-  WHEN 'sent' THEN 1
-  WHEN 'delivered' THEN 2
-  WHEN 'read' THEN 3
-  WHEN 'failed' THEN 4
-  ELSE 0 END`
-
 // Applies a delivery/read receipt to the matching outbound message, then pushes
 // the tick change to open agent tabs so the bubble's status icon updates live.
+// Returns true when the receipt landed on a message row. A false means the
+// wamid is not in `messages` yet — the caller parks the event for replay
+// rather than ACKing it away (see ../../services/whatsapp/reconcile.js).
 async function processStatus(c, event) {
   const column = STATUS_COLUMN[event.status]
-  if (!column) return
+  if (!column) return true
 
   const at = event.timestamp
     ? new Date(Number(event.timestamp) * 1000).toISOString()
@@ -110,7 +94,7 @@ async function processStatus(c, event) {
 
   const result = await c.env.DB.prepare(
     `UPDATE messages
-     SET status = CASE WHEN ?1 > (${STORED_RANK_SQL}) THEN ?2 ELSE status END,
+     SET status = CASE WHEN ?1 > (${storedRankSql()}) THEN ?2 ELSE status END,
          ${column} = COALESCE(${column}, ?3),
          error_code = COALESCE(?4, error_code),
          error_message = COALESCE(?5, error_message)
@@ -126,7 +110,8 @@ async function processStatus(c, event) {
 
   // Only broadcast when a row actually matched (ignores receipts for messages we
   // never stored, e.g. legacy sends). The UI keys on the wamid.
-  if ((result.meta?.changes ?? 0) > 0) {
+  const matched = (result.meta?.changes ?? 0) > 0
+  if (matched) {
     await broadcast(c.env, 'status:update', {
       messageId: event.messageId,
       status: event.status,
@@ -134,11 +119,16 @@ async function processStatus(c, event) {
       errorMessage: event.errorMessage,
     })
   }
+  return matched
 }
 
 async function processEvent(c, event) {
   if (event.type === 'status') return processStatus(c, event)
-  if (event.type === 'message') return processInboundMessage(c, event)
+  if (event.type === 'message') {
+    await processInboundMessage(c, event)
+    return true
+  }
+  return true
 }
 
 // --- POST /api/whatsapp/webhook — inbound messages + delivery receipts ----
@@ -211,12 +201,17 @@ webhook.post('/', async (c) => {
     if (!claim) continue
 
     try {
-      await processEvent(c, event)
+      // A campaign send writes wamids back only after the whole batch of Meta
+      // calls returns, so a fast receipt — Meta's 131049 policy rejections come
+      // back in milliseconds — can beat its own message row to the wamid. That
+      // used to be marked 'processed' and silently lost; park it as 'unmatched'
+      // so the reconciler applies it once the wamid lands.
+      const matched = await processEvent(c, event)
       await c.env.DB.prepare(
         `UPDATE webhook_events
-         SET processing_status = 'processed', processed_at = datetime('now')
-         WHERE idempotency_key = ?`,
-      ).bind(event.idempotencyKey).run()
+         SET processing_status = ?1, processed_at = datetime('now')
+         WHERE idempotency_key = ?2`,
+      ).bind(matched ? 'processed' : 'unmatched', event.idempotencyKey).run()
     } catch (err) {
       // Processing failed. Park the row as 'failed' and keep going: one bad
       // event (an unsupported shape, a media fetch that 404s) must not hold

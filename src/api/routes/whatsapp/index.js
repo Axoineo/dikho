@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { requireAuth } from '../../middleware/requireAuth.js'
 import { ok } from '../../utils/response.js'
 import { signMediaTicket } from '../../services/whatsapp/mediaTicket.js'
+import { reconcileInbound, reconcileStatuses } from '../../services/whatsapp/reconcile.js'
 import webhook from './webhook.js'
 import conversations from './conversations.js'
 import media from './media.js'
@@ -20,6 +21,18 @@ whatsapp.route('/media', media)
 whatsapp.get('/media-ticket', requireAuth, async (c) => {
   const ticket = await signMediaTicket(c.env.WHATSAPP_APP_SECRET)
   return ok(c, { ticket })
+})
+
+// Drains delivery receipts the webhook could not attach to a row at the time
+// (see services/whatsapp/reconcile.js). A cron in wrangler.api.jsonc runs the
+// same sweep; this route is the manual handle, and `?includeProcessed=1`
+// widens it to receipts ACKed before the backlog flag existed.
+whatsapp.post('/reconcile', requireAuth, async (c) => {
+  const includeProcessed = c.req.query('includeProcessed') === '1'
+  const sinceIso = c.req.query('since') ?? null
+  const result = await reconcileStatuses(c.env.DB, { includeProcessed, sinceIso })
+  const inbound = await reconcileInbound(c)
+  return ok(c, { ...result, inbound })
 })
 
 // Inbox data routes are dashboard-only.
