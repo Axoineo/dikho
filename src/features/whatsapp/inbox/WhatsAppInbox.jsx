@@ -162,18 +162,13 @@ export default function WhatsAppInbox() {
 
   return (
    <MediaTicketProvider>
-    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden rounded-2xl border border-line bg-chat-shell shadow-sm">
+    {/* Full-bleed panes divided by hairlines — no card, no outer radius, no
+        shadow. The floating-card treatment is what made the inbox read as a
+        widget inside a dashboard rather than as a chat client. */}
+    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden bg-chat-shell">
       {/* Left — conversation list */}
-      <aside className="flex w-full max-w-[360px] shrink-0 flex-col border-r border-line">
-        <header className="flex items-center justify-between px-5 pb-1 pt-4">
-          <h1 className="text-[19px] font-semibold tracking-tight text-ink">Inbox</h1>
-          <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[12px] font-semibold text-brand dark:text-[#5ba0e0]">
-            {conversations.length}
-          </span>
-        </header>
-        <div className="min-h-0 flex-1">
-          <ChatList conversations={conversations} activeId={activeId} onSelect={openConversation} loading={loadingConvs} />
-        </div>
+      <aside className="flex w-full max-w-[400px] shrink-0 flex-col border-r border-chat-ring">
+        <ChatList conversations={conversations} activeId={activeId} onSelect={openConversation} loading={loadingConvs} />
       </aside>
 
       {/* Middle — active conversation */}

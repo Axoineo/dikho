@@ -1,15 +1,15 @@
 import { useRef, useState } from 'react'
 import { waApi } from '../../../lib/api'
-import { sessionMsLeft, formatCountdown, displayName } from './inboxUtils'
+import { sessionMsLeft, displayName } from './inboxUtils'
 
 const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😎','🤩','🥳','👍','👎','🙏','👏','🙌','💪','🔥','✨','🎉','✅','❌','⚠️','❤️','💙','💯','🤝','🙂','😉','😅','😢','😡','🤔','👌','👋','💰','📎','📄','📷','🕒']
 
-// Attachment menu — the CRM-relevant subset of WhatsApp's menu (img1). Camera,
+// Attachment menu — the CRM-relevant subset of WhatsApp's menu. Camera,
 // contacts, polls etc. are omitted as not useful for a business inbox.
 const ATTACH = [
-  { key: 'document', label: 'Document', accept: '*/*', color: '#7c5cfc',
+  { key: 'document', label: 'Document', accept: '*/*', color: '#7f66ff',
     icon: <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z M14 3v6h6" /> },
-  { key: 'media', label: 'Photos & videos', accept: 'image/*,video/*', color: '#0aa5e0',
+  { key: 'media', label: 'Photos & videos', accept: 'image/*,video/*', color: '#007bfc',
     icon: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="8.5" cy="10" r="1.5" /><path d="M21 16l-5-5L5 21" /></> },
 ]
 
@@ -18,7 +18,6 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
   const [busy, setBusy] = useState(false)
   const [menu, setMenu] = useState(null) // 'attach' | 'emoji' | null
   const fileRef = useRef(null)
-  const acceptRef = useRef('*/*')
   const lastTypingRef = useRef(0)
 
   const msLeft = sessionMsLeft(conversation.last_inbound_at)
@@ -33,12 +32,22 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
     waApi.typing(conversation.id).catch(() => {})
   }
 
+  // Closed window: the composer is replaced outright, at composer height, so
+  // the chat keeps its shape instead of growing an amber warning strip. The
+  // live countdown for the open case is a system notice on the canvas.
   if (!withinWindow) {
     return (
-      <div className="border-t border-black/10 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-800 dark:border-white/10 dark:bg-amber-950/40 dark:text-amber-200">
-        ⏳ The 24-hour messaging window has closed. You can only send a pre-approved{' '}
-        <b>Template</b> until {displayName(conversation)} replies again.
-        <a href="/whatsapp/templates" className="ml-1 font-semibold underline">Open Templates →</a>
+      <div className="flex shrink-0 items-center gap-3 border-l border-chat-ring bg-chat-bar px-4 py-3.5 text-[13.5px] leading-relaxed text-chat-sub">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" /></svg>
+        <span className="min-w-0">
+          The 24-hour reply window has closed. <b className="font-semibold text-chat-text">{displayName(conversation)}</b> must message first, or send an approved template.
+        </span>
+        <a
+          href="/whatsapp/templates"
+          className="ml-auto shrink-0 rounded-full bg-chat-accent px-4 py-2 text-[13.5px] font-medium text-chat-on-accent no-underline"
+        >
+          Send a template
+        </a>
       </div>
     )
   }
@@ -52,9 +61,7 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
   }
 
   function pickFile(accept) {
-    acceptRef.current = accept
     setMenu(null)
-    // set accept then open
     if (fileRef.current) { fileRef.current.accept = accept; fileRef.current.click() }
   }
 
@@ -66,24 +73,19 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
     try { await onSendMedia(file, text.trim()); setText('') } finally { setBusy(false) }
   }
 
-  return (
-    <div className="relative border-t border-line bg-chat-shell">
-      {/* low-session warning strip */}
-      {msLeft < 60 * 60 * 1000 && (
-        <div className="px-4 pt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-          ⏳ Session closes in {formatCountdown(msLeft)} — free-form replies disabled after that.
-        </div>
-      )}
+  const canSend = !busy && !!text.trim()
 
+  return (
+    <div className="relative shrink-0 border-l border-chat-ring bg-chat-bar">
       {/* click-away layer for popovers */}
       {menu && <div className="fixed inset-0 z-10" onClick={() => setMenu(null)} />}
 
       {/* attachment menu */}
       {menu === 'attach' && (
-        <div className="absolute bottom-16 left-3 z-20 w-56 overflow-hidden rounded-xl border border-line bg-chat-raised py-1 shadow-xl">
+        <div className="absolute bottom-16 left-3 z-20 w-56 overflow-hidden rounded-xl bg-chat-raised py-1 shadow-xl ring-1 ring-chat-ring">
           {ATTACH.map((a) => (
             <button key={a.key} type="button" onClick={() => pickFile(a.accept)}
-              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[14px] text-ink hover:bg-line-soft">
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[14px] text-chat-text hover:bg-chat-row-hover">
               <span className="flex h-9 w-9 items-center justify-center rounded-full text-white" style={{ backgroundColor: a.color }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{a.icon}</svg>
               </span>
@@ -95,25 +97,25 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
 
       {/* emoji popover */}
       {menu === 'emoji' && (
-        <div className="absolute bottom-16 left-3 z-20 grid w-64 grid-cols-8 gap-1 rounded-xl border border-line bg-chat-raised p-2 shadow-xl">
+        <div className="absolute bottom-16 left-3 z-20 grid w-64 grid-cols-8 gap-1 rounded-xl bg-chat-raised p-2 shadow-xl ring-1 ring-chat-ring">
           {EMOJIS.map((em) => (
-            <button key={em} type="button" onClick={() => { setText((t) => t + em); }}
-              className="rounded p-1 text-xl hover:bg-line-soft">{em}</button>
+            <button key={em} type="button" onClick={() => { setText((t) => t + em) }}
+              className="rounded p-1 text-xl hover:bg-chat-row-hover">{em}</button>
           ))}
         </div>
       )}
 
-      <form onSubmit={submitText} className="flex items-end gap-1.5 px-4 py-3">
+      <form onSubmit={submitText} className="flex items-end gap-2 py-[5px] pl-2.5 pr-4">
         <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
 
         <button type="button" title="Emoji" onClick={() => setMenu(menu === 'emoji' ? null : 'emoji')}
-          className="shrink-0 rounded-full p-2 text-muted hover:bg-line-soft">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" strokeLinecap="round" /><circle cx="9" cy="10" r="0.6" fill="currentColor" /><circle cx="15" cy="10" r="0.6" fill="currentColor" /></svg>
+          className="mb-1.5 grid h-10 w-10 shrink-0 place-items-center rounded-full text-chat-sub hover:bg-chat-ring">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" strokeLinecap="round" /><circle cx="9" cy="10" r="0.7" fill="currentColor" /><circle cx="15" cy="10" r="0.7" fill="currentColor" /></svg>
         </button>
 
         <button type="button" title="Attach" onClick={() => setMenu(menu === 'attach' ? null : 'attach')}
-          className="shrink-0 rounded-full p-2 text-muted hover:bg-line-soft">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21.4 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" /></svg>
+          className="mb-1.5 grid h-10 w-10 shrink-0 place-items-center rounded-full text-chat-sub hover:bg-chat-ring">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M21.4 11.05l-8.49 8.49a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" /></svg>
         </button>
 
         <textarea
@@ -123,12 +125,15 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
           onChange={(e) => { setText(e.target.value); if (e.target.value.trim()) pingTyping() }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitText() } }}
           placeholder="Type a message"
-          className="max-h-32 flex-1 resize-none rounded-xl border border-line bg-chat-canvas px-3.5 py-2.5 text-[14px] text-ink outline-none focus:border-brand placeholder:text-muted"
+          className="my-[5px] max-h-32 min-h-[42px] flex-1 resize-none rounded-lg bg-chat-input px-3 py-[11px] text-[15px] leading-5 text-chat-text outline-none placeholder:text-chat-sub"
         />
 
-        <button type="submit" disabled={busy || !text.trim()} title="Send"
-          className="shrink-0 rounded-full bg-brand p-2.5 text-white transition-opacity disabled:opacity-40">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4l17.45-8.06a.5.5 0 0 0 0-.9L3.4 3.38a.5.5 0 0 0-.7.58L4.6 11 2.7 19.82a.5.5 0 0 0 .7.58z" /></svg>
+        {/* No filled circle: the glyph simply turns green once there is
+            something to send, which is how the client signals it. */}
+        <button type="submit" disabled={!canSend} title="Send"
+          className={`mb-1.5 grid h-10 w-10 shrink-0 place-items-center rounded-full transition-colors
+            ${canSend ? 'text-chat-accent hover:bg-chat-ring' : 'cursor-default text-chat-sub opacity-60'}`}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.4l17.45-8.06a.5.5 0 0 0 0-.9L3.4 3.38a.5.5 0 0 0-.7.58L4.6 11 2.7 19.82a.5.5 0 0 0 .7.58z" /></svg>
         </button>
       </form>
     </div>

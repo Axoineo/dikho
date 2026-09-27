@@ -9,6 +9,8 @@ export default {
 
   theme: {
     extend: {
+      borderRadius: { bubble: '7.5px' },
+      boxShadow: { bubble: 'var(--chat-shadow)' },
       colors: {
         // Mapped to the design tokens in src/index.css. Using these instead of
         // literal palette classes (bg-gray-900) means a colour only has to be
@@ -48,12 +50,24 @@ export default {
         // canvas set back from the chrome so message bubbles lift off it.
         chat: {
           shell: 'var(--chat-shell)',
+          bar: 'var(--chat-bar)',
           canvas: 'var(--chat-canvas)',
           'bubble-in': 'var(--chat-bubble-in)',
           'bubble-out': 'var(--chat-bubble-out)',
           'bubble-out-text': 'var(--chat-bubble-out-text)',
           raised: 'var(--chat-raised)',
           ring: 'var(--chat-ring)',
+          text: 'var(--chat-text)',
+          sub: 'var(--chat-sub)',
+          accent: 'var(--chat-accent)',
+          'accent-ink': 'var(--chat-accent-ink)',
+          tick: 'var(--chat-tick)',
+          chip: 'var(--chat-chip)',
+          'row-active': 'var(--chat-row-active)',
+          'row-hover': 'var(--chat-row-hover)',
+          input: 'var(--chat-input)',
+          'on-accent': 'var(--chat-on-accent)',
+          meta: 'var(--chat-meta)',
         },
 
         // WhatsApp's own client colours, for the message preview only.
