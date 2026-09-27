@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
 function SidebarIcon({ name, size = 20 }) {
@@ -150,10 +150,16 @@ const WHATSAPP_ITEMS = [
 function WhatsAppGroup({ collapsed, onNavigate }) {
   const { pathname } = useLocation()
   const sectionActive = pathname.startsWith('/whatsapp')
-  // Opens itself when you're inside the section, then stays under user control.
+  // Closed by default: the five sub-items only appear once the group is opened.
+  // It opens itself on the way *into* the section (deep link, or a link from
+  // another page), but never forces itself back open afterwards, so the
+  // chevron can always close it again.
   const [open, setOpen] = useState(sectionActive)
-
-  const expanded = open || sectionActive
+  const wasSectionActive = useRef(sectionActive)
+  useEffect(() => {
+    if (sectionActive && !wasSectionActive.current) setOpen(true)
+    wasSectionActive.current = sectionActive
+  }, [sectionActive])
 
   // The trigger reuses `.nav-item` from index.css rather than re-implementing
   // it in Tailwind — it is visually the same control as the items above it,
@@ -164,13 +170,13 @@ function WhatsAppGroup({ collapsed, onNavigate }) {
         type="button"
         className={`nav-item ${sectionActive ? 'bg-[#185494]/[0.06] text-[#185494] dark:bg-[#185494]/[0.12] dark:text-[#5ba0e0]' : ''}`}
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={expanded}
+        aria-expanded={open}
         title={collapsed ? 'WhatsApp Marketing' : undefined}
       >
         <span className="nav-icon"><SidebarIcon name="whatsapp" size={20} /></span>
         {/* "WhatsApp", not "WhatsApp Marketing": the full name needs 137px and
             the 248px row leaves ~155px for label *and* badge, so the two
-            together truncated the label to "WhatsApp Marketi…". The six
+            together truncated the label to "WhatsApp Marketi…". The five
             sub-items below make the module obvious, page titles still read
             "WhatsApp Marketing", and the collapsed-rail tooltip keeps the
             full name. */}
@@ -192,42 +198,47 @@ function WhatsAppGroup({ collapsed, onNavigate }) {
         </span>
         <span
           className={`inline-flex shrink-0 items-center text-[#185494]/35 transition-transform duration-200 dark:text-[#b4c3d7]/30
-            ${expanded ? 'rotate-90' : ''}
+            ${open ? 'rotate-90' : ''}
             ${collapsed ? 'w-0 overflow-hidden opacity-0' : ''}`}
         >
           <SidebarIcon name="chevron" />
         </span>
       </button>
 
-      <div
-        hidden={!expanded}
-        className={`ml-[21px] flex flex-col gap-0.5 border-l border-[#185494]/[0.14] pl-2.5
-          dark:border-white/[0.08] ${collapsed ? 'hidden' : ''}`}
-      >
-        {WHATSAPP_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={onNavigate}
-            title={collapsed ? item.label : undefined}
-            className={({ isActive }) => `flex min-h-[32px] items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5
-              text-[12.8px] no-underline transition-colors
-              ${isActive
-                ? 'bg-[#185494]/10 font-semibold text-[#185494] dark:bg-[#185494]/[0.22] dark:text-[#5ba0e0]'
-                : 'font-medium text-[#185494]/55 hover:bg-[#185494]/5 hover:text-[#185494]/85 dark:text-[#b4c3d7]/55 dark:hover:bg-white/5 dark:hover:text-[#c8d7e6]/90'}`}
-          >
-            {({ isActive }) => (
-              <>
-                <span className={`inline-flex shrink-0 ${isActive ? 'opacity-100' : 'opacity-70'}`}>
-                  <SidebarIcon name={item.icon} size={17} />
-                </span>
-                <span className="nav-label">{item.label}</span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
+      {/* Mounted only while open, rather than hidden with the `hidden`
+          attribute: the UA's `[hidden] { display: none }` loses to the `flex`
+          utility class on the same element, and Tailwind's preflight — off in
+          this project — is not there to close that gap, so the panel stayed
+          visible in every state. The collapsed rail has no room for it at all. */}
+      {open && !collapsed && (
+        <div
+          className="ml-[21px] flex flex-col gap-0.5 border-l border-[#185494]/[0.14] pl-2.5
+            dark:border-white/[0.08]"
+        >
+          {WHATSAPP_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              onClick={onNavigate}
+              className={({ isActive }) => `flex min-h-[32px] items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5
+                text-[12.8px] no-underline transition-colors
+                ${isActive
+                  ? 'bg-[#185494]/10 font-semibold text-[#185494] dark:bg-[#185494]/[0.22] dark:text-[#5ba0e0]'
+                  : 'font-medium text-[#185494]/55 hover:bg-[#185494]/5 hover:text-[#185494]/85 dark:text-[#b4c3d7]/55 dark:hover:bg-white/5 dark:hover:text-[#c8d7e6]/90'}`}
+            >
+              {({ isActive }) => (
+                <>
+                  <span className={`inline-flex shrink-0 ${isActive ? 'opacity-100' : 'opacity-70'}`}>
+                    <SidebarIcon name={item.icon} size={17} />
+                  </span>
+                  <span className="nav-label">{item.label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
