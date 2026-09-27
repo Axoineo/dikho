@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { City, Country, State } from 'country-state-city'
-import { supabase } from '../../lib/supabase'
+import { apiPublicPost } from '../../lib/api'
 import { SearchableSelect } from '../../components/SearchableSelect'
 
 /* ─── Constants ────────────────────────────────────────────────────── */
 const TURNSTILE_SITEKEY = '0x4AAAAAAEnxgBvSPuBu7S85'
+// Bound into the token and re-checked by the Worker, so a token minted on the
+// vendor form cannot be replayed against lead submission.
+// Must match ACTION_CG_LEAD in src/api/routes/public/index.js.
+const TURNSTILE_ACTION = 'cg-lead'
 const DRIVE_CATALOGUE_URL = 'https://www.dropbox.com/scl/fo/hvs3nrxa5zfwyols7undr/AFJBK3hZ5JMtl0XUEyPY9sI?rlkey=9n71uwcr2splnw6de89q7ie9d&st=xknk2n8z&dl=0'
 
 /* ─── Cloudflare Turnstile ─────────────────────────────────────────── */
-function TurnstileWidget({ onVerify, onExpire }) {
+// `resetRef` is filled with a function that mints a fresh challenge. Tokens are
+// single-use — siteverify answers `timeout-or-duplicate` the second time — so a
+// failed submit must reset the widget or every retry fails for the wrong reason.
+function TurnstileWidget({ onVerify, onExpire, resetRef }) {
   const containerRef = useRef(null)
   const widgetIdRef = useRef(null)
   const [loading, setLoading] = useState(true)
@@ -28,6 +35,7 @@ function TurnstileWidget({ onVerify, onExpire }) {
       if (cancelled || !window.turnstile || !containerRef.current || widgetIdRef.current != null) return
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: TURNSTILE_SITEKEY,
+        action: TURNSTILE_ACTION,
         callback: (token) => { if (!cancelled) { setLoading(false); onVerifyRef.current(token) } },
         'expired-callback': () => { if (!cancelled) onExpireRef.current() },
         'before-interactive-callback': () => { if (!cancelled) setLoading(false) },
@@ -57,6 +65,14 @@ function TurnstileWidget({ onVerify, onExpire }) {
       }
     }
 
+    if (resetRef) {
+      resetRef.current = () => {
+        if (widgetIdRef.current != null && window.turnstile) {
+          try { window.turnstile.reset(widgetIdRef.current) } catch {}
+        }
+      }
+    }
+
     return () => {
       cancelled = true
       if (widgetIdRef.current != null && window.turnstile) {
@@ -64,6 +80,7 @@ function TurnstileWidget({ onVerify, onExpire }) {
         widgetIdRef.current = null
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // ← empty array: mount once, never re-run
 
   return (
@@ -235,6 +252,7 @@ export default function PublicClientWelcome() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [captchaToken, setCaptchaToken] = useState(null)
+  const captchaResetRef = useRef(null)
   const [submittedCompany, setSubmittedCompany] = useState('')
 
   const [form, setForm] = useState({
@@ -389,17 +407,25 @@ export default function PublicClientWelcome() {
         city: form.city.trim(),
       }
 
-      // Corporate-gifting leads go to their own table (not the CRM clients list),
-      // through a SECURITY DEFINER RPC — the anon role has no direct INSERT on
-      // cg_leads. See migration 20260925000000_public_write_rpcs.
-      const { error: insertError } = await supabase.rpc('public_submit_cg_lead', { p_lead: payload })
-      if (insertError) throw insertError
+      // Corporate-gifting leads go to their own table (not the CRM clients
+      // list), through a SECURITY DEFINER RPC — and now via the API Worker
+      // rather than supabase.rpc, so the Turnstile token is verified against
+      // siteverify before anything is written. The anon role no longer has
+      // EXECUTE on that function — see 20260927000000_turnstile_lockdown.sql.
+      await apiPublicPost('/cg-lead', {
+        'cf-turnstile-response': captchaToken,
+        lead: payload,
+      })
 
       setSubmittedCompany(form.company_name.trim())
       setSubmitted(true)
     } catch (err) {
       console.error(err)
       setError(err?.message || 'Submission failed. Please try again.')
+      // The token was spent by the attempt above (single-use), so clear it and
+      // mint a fresh challenge — otherwise a retry fails as a duplicate.
+      setCaptchaToken(null)
+      captchaResetRef.current?.()
     } finally {
       setSaving(false)
     }
@@ -520,6 +546,7 @@ export default function PublicClientWelcome() {
               <TurnstileWidget
                 onVerify={t => { setCaptchaToken(t); setError('') }}
                 onExpire={() => setCaptchaToken(null)}
+                resetRef={captchaResetRef}
               />
               <div style={{ display: 'flex', gap: '0px' }}>
                 <button type="submit" className="pvf-btn-submit-pill" disabled={saving || !captchaToken} style={{ marginRight: '0px' }}>

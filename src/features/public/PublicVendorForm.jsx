@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { City, Country, State } from 'country-state-city'
 import { supabase } from '../../lib/supabase'
+import { apiPublicPost } from '../../lib/api'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import { Icon } from '../../components/Icon'
 
 /* ─── Cloudflare Turnstile ──────────────────────────────────────────────
-   Get your free sitekey: https://dash.cloudflare.com/?to=/:account/turnstile
-   The key below is the always-pass TEST key. Replace with your real one.
+   Live "managed" widget. The sitekey is public by design; the paired secret
+   lives only as a Worker secret and is checked server-side in
+   src/api/services/turnstile.js — the token this widget produces proves
+   nothing until POST /api/public/vendor verifies it against siteverify.
+   Manage the widget: https://dash.cloudflare.com/?to=/:account/turnstile
 ────────────────────────────────────────────────────────────────────── */
 const TURNSTILE_SITEKEY = '0x4AAAAAAEnxgBvSPuBu7S85'
 
-function TurnstileWidget({ onVerify, onExpire }) {
+// Bound into the token and re-checked by the Worker, so a token minted on the
+// corporate-gifting form cannot be replayed against vendor registration.
+// Must match ACTION_VENDOR_REGISTER in src/api/routes/public/index.js.
+const TURNSTILE_ACTION = 'vendor-register'
+
+// `resetRef` is filled with a function that mints a fresh challenge. Tokens are
+// single-use — siteverify answers `timeout-or-duplicate` the second time — so a
+// failed submit must reset the widget or every retry fails for the wrong reason.
+function TurnstileWidget({ onVerify, onExpire, resetRef }) {
   const containerRef = useRef(null)
   const widgetIdRef = useRef(null)
   const stableVerify = useCallback(onVerify, [])
@@ -21,10 +33,14 @@ function TurnstileWidget({ onVerify, onExpire }) {
       if (!window.turnstile || !containerRef.current || widgetIdRef.current != null) return
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: TURNSTILE_SITEKEY,
+        action: TURNSTILE_ACTION,
         callback: stableVerify,
         'expired-callback': stableExpire,
         theme: 'light',
-        size: 'invisible',
+        // 'normal', not 'invisible': this is a "managed" widget, and 'invisible'
+        // is not a value the current render API accepts — it was silently
+        // ignored, so the widget has always drawn visibly here.
+        size: 'normal',
       })
     }
     if (window.turnstile) {
@@ -35,13 +51,21 @@ function TurnstileWidget({ onVerify, onExpire }) {
       s.async = true; s.defer = true; s.onload = init
       document.head.appendChild(s)
     }
+    if (resetRef) {
+      resetRef.current = () => {
+        if (widgetIdRef.current != null && window.turnstile) {
+          try { window.turnstile.reset(widgetIdRef.current) } catch {}
+        }
+      }
+    }
+
     return () => {
       if (widgetIdRef.current != null && window.turnstile) {
         try { window.turnstile.remove(widgetIdRef.current) } catch {}
         widgetIdRef.current = null
       }
     }
-  }, [stableVerify, stableExpire])
+  }, [stableVerify, stableExpire, resetRef])
 
   return <div ref={containerRef} />
 }
@@ -204,6 +228,7 @@ export default function PublicVendorForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [captchaToken, setCaptchaToken] = useState(null)
+  const captchaResetRef = useRef(null)
 
   const [form, setForm] = useState({
     company_name: '',
@@ -434,13 +459,25 @@ export default function PublicVendorForm() {
         zipcode: form.zipcode.trim() || null,
       }
 
-      const { error: rpcErr } = await supabase.rpc('public_register_vendor', { p_vendor, p_address })
-      if (rpcErr) throw rpcErr
+      // Through the API Worker, not supabase.rpc: the Worker verifies the
+      // Turnstile token against siteverify and only then calls
+      // public_register_vendor with the service-role key. The anon role no
+      // longer has EXECUTE on that function — see migration
+      // 20260927000000_turnstile_lockdown.sql.
+      await apiPublicPost('/vendor', {
+        'cf-turnstile-response': captchaToken,
+        vendor: p_vendor,
+        address: p_address,
+      })
 
       setSubmitted(true)
     } catch (err) {
       console.error(err)
       setError(err?.message || 'Submission failed. Please try again.')
+      // The token was spent by the attempt above (single-use), so clear it and
+      // mint a fresh challenge — otherwise a retry fails as a duplicate.
+      setCaptchaToken(null)
+      captchaResetRef.current?.()
     } finally {
       setSaving(false)
     }
@@ -784,6 +821,7 @@ export default function PublicVendorForm() {
                   <TurnstileWidget
                     onVerify={t => { setCaptchaToken(t); setError('') }}
                     onExpire={() => setCaptchaToken(null)}
+                    resetRef={captchaResetRef}
                   />
                 </div>
 

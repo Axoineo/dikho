@@ -33,7 +33,15 @@
   // no secret value).
   "vars": {
     "CAMPAIGN_BATCH_LIMIT": "40",
-    "CAMPAIGN_CONCURRENCY": "5"
+    "CAMPAIGN_CONCURRENCY": "5",
+    // Hostnames Turnstile's siteverify may report as the page that solved the
+    // challenge, for the public form routes (src/api/services/turnstile.js).
+    // Non-secret (these are public domains), and kept HERE rather than as a
+    // remote-only var so a deploy can never silently drop it — the same trap
+    // that wiped the Meta IDs. `.dev.vars` overrides this for local dev, which
+    // is why localhost/127.0.0.1 are deliberately absent: a token solved on an
+    // attacker's own localhost page must not verify against production.
+    "TURNSTILE_HOSTNAMES": "manage.dikho.in,dikho.pages.dev"
   },
   // The API code reads this as `c.env.DB`, so the binding name must stay "DB".
   "d1_databases": [

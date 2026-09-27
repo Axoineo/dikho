@@ -35,5 +35,39 @@ SUPABASE_SEND_SMS_HOOK_SECRET=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 
-# Comma-separated list of origins allowed to call authenticated /api routes.
+# Comma-separated list of origins allowed to call /api routes. This must also
+# list whatever origin serves the PUBLIC forms (/vendor/register and
+# /corporategifting), or their POST to /api/public/* is blocked by CORS.
 ALLOWED_ORIGINS=https://manage.dikho.in,http://localhost:5173
+
+# ─── Cloudflare Turnstile ───────────────────────────────────────────────────
+# Gates the two unauthenticated public form writes (/api/public/vendor and
+# /api/public/cg-lead). See src/api/services/turnstile.js.
+#
+# Secret for widget 0x4AAAAAAEnxgBvSPuBu7S85 ("managed" mode). Read it with:
+#   npx wrangler turnstile widget get 0x4AAAAAAEnxgBvSPuBu7S85 --json
+# and set it in production WITHOUT putting it on the command line:
+#   npx wrangler secret put TURNSTILE_SECRET --name dikho-api
+# The verification fails CLOSED if this is missing, so a dropped secret breaks
+# the forms rather than quietly leaving them open.
+TURNSTILE_SECRET=
+
+# Comma-separated hostnames siteverify is allowed to report as the page that
+# solved the challenge. PRODUCTION MUST NOT include localhost/127.0.0.1 —
+# otherwise a token solved on an attacker's local page would be accepted.
+#   local:      localhost,127.0.0.1
+#   production: manage.dikho.in,dikho.pages.dev
+# These must also be listed as the widget's allowed domains in the Cloudflare
+# dashboard (currently: 127.0.0.1, dikho.pages.dev, localhost, manage.dikho.in).
+TURNSTILE_HOSTNAMES=localhost,127.0.0.1
+
+# ─── Supabase service role ──────────────────────────────────────────────────
+# Lets the Worker call public_register_vendor / public_submit_cg_lead after the
+# Turnstile check passes. Migration 20260927000000_turnstile_lockdown.sql revokes
+# anon's EXECUTE on those functions, so this is the only way in.
+#
+# This key bypasses Row Level Security completely. It must NEVER be given a
+# VITE_ prefix or put in .env.local — that would ship it to the browser. Set it
+# in production with:
+#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name dikho-api
+SUPABASE_SERVICE_ROLE_KEY=

@@ -143,6 +143,92 @@ supabase db push
 ```
 Alternatively, copy-paste the migration contents into the Supabase Dashboard → SQL Editor.
 
+## Cloudflare Turnstile (public forms)
+
+The two unauthenticated forms — `/vendor/register` and `/corporategifting` — are
+protected by Turnstile widget `0x4AAAAAAEnxgBvSPuBu7S85` ("managed" mode).
+
+**The widget alone protects nothing.** The token it produces is only meaningful
+because `POST /api/public/vendor` and `POST /api/public/cg-lead` on the
+`dikho-api` Worker verify it against Cloudflare's `siteverify` before writing
+(`src/api/services/turnstile.js`), and because `anon` no longer has `EXECUTE` on
+the underlying RPCs (`20260927000000_turnstile_lockdown.sql`). Removing either
+half turns the check back into decoration.
+
+Three things are checked, not just `success`:
+
+| Check | Why |
+|-------|-----|
+| `success === true` | the challenge was actually solved |
+| `action` matches | a token minted on one form can't be replayed against the other |
+| `hostname` in allowlist | a token solved on an attacker's page is rejected |
+
+The `action` values are bound in two places and must stay in sync:
+`TURNSTILE_ACTION` in each form under `src/features/public/`, and
+`ACTION_VENDOR_REGISTER` / `ACTION_CG_LEAD` in `src/api/routes/public/index.js`.
+A widget rendered with no `action` gets no `action` back from `siteverify`, so a
+mismatch fails *every* submit — it shows up as `turnstile.rejected` in
+`wrangler tail`.
+
+### Worker configuration
+
+| Variable | Notes |
+|----------|-------|
+| `TURNSTILE_SECRET` | Widget secret. `npx wrangler secret put TURNSTILE_SECRET --name dikho-api` |
+| `TURNSTILE_HOSTNAMES` | Comma-separated. Committed as a plain var in `wrangler.api.jsonc` (non-sensitive, and vars in the config file survive deploys). **Production must not include `localhost`/`127.0.0.1`** — `.dev.vars` overrides it locally. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Lets the Worker call the locked-down RPCs. Never `VITE_`-prefixed. |
+| `SUPABASE_URL` | Already required by `requireAuth`. |
+| `ALLOWED_ORIGINS` | Must include whatever origin serves the public forms, or their POST is blocked by CORS. |
+
+Read the secret without putting it on a command line or in chat:
+```bash
+npx wrangler turnstile widget get 0x4AAAAAAEnxgBvSPuBu7S85 --json | jq -er '.secret'
+```
+
+Verification fails **closed**: if `TURNSTILE_SECRET` or `TURNSTILE_HOSTNAMES` is
+missing, the forms break (HTTP 500) rather than silently accepting writes.
+
+### Rollout order (this ordering matters)
+
+The lockdown migration and the frontend are coupled the same way the Phase 1/2
+public-write split was:
+
+1. Set `TURNSTILE_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` on `dikho-api`
+   (`TURNSTILE_HOSTNAMES` ships in `wrangler.api.jsonc`, so a deploy sets it).
+2. `npm run deploy:api` — publishes `/api/public/*`. Safe on its own: the live
+   bundle still calls the RPCs directly, so nothing switches over yet.
+3. **Merge/push to `main`** — the SPA is a Cloudflare **Pages** project
+   (`dikho`, Git-connected, auto-builds Production from `main`). This is the step
+   that points the forms at the Worker. Note `npm run deploy` does *not* do this
+   — it deploys the unused `dikho-so-po` Worker, which no domain points at.
+4. Verify **both** public forms submit end to end.
+5. Apply `supabase/migrations/20260927000000_turnstile_lockdown.sql`.
+
+Two ordering hazards, both of which break the live forms:
+
+- **Step 3 before step 1.** The forms start posting to the Worker, which fails
+  closed — missing `TURNSTILE_SECRET` returns 500, and a missing
+  `SUPABASE_SERVICE_ROLE_KEY` fails at the RPC call. Because step 3 is a plain
+  `git push`, this is easy to trigger by accident: set the secrets first.
+- **Step 5 before steps 2-3.** The deployed bundle is still calling the RPC as
+  `anon`, so every submit fails with "permission denied for function".
+
+### Testing
+
+Cloudflare's dummy secrets exercise each branch without a real challenge:
+
+```bash
+# always passes / always fails / always "already spent"
+for s in 1x0000000000000000000000000000000AA          2x0000000000000000000000000000000AA          3x0000000000000000000000000000000AA; do
+  curl -sS https://challenges.cloudflare.com/turnstile/v0/siteverify     -H 'Content-Type: application/x-www-form-urlencoded'     -d "secret=$s&response=dummy"; echo
+done
+```
+
+Tokens are **single-use** — a second `siteverify` call with the same token
+returns `timeout-or-duplicate`. Both forms therefore reset their widget after a
+failed submit, so a retry gets a fresh challenge instead of failing as a
+duplicate.
+
 ## CI/CD: GitHub Actions
 
 Workflow: `.github/workflows/node.js.yml`
@@ -180,6 +266,10 @@ Before launching to production, complete the following checks:
 8. [ ] Run `npm run build` successfully before deploying
 9. [ ] Test the public vendor registration form at `/vendor/register` works
 10. [ ] Verify device-check function is deployed: `supabase functions list`
+11. [ ] Set `TURNSTILE_SECRET`, `TURNSTILE_HOSTNAMES` and `SUPABASE_SERVICE_ROLE_KEY` on `dikho-api`
+12. [ ] Confirm `TURNSTILE_HOSTNAMES` in production excludes `localhost` and `127.0.0.1`
+13. [ ] Apply `20260927000000_turnstile_lockdown.sql` **only after** the Worker and SPA are live (see Rollout order)
+14. [ ] Confirm both public forms still submit after the lockdown migration
 
 ## Known Limitations
 
@@ -188,3 +278,8 @@ Before launching to production, complete the following checks:
 - No staging environment is configured.
 - No automated database backup strategy is currently documented.
 - Edge Function observability relies solely on Supabase dashboard logs.
+- The vendor form's document upload still goes straight from the browser to
+  Supabase storage under an anon INSERT policy, so it is **not** behind
+  Turnstile — a bot can push objects into `vendors_documents/` without touching
+  the verified RPC path. Closing this means proxying the upload through the
+  Worker (or moving it to R2).

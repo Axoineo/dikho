@@ -42,6 +42,21 @@ export async function apiDelete(path, payload) {
   }))
 }
 
+// Unauthenticated POST to an /api/public route (the two public forms). No
+// Authorization header by design: these routes carry no session and are gated
+// server-side on a Cloudflare Turnstile token in the body, which the Worker
+// checks against siteverify before it writes anything.
+//
+// The API is cross-origin from this SPA, so the Worker's ALLOWED_ORIGINS must
+// list whatever origin serves the public forms.
+export async function apiPublicPost(path, payload) {
+  return unwrap(await fetch(`${BASE}/public${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+}
+
 // Builds a direct, streamable URL for re-hosted media using a signed ticket, so
 // <img>/<video>/<iframe> can load it without an Authorization header. Returns
 // null until a ticket is available.
