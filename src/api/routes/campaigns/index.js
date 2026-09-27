@@ -346,14 +346,25 @@ campaigns.get('/stats', async (c) => {
   const [contactCount, campaignCount, messageStats] = await c.env.DB.batch([
     c.env.DB.prepare('SELECT COUNT(*) AS total FROM contacts WHERE opted_out = 0'),
     c.env.DB.prepare('SELECT COUNT(*) AS total FROM campaigns'),
+    // Campaign sends only. `messages` also carries the inbox — inbound customer
+    // messages and the free-form replies agents type — and counting those here
+    // inflated every campaign number on the overview (12 agent replies were
+    // being reported as marketing sends).
+    //
+    // `accepted` is everything Meta's API took from us. `awaiting` is the
+    // subset still holding a `sent` with no terminal receipt: Meta accepted it
+    // and has told us nothing since. Meta's own reporting does not count those
+    // as sent, which is most of why the two dashboards disagree.
     c.env.DB.prepare(
       `SELECT
          COUNT(*) AS total,
-         SUM(CASE WHEN status IN ('sent','delivered','read') THEN 1 ELSE 0 END) AS sent,
+         SUM(CASE WHEN status IN ('sent','delivered','read','failed') THEN 1 ELSE 0 END) AS accepted,
+         SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS awaiting,
          SUM(CASE WHEN status IN ('delivered','read') THEN 1 ELSE 0 END) AS delivered,
          SUM(CASE WHEN status = 'read' THEN 1 ELSE 0 END) AS read_count,
          SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-       FROM messages`,
+       FROM messages
+       WHERE campaign_id IS NOT NULL AND direction = 'outbound'`,
     ),
   ])
 
@@ -362,7 +373,8 @@ campaigns.get('/stats', async (c) => {
     contacts: contactCount.results[0]?.total ?? 0,
     campaigns: campaignCount.results[0]?.total ?? 0,
     messages: stats.total ?? 0,
-    sent: stats.sent ?? 0,
+    accepted: stats.accepted ?? 0,
+    awaiting: stats.awaiting ?? 0,
     delivered: stats.delivered ?? 0,
     read: stats.read_count ?? 0,
     failed: stats.failed ?? 0,

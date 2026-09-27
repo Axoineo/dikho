@@ -56,6 +56,13 @@ export async function processInboundMessage(c, event) {
 
   // 2. Conversation upsert. unread_count++ and last_inbound_at (which powers the
   //    24-hour session window) both advance here.
+  //
+  //    The "last message" fields only move forward. Meta does not guarantee
+  //    webhook ordering, and a replayed backlog message (see ./reconcile.js)
+  //    is older still — either would otherwise rewind the chat list to a stale
+  //    preview and drop the thread down the ordering. The unread count and the
+  //    open status advance unconditionally, because an out-of-order message is
+  //    no less unread. ISO-8601 strings compare correctly with `<`.
   await db.prepare(
     `INSERT INTO conversations
        (contact_id, phone, wa_name, last_message_at, last_message_preview,
@@ -64,10 +71,14 @@ export async function processInboundMessage(c, event) {
      ON CONFLICT(phone) DO UPDATE SET
        contact_id = COALESCE(conversations.contact_id, ?1),
        wa_name = COALESCE(?3, conversations.wa_name),
-       last_message_at = ?4,
-       last_message_preview = ?5,
-       last_message_direction = 'inbound',
-       last_inbound_at = ?4,
+       last_message_at = MAX(COALESCE(conversations.last_message_at, ?4), ?4),
+       last_message_preview = CASE
+         WHEN conversations.last_message_at IS NULL OR conversations.last_message_at <= ?4
+         THEN ?5 ELSE conversations.last_message_preview END,
+       last_message_direction = CASE
+         WHEN conversations.last_message_at IS NULL OR conversations.last_message_at <= ?4
+         THEN 'inbound' ELSE conversations.last_message_direction END,
+       last_inbound_at = MAX(COALESCE(conversations.last_inbound_at, ?4), ?4),
        unread_count = conversations.unread_count + 1,
        status = 'open',
        updated_at = datetime('now')`,

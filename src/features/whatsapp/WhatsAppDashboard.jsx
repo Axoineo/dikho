@@ -7,7 +7,7 @@ import { Alert, EmptyState, PageHeader, Panel, PanelHead } from './ui'
 const CARDS = [
   { key: 'contacts', label: 'Contacts', accent: 'var(--brand-blue)', hint: 'Subscribed audience' },
   { key: 'campaigns', label: 'Campaigns', accent: '#f9af1b', hint: 'Total sends' },
-  { key: 'sent', label: 'Messages sent', accent: '#4a8f6a', hint: 'Accepted by Meta' },
+  { key: 'accepted', label: 'Messages sent', accent: '#4a8f6a', hint: 'Accepted by Meta' },
   { key: 'delivered', label: 'Delivered', accent: '#53bdeb', hint: 'Confirmed on device' },
   { key: 'read', label: 'Read', accent: '#5ba0e0', hint: 'Opened by recipient' },
   { key: 'failed', label: 'Failed', accent: '#d9534f', hint: 'Rejected or undeliverable' },
@@ -35,8 +35,12 @@ export default function WhatsAppDashboard() {
     apiGet('/campaigns/stats').then(setStats).catch((err) => setError(err.message))
   }, [])
 
-  const rate = (part) => (stats && stats.sent > 0 ? Math.round((part / stats.sent) * 100) : null)
-  const deliveryRate = rate(stats?.delivered)
+  // Denominators match Meta's own reporting so the two dashboards can be read
+  // side by side: delivery is measured against what Meta accepted, and reads
+  // against what actually reached a phone. Dividing reads by `accepted` — as
+  // this did — reported 33% where Meta showed 63% on identical data.
+  const pct = (part, whole) => (stats && whole > 0 ? Math.round((part / whole) * 100) : null)
+  const deliveryRate = pct(stats?.delivered, stats?.accepted)
 
   return (
     <>
@@ -70,8 +74,9 @@ export default function WhatsAppDashboard() {
           ) : (
             <div className="overflow-hidden rounded-[10px] border border-line">
               {[
-                ['Delivery rate', `${deliveryRate}%`],
-                ['Read rate', `${rate(stats.read)}%`],
+                ['Delivery rate', `${deliveryRate}% of accepted`],
+                ['Read rate', `${pct(stats.read, stats.delivered)}% of delivered`],
+                ['Awaiting a receipt', stats.awaiting],
                 ['Failures', stats.failed],
               ].map(([key, value]) => (
                 <div key={key} className="flex items-center justify-between gap-4 border-b
