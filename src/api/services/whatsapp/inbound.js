@@ -18,6 +18,17 @@ function parseContent(m) {
     case 'audio':    return { type: 'audio', body: '', media: m.audio }
     case 'video':    return { type: 'video', body: m.video?.caption ?? '', media: m.video }
     case 'sticker':  return { type: 'sticker', body: '', media: m.sticker }
+    // A customer tapping a button or a list item arrives as its own type with
+    // the chosen label nested inside. Left unparsed it fell through to the
+    // placeholder below and the agent saw a literal "[interactive]" in the
+    // thread instead of what the customer actually chose.
+    case 'interactive': {
+      const i = m.interactive ?? {}
+      const reply = i.button_reply ?? i.list_reply ?? {}
+      return { type: 'interactive', body: reply.title ?? '[interactive]', media: null }
+    }
+    case 'button':   return { type: 'button', body: m.button?.text ?? '[button]', media: null }
+    case 'reaction': return { type: 'reaction', body: m.reaction?.emoji ?? '', media: null }
     default:         return { type: m.type ?? 'unknown', body: `[${m.type ?? 'unsupported message'}]`, media: null }
   }
 }

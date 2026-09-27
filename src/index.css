@@ -28,18 +28,39 @@
   /* Brand tint used by ::selection and native form controls. */
   --select-bg: rgba(24, 84, 148, 0.16);
 
-  /* WhatsApp inbox surfaces. A chat needs one more depth level than the rest
-     of the dashboard — a canvas set back from the chrome so bubbles lift off
-     it — which the generic --surface/--page pair cannot express. Kept as
-     tokens rather than literals in the components so dark mode is defined in
-     one place instead of a `dark:` hex on every element. */
-  --chat-shell: #ffffff;
-  --chat-canvas: #f5f6f8;
+  /* WhatsApp inbox surfaces. These deliberately leave the dashboard's palette
+     and follow WhatsApp Web's own, because the inbox is a WhatsApp client
+     first and a dashboard screen second: agents live in WhatsApp all day, and
+     a blue, card-shaped chat costs them time re-orienting. An earlier pass
+     went the other way (neutral ramp, brand blue) to keep the app visually
+     consistent — that trade was reversed on 2026-09-27 by product decision.
+     Scoped to --chat-* so no other screen moves. */
+  --chat-shell: #ffffff;          /* list + info panels                     */
+  --chat-bar: #f0f2f5;            /* headers, composer, search field        */
+  --chat-canvas: #efeae2;         /* thread background (warm, not grey)     */
   --chat-bubble-in: #ffffff;
-  --chat-bubble-out: #e8f1fc;
-  --chat-bubble-out-text: #263247;
-  --chat-raised: #ffffff;
-  --chat-ring: rgba(0, 0, 0, 0.06);
+  --chat-bubble-out: #d9fdd3;
+  --chat-bubble-out-text: #111b21;
+  --chat-raised: #ffffff;         /* day chips, system notices, popovers    */
+  --chat-ring: rgba(11, 20, 26, 0.08);
+  --chat-text: #111b21;
+  --chat-sub: #5b6a74;            /* WhatsApp ships #667781, which is 3.9:1
+                                     on the warm canvas — three shades down
+                                     clears AA everywhere and is visually
+                                     indistinguishable. 4.7:1 on #efeae2,
+                                     5.0:1 on #f0f2f5, 5.6:1 on #ffffff.     */
+  --chat-accent: #008069;         /* WhatsApp's LIGHT-theme green (it uses
+                                     #00a884 only in dark); white on it is
+                                     4.9:1, where #00a884 would be 3.0:1.    */
+  --chat-accent-ink: #017561;     /* green as TEXT — 4.8:1 on #ffffff       */
+  --chat-tick: #53bdeb;
+  --chat-chip: #d9fdd3;           /* active filter pill                     */
+  --chat-row-active: #f0f2f5;
+  --chat-row-hover: #f5f6f6;
+  --chat-input: #ffffff;
+  --chat-on-accent: #ffffff;      /* text/glyphs on an accent fill          */
+  --chat-meta: rgba(17, 27, 33, 0.65);  /* 5.2:1 on the outgoing bubble     */
+  --chat-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
 }
 
 * { box-sizing: border-box; }
@@ -1616,18 +1637,29 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   --focus-ring-soft: rgba(91, 160, 224, 0.4);
   --select-bg: rgba(91, 160, 224, 0.28);
 
-  /* The inbox used to carry WhatsApp Web's own dark palette (#0b141a canvas,
-     #0f1a20 chrome, #202c33 bubbles). Those are green-teal blacks and sat
-     visibly wrong next to this app's neutral --page/--surface, so the inbox
-     read as a different product in dark mode. These keep the extra depth a
-     chat needs but on the same neutral-cool ramp as everything else. */
-  --chat-shell: #1a1d23;
-  --chat-canvas: #0f1216;
-  --chat-bubble-in: #232831;
-  --chat-bubble-out: #1e4a72;
-  --chat-bubble-out-text: #eaf1fa;
-  --chat-raised: #242a33;
-  --chat-ring: rgba(255, 255, 255, 0.06);
+  /* WhatsApp Web's dark palette, matching the light block above. The inbox is
+     intentionally the one screen that does NOT sit on the app's neutral-cool
+     ramp; see the note on --chat-* in :root. */
+  --chat-shell: #111b21;
+  --chat-bar: #202c33;
+  --chat-canvas: #0b141a;
+  --chat-bubble-in: #202c33;
+  --chat-bubble-out: #005c4b;
+  --chat-bubble-out-text: #e9edef;  /* 13.1:1 on #005c4b                    */
+  --chat-raised: #182229;
+  --chat-ring: rgba(134, 150, 160, 0.15);
+  --chat-text: #e9edef;
+  --chat-sub: #8696a0;            /* 5.2:1 on #111b21, 4.8:1 on #202c33     */
+  --chat-accent: #00a884;
+  --chat-accent-ink: #21c063;     /* 7.1:1 on #111b21                       */
+  --chat-tick: #53bdeb;
+  --chat-chip: #103629;
+  --chat-row-active: #2a3942;
+  --chat-row-hover: #202c33;
+  --chat-input: #2a3942;
+  --chat-on-accent: #111b21;      /* dark ink on #00a884 = 5.8:1            */
+  --chat-meta: rgba(233, 237, 239, 0.75);  /* 4.6:1 on #005c4b              */
+  --chat-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
 }
 
 /* Dark-theme scrollbars: lift off the darker surface. */
