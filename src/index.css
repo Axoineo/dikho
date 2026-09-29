@@ -489,9 +489,9 @@ button, input, textarea, select { border: 0; }
   display: flex;
   flex-direction: column;
   border: 0;
-  border-right: 1px solid rgba(24, 84, 148, 0.14);
-  /* Square. The rounded boundary is drawn by .app-main's left edge instead —
-     see the note on .app-shell's background. */
+  /* No border-right here: .app-main owns the separator via its border-left,
+     which follows the rounded corners. A straight border-right on a square
+     sidebar creates visible notches where .app-main's curve pulls away. */
   border-radius: 0;
   padding: 0 8px;
   transition:
@@ -1254,6 +1254,9 @@ button, input, textarea, select { border: 0; }
      to these corners, so every module curves away from the rail identically
      regardless of what colour it paints. */
   border-radius: 14px 0 0 14px;
+  /* The separator lives here, not on .sidebar's border-right, so it follows
+     the rounded corners instead of running straight past them. */
+  border-left: 1px solid rgba(24, 84, 148, 0.14);
   overflow: hidden;
   transition: width 0.3s ease-in-out;
 }
@@ -2297,7 +2300,9 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 [data-theme="dark"] .sidebar {
   background: #1a1d23;
   color: rgba(200, 210, 225, 0.85);
-  border-color: #2a2e36;
+}
+[data-theme="dark"] .app-main {
+  border-left-color: #2a2e36;
 }
 [data-theme="dark"] .nav-item {
   color: rgba(180, 195, 215, 0.65);
