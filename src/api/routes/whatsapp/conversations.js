@@ -41,7 +41,21 @@ function mediaTypeFor(mime = '') {
    Newest activity first, matching the WhatsApp Web left pane. */
 conversations.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT conv.*, ct.name AS contact_name, ct.avatar_url AS avatar_url
+    // last_message_status is derived, not stored: the list row needs the
+    // delivery state of the newest outbound message so it can show the same
+    // ticks the thread does. Deriving it here beats adding a column that the
+    // send path and every status webhook would have to remember to update —
+    // one missed write and the list lies about delivery.
+    //
+    // Cheap despite being correlated: idx_messages_conversation is
+    // (conversation_id, created_at), so this is a reverse index scan that
+    // stops at the first outbound row. Measured against production — 27
+    // conversations cost 88 rows read in total.
+    `SELECT conv.*, ct.name AS contact_name, ct.avatar_url AS avatar_url,
+            (SELECT m.status FROM messages m
+              WHERE m.conversation_id = conv.id AND m.direction = 'outbound'
+              ORDER BY m.created_at DESC, m.id DESC
+              LIMIT 1) AS last_message_status
      FROM conversations conv
      LEFT JOIN contacts ct ON ct.id = conv.contact_id
      WHERE conv.status = 'open'

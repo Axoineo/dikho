@@ -28,6 +28,44 @@ const GLYPHS = {
   sticker: <path d="M12 2a10 10 0 1 0 10 10h-6a4 4 0 0 1-4-4V2z" />,
 }
 
+/* Same delivery states the thread shows, at list scale: one check sent, two
+   delivered, two blue read. Without this the row drew a fixed grey double
+   check on every outbound conversation, which claimed "delivered" even for a
+   message that had only just been queued — or had failed outright. */
+function RowTicks({ status }) {
+  if (status === 'failed') {
+    return (
+      <svg width="12" height="12" viewBox="0 0 24 24" className="shrink-0 text-danger" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+        <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.4h.01" />
+      </svg>
+    )
+  }
+  if (status === 'read' || status === 'delivered') {
+    return (
+      <svg viewBox="0 0 20 12" width="15" height="10"
+        className={`shrink-0 ${status === 'read' ? 'text-chat-tick' : ''}`}
+        fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 6.6l3.1 3.1L10.4 3.2" /><path d="M8.2 9.7L14.9 3.2" />
+      </svg>
+    )
+  }
+  if (status === 'sent' || status === 'queued') {
+    return (
+      <svg viewBox="0 0 12 12" width="11" height="10" className="shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 6.5l3.2 3.2L11 3" />
+      </svg>
+    )
+  }
+  // No status at all — an API that predates last_message_status being derived.
+  // Falls back to the neutral double check this row drew before, rather than
+  // asserting "sent" and downgrading every delivered message on a stale API.
+  return (
+    <svg viewBox="0 0 20 12" width="15" height="10" className="shrink-0" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 6.6l3.1 3.1L10.4 3.2" /><path d="M8.2 9.7L14.9 3.2" />
+    </svg>
+  )
+}
+
 // Returns { text, glyph } for one conversation's list row.
 function decodePreview(conv) {
   const raw = (conv.last_message_preview || '').trim()
@@ -188,7 +226,7 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
                 <span className="mt-[3px] flex items-center justify-between gap-2.5">
                   <span className="flex min-w-0 items-center gap-1 text-[12.8px] text-muted">
                     {conv.last_message_direction === 'outbound' && (
-                      <svg viewBox="0 0 18 12" width="14" height="10" className="shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 6.5l3.2 3.2L11 3" /><path d="M6.2 9.7L12.9 3" /></svg>
+                      <RowTicks status={conv.last_message_status} />
                     )}
                     {preview.glyph && (
                       <svg width="12.5" height="12.5" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">{preview.glyph}</svg>

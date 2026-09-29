@@ -217,13 +217,21 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
   }, [sectionActive])
 
   /* This group sits last in the rail, so opening it pushes five rows below the
-     fold — on a short window they simply were not there. Scroll the panel into
-     view once it has rendered, which also keeps the account block visible
-     because scrollIntoView stops as soon as the element fits. */
+     fold — on a short window they simply were not there.
+     scrollIntoView({block:'nearest'}) stops the instant the panel technically
+     fits, which parks the last row hard against the bottom edge and still
+     reads as cut off. Scroll the nav by hand instead, to the panel's bottom
+     plus a margin, so the group finishes clear of the edge. */
   useEffect(() => {
     if (!open || collapsed) return
     const id = requestAnimationFrame(() => {
-      panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      const panel = panelRef.current
+      const nav = panel?.closest('.sidebar-nav')
+      if (!panel || !nav) return
+      const BREATHING_ROOM = 16
+      const wantVisibleTo = panel.offsetTop + panel.offsetHeight + BREATHING_ROOM
+      const target = Math.min(wantVisibleTo - nav.clientHeight, nav.scrollHeight - nav.clientHeight)
+      if (target > nav.scrollTop) nav.scrollTo({ top: target, behavior: 'smooth' })
     })
     return () => cancelAnimationFrame(id)
   }, [open, collapsed])
