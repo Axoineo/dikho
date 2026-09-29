@@ -71,3 +71,30 @@ TURNSTILE_HOSTNAMES=localhost,127.0.0.1
 # in production with:
 #   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name dikho-api
 SUPABASE_SERVICE_ROLE_KEY=
+
+# ─── API Setu (GSTIN autofill) ──────────────────────────────────────────────
+# Backs GET /api/gstn/:gstin, which the public vendor form uses to auto-fill
+# legal name / trade name / address from a GSTIN.
+# See src/api/services/apisetu/client.js.
+#
+# Client id is public (shown in the API Setu console sidebar) and is already set
+# as a plain var in wrangler.api.jsonc; it is repeated here only so local
+# `wrangler dev` has it too.
+APISETU_CLIENT_ID=in.dikho
+
+# API Setu console > Consume APIs > API Keys > Create API Keys. Only issuable
+# once the GSTN subscription is APPROVED — while it is Pending, the key either
+# cannot be created or returns 401/403, which the Worker logs as
+# `apisetu.unauthorized`.
+# Set in production WITHOUT putting it on the command line:
+#   npx wrangler secret put APISETU_API_KEY --name dikho-api
+# Missing/blank simply disables autofill — the form still submits manually.
+APISETU_API_KEY=
+
+# Sent as the `Referer` header on every API Setu call, to satisfy the key's
+# "Whitelist Domain/Url" restriction. That restriction is built for browser
+# callers and matches on Origin/Referer, which a Worker does not send by
+# default — so this must equal whatever domain the key was created with.
+# Blank sends no Referer (correct for an unrestricted key).
+#   production: https://dikho-api.fineeurox.workers.dev
+APISETU_REFERER=

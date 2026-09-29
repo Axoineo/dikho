@@ -17,7 +17,12 @@ async function authHeader() {
 async function unwrap(res) {
   const body = await res.json().catch(() => null)
   if (!res.ok || body?.success === false) {
-    throw new Error(body?.error?.message || `Request failed (${res.status})`)
+    const err = new Error(body?.error?.message || `Request failed (${res.status})`)
+    // Carried alongside the message so callers can branch on the kind of
+    // failure without pattern-matching the wording — the GSTIN lookup needs to
+    // tell "no such GSTIN" (404) apart from "directory is down" (503).
+    err.status = res.status
+    throw err
   }
   return body.data
 }
@@ -55,6 +60,17 @@ export async function apiPublicPost(path, payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }))
+}
+
+// Unauthenticated GET for read-only public lookups (currently the GSTIN →
+// taxpayer autofill, GET /api/gstn/:gstin). No Authorization header by design:
+// the public vendor form has no session, and the route is protected server-side
+// by a format gate plus a per-IP rate limit rather than by a token.
+//
+// `signal` lets the caller abandon an in-flight lookup when the user keeps
+// typing, so a slow response can never land on top of a newer one.
+export async function apiPublicGet(path, { signal } = {}) {
+  return unwrap(await fetch(`${BASE}${path}`, { signal }))
 }
 
 // Builds a direct, streamable URL for re-hosted media using a signed ticket, so

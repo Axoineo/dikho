@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { City, Country, State } from 'country-state-city'
 import { supabase } from '../../lib/supabase'
 import { apiPublicPost } from '../../lib/api'
+import { useGstinLookup } from '../../lib/useGstinLookup'
+import { GSTIN_LENGTH, normalizeGstin, taxpayerToVendorFields } from '../../lib/gstin'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import { Icon } from '../../components/Icon'
 
@@ -88,6 +90,38 @@ function FieldGroup({ label, children, hint }) {
       {children}
       {hint && <span className="pvf-hint">{hint}</span>}
     </div>
+  )
+}
+
+/* ─── GSTIN lookup status ──────────────────────────────────────────────
+   Deliberately an inline hint in the same style as the PIN-code check, not a
+   blocking banner: every one of these states is something the user can simply
+   ignore and keep typing through.
+──────────────────────────────────────────────────────────────────────── */
+const GSTIN_HINT_TONE = {
+  checking: 'pvf-hint-warn',
+  filled: 'pvf-hint-ok',
+  notfound: 'pvf-hint-warn',
+  malformed: 'pvf-hint-warn',
+  error: 'pvf-hint-warn',
+}
+
+function GstinStatus({ lookup }) {
+  if (!lookup.message) return null
+
+  // 'warn' rather than 'error' throughout, on purpose. A failed lookup is a
+  // missing convenience, not a mistake the user made, and red text next to a
+  // field they filled in correctly reads as a rejection.
+  const tone = GSTIN_HINT_TONE[lookup.status] || 'pvf-hint-warn'
+  const canRetry = lookup.status === 'error'
+
+  return (
+    <span className={`pvf-hint ${tone}`} role="status" aria-live="polite">
+      {lookup.message}
+      {canRetry && (
+        <button type="button" className="pvf-gstin-retry" onClick={lookup.retry}>Try again</button>
+      )}
+    </span>
   )
 }
 
@@ -271,7 +305,16 @@ export default function PublicVendorForm() {
   const [dragActive, setDragActive] = useState(false)
   const [zipStatus, setZipStatus] = useState(null)
 
-  function update(key, val) { setForm(f => ({ ...f, [key]: val })) }
+  // Keys this component filled from the GST directory. A second lookup may
+  // replace its OWN values, but never something the user typed — and a field
+  // the user edits by hand drops out of the set (see update below), so it is
+  // theirs from then on.
+  const autofilledRef = useRef(new Set())
+
+  function update(key, val) {
+    autofilledRef.current.delete(key)
+    setForm(f => ({ ...f, [key]: val }))
+  }
 
   // Country / state / city cascades
   const states = useMemo(() =>
@@ -301,6 +344,53 @@ export default function PublicVendorForm() {
     setForm(f => ({ ...f, state_code: code, state: s?.name || '', city: '', zipcode: '' }))
     setZipStatus(null)
   }
+
+  /* ─── GSTIN auto-fill ───────────────────────────────────────────────────
+     Typing a full GSTIN pulls the vendor's registered details from the GST
+     directory via GET /api/gstn/:gstin (the API key stays in the Worker).
+     Everything about this is advisory: the fields stay editable, and any
+     failure leaves the user exactly where they were.
+  ──────────────────────────────────────────────────────────────────────── */
+
+  const applyGstinFields = useCallback((fields) => {
+    setForm(prev => {
+      const next = { ...prev }
+
+      for (const [key, value] of Object.entries(fields)) {
+        // Fill blanks freely; otherwise only replace a value we put there.
+        const current = String(prev[key] ?? '').trim()
+        if (current !== '' && !autofilledRef.current.has(key)) continue
+        next[key] = value
+        autofilledRef.current.add(key)
+      }
+
+      // The State dropdown is keyed on the ISO code but displays a label it
+      // looks up in its own options, so the name has to come from the same
+      // list — GSTN's spelling of the state is not guaranteed to match it.
+      // Skipped when the user has the address on a non-Indian country, where
+      // an Indian state code would render as raw text.
+      if (next.state_code && next.country_code === 'IN') {
+        const match = State.getStatesOfCountry('IN').find(s => s.isoCode === next.state_code)
+        if (match && next.state !== match.name) {
+          next.state = match.name
+          autofilledRef.current.add('state')
+        }
+      } else {
+        next.state_code = prev.state_code
+        next.state = prev.state
+      }
+
+      return Object.keys(next).every(k => next[k] === prev[k]) ? prev : next
+    })
+
+    // The PIN check compares against the city, and both may have just moved.
+    if (fields.zipcode || fields.city) setZipStatus(null)
+  }, [])
+
+  const gstinLookup = useGstinLookup(form.gstin, {
+    mapTaxpayer: taxpayerToVendorFields,
+    onAutofill: applyGstinFields,
+  })
 
   // Load media
   useEffect(() => {
@@ -655,8 +745,20 @@ export default function PublicVendorForm() {
                     </select>
                   </FieldGroup>
 
-                  <FieldGroup label="GSTIN">
-                    <input className="pvf-input pvf-mono" value={form.gstin} onChange={e => update('gstin', e.target.value.toUpperCase())} placeholder="27AABCU9603R1ZM" maxLength={15} />
+                  <FieldGroup label="GSTIN" hint={gstinLookup.status === 'idle' ? 'Enter all 15 characters to auto-fill your details' : undefined}>
+                    <div className="pvf-gstin-wrap">
+                      <input
+                        className="pvf-input pvf-mono"
+                        value={form.gstin}
+                        onChange={e => update('gstin', normalizeGstin(e.target.value))}
+                        placeholder="27AABCU9603R1ZM"
+                        maxLength={GSTIN_LENGTH}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      {gstinLookup.status === 'checking' && <span className="pvf-gstin-spinner" aria-hidden="true" />}
+                    </div>
+                    <GstinStatus lookup={gstinLookup} />
                   </FieldGroup>
 
                   <FieldGroup label="GSTIN Date">

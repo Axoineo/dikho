@@ -41,8 +41,36 @@
     // that wiped the Meta IDs. `.dev.vars` overrides this for local dev, which
     // is why localhost/127.0.0.1 are deliberately absent: a token solved on an
     // attacker's own localhost page must not verify against production.
-    "TURNSTILE_HOSTNAMES": "manage.dikho.in,dikho.pages.dev"
+    "TURNSTILE_HOSTNAMES": "manage.dikho.in,dikho.pages.dev",
+    // API Setu (apisetu.gov.in) client id for the GSTIN autofill lookup —
+    // src/api/services/apisetu/client.js. Printed openly in the API Setu
+    // console sidebar, so it carries no secret value and belongs here rather
+    // than as a remote-only var a deploy could wipe. The paired API key IS
+    // secret and is set with `wrangler secret put APISETU_API_KEY`.
+    "APISETU_CLIENT_ID": "in.dikho",
+    // The origin declared to API Setu as the caller, sent as a `Referer` header
+    // by src/api/services/apisetu/client.js. Must match whatever is entered as
+    // the key's "Whitelist Domain/Url" in the API Setu console — that check is
+    // built for browser callers and reads Origin/Referer, which a Worker's
+    // server-to-server fetch does not otherwise send.
+    //
+    // Accurate rather than cosmetic: this genuinely is the host making the
+    // call. Leave it empty to send no Referer at all.
+    "APISETU_REFERER": "https://dikho-api.fineeurox.workers.dev"
   },
+  // Per-IP throttle for GET /api/gstn/:gstin (src/api/routes/gstn/index.js).
+  // Deliberately NOT backed by D1: that database's free-plan row-write budget
+  // is already load-bearing for WhatsApp, and a rate limiter must not be able
+  // to exhaust it. This binding keeps no storage at all.
+  // `namespace_id` is any stable integer-as-string unique within this Worker;
+  // `period` accepts only 10 or 60.
+  "ratelimits": [
+    {
+      "name": "GSTIN_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 12, "period": 60 }
+    }
+  ],
   // The API code reads this as `c.env.DB`, so the binding name must stay "DB".
   "d1_databases": [
     {

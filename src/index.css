@@ -2709,6 +2709,49 @@ select.pvf-input option[value=""] {
 .pvf-hint-ok    { color: #276749; }
 .pvf-hint-warn  { color: #c05621; }
 
+/* GSTIN auto-fill — spinner sits inside the field, status hint below it. */
+.pvf-gstin-wrap {
+  position: relative;
+  display: block;
+}
+
+.pvf-gstin-wrap .pvf-input { padding-right: 36px; }
+
+.pvf-gstin-spinner {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border: 2px solid #cbd5e0;
+  border-top-color: var(--brand-blue, #185494);
+  border-radius: 50%;
+  animation: pvf-gstin-spin 0.7s linear infinite;
+}
+
+@keyframes pvf-gstin-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pvf-gstin-spinner { animation-duration: 2.4s; }
+}
+
+/* Tailwind preflight is off in this project, so an unstyled <button> keeps the
+   UA's buttonface/buttontext and would render as a grey chip with invisible
+   text. Both have to be reset explicitly, not just one. */
+.pvf-gstin-retry {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-blue, #185494);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pvf-gstin-retry:hover { opacity: 0.8; }
+
 /* Phone */
 .pvf-phone {
   display: flex;

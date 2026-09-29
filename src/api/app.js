@@ -6,6 +6,7 @@ import health from './routes/health.js'
 import whatsapp from './routes/whatsapp/index.js'
 import auth from './routes/auth/index.js'
 import publicRoutes from './routes/public/index.js'
+import gstn from './routes/gstn/index.js'
 import contacts from './routes/contacts/index.js'
 import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
@@ -29,6 +30,14 @@ export function createApiApp() {
   // session by design — each route verifies a Cloudflare Turnstile token before
   // it writes, which is the only thing standing between these and a bot.
   app.route('/public', publicRoutes)
+
+  // GSTIN → taxpayer lookup for the form autofill. Read-only, and the data is
+  // already public on gst.gov.in, so this is not gated on a session: the public
+  // vendor form has none, and Turnstile cannot help here either (its tokens are
+  // single-use and spent at submit). What protects it is a strict format gate
+  // plus a per-IP rate limit — see routes/gstn/index.js. The internal forms are
+  // meant to call this same route.
+  app.route('/gstn', gstn)
 
   // Dashboard routes — require a valid Supabase session. Both the bare path
   // and the wildcard are registered: Hono's `/x/*` does not match `/x`.
