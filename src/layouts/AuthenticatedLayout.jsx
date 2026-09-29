@@ -2,13 +2,18 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
-import { Icon } from '../components/Icon'
 import { MAX_SESSION_MS, INACTIVITY_MS, WARN_BEFORE_MS } from '../app/constants'
 import Login from '../features/auth/Login'
 
 export default function AuthenticatedLayout() {
   const [session, setSession] = useState(undefined)
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (window.innerWidth <= 768) return false
+    // The toggle is now the only control that sets this, so forgetting it on
+    // every reload would make the collapsed rail impossible to keep.
+    const saved = localStorage.getItem('dikho-sidebar')
+    return saved === null ? true : saved === 'open'
+  })
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [showSessionWarning, setShowSessionWarning] = useState(false)
   const [warnSecsLeft, setWarnSecsLeft] = useState(300)
@@ -54,6 +59,15 @@ export default function AuthenticatedLayout() {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  function toggleSidebar() {
+    setSidebarOpen((open) => {
+      // Only the desktop rail is a persistent preference; on mobile the same
+      // state drives a transient drawer and should not be remembered.
+      if (window.innerWidth > 768) localStorage.setItem('dikho-sidebar', open ? 'closed' : 'open')
+      return !open
+    })
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -142,25 +156,17 @@ export default function AuthenticatedLayout() {
     <div className={`app-shell${collapsed ? ' sidebar-is-closed' : ''}`}>
       <Sidebar
         collapsed={collapsed}
+        onToggle={toggleSidebar}
         onOverlayClick={isMobile ? () => setSidebarOpen(false) : null}
         onLogout={logout}
+        session={session}
       />
 
+      {/* No header: the shell is exactly sidebar + main content, both full
+          viewport height. The toggle moved into the sidebar, account and
+          settings moved to the foot of the sidebar, and the full-screen
+          button is gone — the layout is already edge to edge. */}
       <div className="app-main">
-        <header className="app-header">
-          <button className="header-menu" onClick={() => setSidebarOpen((v) => !v)} aria-label="Toggle sidebar">
-            <Icon name="menu" size={21} />
-          </button>
-          <div className="header-spacer" />
-          <div className="header-right">
-            <button className="header-icon" aria-label="Full screen" onClick={() => {
-              if (!document.fullscreenElement) document.documentElement.requestFullscreen?.()
-              else document.exitFullscreen?.()
-            }}><Icon name="expand" size={19} /></button>
-            <button className="header-icon" aria-label="Account"><Icon name="user" size={20} /></button>
-          </div>
-        </header>
-
         <main className="workspace">
           <Suspense fallback={<div className="loading-screen">Loading...</div>}>
             <Outlet context={{ session, themeMode, onThemeChange: handleThemeChange }} />

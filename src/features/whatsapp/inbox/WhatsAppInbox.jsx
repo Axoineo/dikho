@@ -165,7 +165,7 @@ export default function WhatsAppInbox() {
     {/* Full-bleed panes divided by hairlines — no card, no outer radius, no
         shadow. The floating-card treatment is what made the inbox read as a
         widget inside a dashboard rather than as a chat client. */}
-    <div className="flex h-[calc(100vh-var(--app-header-h,56px))] overflow-hidden bg-chat-shell">
+    <div className="workspace-bleed flex overflow-hidden bg-chat-shell">
       {/* Left — conversation list */}
       <aside className="flex w-full max-w-[400px] shrink-0 flex-col border-r border-chat-ring">
         <ChatList conversations={conversations} activeId={activeId} onSelect={openConversation} loading={loadingConvs} />

@@ -377,113 +377,212 @@ button:disabled { cursor: default; }
 }
 
 /* ---------- App shell ---------- */
+/* Gemini-style shell: a fixed-height flex row of sidebar + main content, with
+   no top bar at all. The shell itself never scrolls — .workspace is the one
+   scroll container — so the rail stays put and the data area owns the full
+   viewport height.
+
+   --sidebar-w is the single source of truth for the rail width: the sidebar
+   reads it, and .app-main subtracts it from 100vw. Collapsing changes only
+   this one value, so both sides animate off the same number and can never
+   disagree mid-transition. */
 .app-shell {
-  min-height: 100vh;
+  --sidebar-w: 256px;
+  /* Logo geometry. --logo-w is the only number to change to resize it; the
+     mark slice and the brand offset are both derived from it. 266.5/1241 is
+     the D's share of the wordmark's width, straight off the SVG. */
+  /* One clock for everything that fades as the rail moves, so nothing can
+     drift out of step with the width animation. */
+  --rail-fade: 0.3s ease-in-out;
+  /* Shared by .sidebar-top's padding and the toggle's vertical centre — the
+     two have to agree or the button sits off the logo's line. */
+  --rail-top-pad: 12px;
+  --logo-w: 110px;
+  --logo-mark-w: calc(var(--logo-w) * 0.2148);
+  --ws-pad-x: 16px;
+  --ws-pad-t: 16px;
+  --ws-pad-b: 24px;
+  height: 100vh;
   display: flex;
   background: var(--page);
-  padding: 12px;
+  padding: 0;
   gap: 0;
+  overflow: hidden;
+}
+/* Two class names because the authenticated shell and the public catalogue
+   shell each named this state for themselves; both mean "collapsed". */
+.app-shell.sidebar-is-closed,
+.app-shell.sidebar-is-collapsed {
+  --sidebar-w: 68px;
 }
 
 /* ============================================================
    SIDEBAR
    ============================================================ */
+/* Geometry contract for this whole block: the rail's horizontal padding (8px)
+   and the nav's (6px) are IDENTICAL in both states, and .nav-item's left
+   padding (14px) never changes. That puts every icon's left edge at
+   8 + 6 + 14 = 28px and its centre at 38px — which is exactly half of the
+   76px collapsed rail. So the icons are already centred on the rail without
+   anything moving them there: collapsing changes the rail's width and fades
+   the text out, and the icon column stays put the whole way. Change any of
+   those three numbers and the icons start sliding during the animation. */
+/* Geometry contract: the rail's padding (8px), the nav's (6px) and .nav-item's
+   left padding (10px) are IDENTICAL in both states. That puts every icon's
+   left edge at 8 + 6 + 10 = 24px and its centre at 34px — exactly half of the
+   68px collapsed rail. The icons are therefore already centred on the rail
+   without anything moving them there: collapsing changes the rail's width and
+   fades the text, and the icon column never budges. Change any of those three
+   numbers, or the collapsed width, and the icons start sliding. */
 .sidebar {
-  position: sticky;
-  top: 12px;
-  width: 248px;
-  flex: 0 0 248px;
-  height: calc(100vh - 24px);
+  position: relative;
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  height: 100vh;
   background: #ffffff;
   color: rgba(24, 84, 148, 0.85);
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(24, 84, 148, 0.10);
-  border-radius: 16px;
-  padding: 0 6px;
+  border: 0;
+  border-right: 1px solid rgba(24, 84, 148, 0.14);
+  /* Rounded on the dashboard side only — the other three edges meet the
+     window, and a radius there would just leak the page colour into a corner
+     with nothing behind it. */
+  border-radius: 0 14px 14px 0;
+  padding: 0 8px;
   transition:
-    width 0.32s cubic-bezier(0.34, 1.12, 0.64, 1),
-    flex-basis 0.32s cubic-bezier(0.34, 1.12, 0.64, 1);
-  overflow: hidden;
+    width 0.3s ease-in-out,
+    flex-basis 0.3s ease-in-out;
+  /* Visible, not hidden: the account popover has to escape the rail. The
+     children that need clipping during the width animation clip themselves. */
+  overflow: visible;
   z-index: 30;
 }
 
-/* Collapsed desktop state */
-.sidebar.sidebar-is-collapsed {
-  width: 68px;
-  flex-basis: 68px;
-}
-
-/* ---------- Logo area ---------- */
-.sidebar-logo-area {
-  flex-shrink: 0;
-  padding: 22px 0 18px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
+/* ---------- Sidebar top: brand + collapse control ---------- */
+.sidebar-top {
   position: relative;
-  min-height: 68px;
-}
-
-/* Full logo — fades out and shrinks when collapsed */
-.sidebar-logo-full {
-  position: absolute;
-  left: 16px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  opacity: 1;
-  transform: translateX(0) scale(1);
-  transition:
-    opacity 0.2s ease,
-    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    visibility 0s linear 0s;
-  pointer-events: none;
-  white-space: nowrap;
-  visibility: visible;
+  height: 72px;
+  /* Breathing room above the wordmark, so it sits off the window edge rather
+     than against it. align-items:center splits the remainder, which is why
+     the toggle beside it drops by the same amount and the two stay level. */
+  padding-top: var(--rail-top-pad);
+  /* The D's centre sits at 133.25/1241 = 0.10737 of the wordmark's width
+     (measured off the SVG). Offsetting by that lands the D on the same 34px
+     axis as every nav icon, in both states. The 8px is the rail's own
+     padding, already applied outside this box. */
+  padding-right: 2px;
+  padding-left: calc(34px - (var(--logo-w) * 0.10737) - 8px);
+  overflow: hidden;
 }
-.sidebar-is-collapsed .sidebar-logo-full {
-  opacity: 0;
-  transform: translateX(-8px) scale(0.92);
-  pointer-events: none;
-  visibility: hidden;
-  transition:
-    opacity 0.2s ease,
-    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    visibility 0s linear 0.2s;
+
+/* The wordmark is literally the mark plus "ikho" — one SVG, two windows onto
+   the SAME file (still a single cached request). The left window keeps the D
+   and never moves or fades; the right holds "ikho" and fades out. */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  /* The wordmark's box includes the gold dot floating above the "i", so
+     centring that box drops the LETTERS about 5px low — and on the rail,
+     where the dot is clipped away, the lone D looks plainly off-centre
+     against the toggle that covers it. Lift by the gap between the box's
+     centre (210) and the D's (264.5): 54.5/1241 of the width. Constant in
+     both states, so it fixes the optics without becoming one more thing that
+     moves during the collapse. */
+  transform: translateY(calc(var(--logo-w) * -0.0439));
 }
-.sidebar-logo-img {
-  width: 100px;
+.sidebar-brand img {
+  width: var(--logo-w);
   height: auto;
   display: block;
-  border: none;
-  outline: none;
+  max-width: none;   /* a responsive-image default would shrink it to the window */
 }
-
-/* Favicon icon — fades in when collapsed */
-.sidebar-logo-icon {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.sidebar-brand-mark {
+  flex: 0 0 var(--logo-mark-w);
+  width: var(--logo-mark-w);
+  overflow: hidden;  /* window onto x 0..266.5 of the viewBox: the D */
+}
+.sidebar-brand-word {
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--rail-fade);
+}
+.sidebar-brand-word img {
+  margin-left: calc(var(--logo-mark-w) * -1);
+}
+.sidebar-is-collapsed .sidebar-brand-word {
   opacity: 0;
-  transform: scale(0.8);
-  transition:
-    opacity 0.2s ease 0.05s,
-    transform 0.25s cubic-bezier(0.34, 1.12, 0.64, 1) 0.05s;
   pointer-events: none;
 }
-.sidebar-is-collapsed .sidebar-logo-icon {
-  opacity: 1;
-  transform: scale(1);
+
+.sidebar-toggle {
+  /* Absolutely positioned in BOTH states, with only `left` differing — and
+     `left` transitions, so the button travels. It used to be a flex item when
+     open and absolute when collapsed: switching layout mode teleported it to
+     the middle of the rail the instant the class landed, and it then faded out
+     from there. That was the button blinking mid-sidebar.
+     `top` is the CONTENT box's centre, not the padding box's: 50% of the
+     latter is 36px while the logo centres at 42px, which is why the expand
+     and collapse icons did not share a line. */
+  position: absolute;
+  left: calc(100% - 42px);
+  top: calc(var(--rail-top-pad) + (100% - var(--rail-top-pad)) / 2);
+  transform: translateY(-50%);
+  z-index: 2;                 /* rides over the wordmark on the rail */
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: rgba(24, 84, 148, 0.6);
+  border-radius: 50%;         /* the faint circle that shows up under hover */
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  /* Fades back in only after the slide is mostly done, so it does not drift
+     across the re-appearing wordmark on its way to the right. */
+  transition: left 0.3s ease-in-out, opacity 0.18s ease 0.14s,
+              background 0.15s ease, color 0.15s ease;
 }
-.sidebar-favicon {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-  border: none;
-  outline: none;
+.sidebar-toggle:hover {
+  background: rgba(24, 84, 148, 0.08);
+  color: rgba(24, 84, 148, 0.92);
+}
+
+/* Collapsed: no permanent button on the rail. The toggle lies transparent on
+   top of the mark — still clickable, so the logo itself reads as "expand" —
+   and fades in when the pointer enters the top block. */
+.sidebar-is-collapsed .sidebar-toggle {
+  /* Dead centre on the logo's axis: half the rail, less the rail's own 8px
+     padding (this box starts there), less half the button. */
+  left: calc(var(--sidebar-w) * 0.5 - 28px);
+  opacity: 0;
+  /* Out promptly on the way in, and no delay on the hover reveal. */
+  transition: left 0.3s ease-in-out, opacity 0.12s ease,
+              background 0.15s ease, color 0.15s ease;
+}
+
+/* The swap is gated on :not(.is-animating), and THAT is the whole fix for the
+   logo flicker. Collapsing starts with the pointer on the toggle, which lives
+   inside .sidebar-top — so :hover is true at t=0, hiding the mark. Then the
+   rail shrinks out from under the pointer, :hover goes false part-way through,
+   and the mark snaps back: one hard blink per collapse, twice if the pointer
+   grazes the edge. Suspending the swap while the width animates means hover is
+   only ever consulted once the rail has settled. */
+.sidebar-is-collapsed:not(.is-animating) .sidebar-top:hover .sidebar-toggle,
+.sidebar-is-collapsed .sidebar-toggle:focus-visible {
+  opacity: 1;
+}
+.sidebar-is-collapsed:not(.is-animating) .sidebar-top:hover .sidebar-brand-mark {
+  opacity: 0;
+}
+.sidebar-brand-mark {
+  opacity: 1;
+  transition: opacity 0.18s ease;
 }
 
 /* ---------- Navigation ---------- */
@@ -491,154 +590,528 @@ button:disabled { cursor: default; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0 6px 14px;
+  gap: 2px;
+  padding: 0 6px 12px;
   overflow-y: auto;
   overflow-x: hidden;
 }
 .sidebar-nav::-webkit-scrollbar { width: 0; }
 
-/* Nav item */
+/* A hard edge on a half-scrolled row reads as a rendering bug; fading it says
+   "there is more this way". Only edges with content past them are faded, which
+   is why the state comes from JS (see useEdgeFade). */
+.sidebar-nav[data-fade="top"] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+}
+.sidebar-nav[data-fade="bottom"] {
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px);
+          mask-image: linear-gradient(to top, transparent 0, #000 28px);
+}
+.sidebar-nav[data-fade="both"] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .nav-item {
+  position: relative;
   width: 100%;
   border: 0;
   background: transparent;
-  color: rgba(24, 84, 148, 0.6);
+  color: rgba(24, 84, 148, 0.68);
   min-height: 38px;
-  padding: 0 12px;
-  border-radius: 10px;
+  padding: 0 10px;            /* fixed in both states — this pins the icons */
+  border-radius: 999px;       /* full pill when open, like the rail it copies */
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  /* Label and badge keep their full width and are clipped by the shrinking
+     pill rather than resized — resizing them is what made text jump. */
+  overflow: hidden;
+  transition: background 0.18s ease, color 0.15s ease;
 }
-.nav-item:hover {
-  background: rgba(24, 84, 148, 0.05);
-  color: rgba(24, 84, 148, 0.85);
-}
-.nav-item.active {
-  background: rgba(24, 84, 148, 0.08);
-  color: #185494;
-}
+.nav-item:hover { color: rgba(24, 84, 148, 0.85); }
+.nav-item.active { color: #185494; font-weight: 500; }
+/* Light needs more alpha than dark to read at the same strength: these sit on
+   white, where 0.04/0.07 all but vanished, while the dark theme's equivalents
+   sit on #1a1d23 and carry fine. Tuned per theme rather than shared. */
+.nav-item:hover        { background: rgba(24, 84, 148, 0.055); }
+.nav-item.active       { background: rgba(24, 84, 148, 0.10); }
 
-/* Icon */
+/* Collapsed the pill has no text to wrap, so the highlight becomes a disc
+   around the icon instead. The disc lives on .nav-icon, not on .nav-item, so
+   switching shapes costs no layout at all — two backgrounds cross-fade on the
+   same 0.18s and the icon underneath never moves a pixel. */
 .nav-icon {
-  flex-shrink: 0;
+  position: relative;
+  flex: 0 0 20px;
+  width: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  opacity: 0.65;
+  /* The glyph now carries the emphasis that the disc used to: brought up from
+     0.68 so the icons read solid, which is what lets the ring behind them be
+     dialled down this far. */
+  opacity: 0.85;
   transition: opacity 0.15s;
 }
+.nav-icon::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* 32, not 36. .nav-item clips with overflow:hidden AND border-radius:999px,
+     which on a 39x38 row is a stadium of radius 19. A 36px disc centred 0.5px
+     off that stadium's axis leaves ~0.5px of clearance — inside the clip's own
+     anti-aliasing, so the browser feathered the disc's outer edge and it read
+     as blurry next to the toggle, which has no clip at all. At 32 the
+     clearance is ~2px and the edge rasterises clean. */
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.18s ease;
+}
+.nav-icon > svg { position: relative; z-index: 1; }
 .nav-item:hover .nav-icon,
 .nav-item.active .nav-icon { opacity: 1; }
 
-/* Label — fades + clips when collapsed */
+.sidebar-is-collapsed .nav-item:hover,
+.sidebar-is-collapsed .nav-item.active { background: transparent; }
+/* Identical alphas to the pill above — the disc was mixed a shade stronger
+   (0.07/0.11 against 0.05/0.09) and so read as a brighter highlight on the
+   rail than the same row shows when open. */
+.sidebar-is-collapsed .nav-item:hover  .nav-icon::before { background: rgba(24, 84, 148, 0.055); }
+.sidebar-is-collapsed .nav-item.active .nav-icon::before { background: rgba(24, 84, 148, 0.10); }
+
+/* Label — fades only. No width or flex change: a layout change here lands in
+   one frame while the rail is still 300ms from closing, which is exactly the
+   "text blinks out, icons drift after it" glitch. */
 .nav-label {
-  flex: 1;
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 13.5px;
-  font-weight: 500;
   letter-spacing: 0.05px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   opacity: 1;
-  transform: translateX(0);
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+  /* Same duration and curve as the rail's width, so the text dissolves AS the
+     rail closes instead of snapping out ahead of it. An earlier pass ran this
+     at 0.12s to hide the label being squeezed; matching the width makes that
+     squeeze part of the motion rather than something to outrun. */
+  transition: opacity var(--rail-fade);
 }
 .sidebar-is-collapsed .nav-label {
   opacity: 0;
-  transform: translateX(-6px);
   pointer-events: none;
-  width: 0;
 }
 
-/* Chevron */
-.nav-chevron {
+.nav-badge {
   flex-shrink: 0;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: rgba(37, 211, 102, 0.14);
+  padding: 1px 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 15px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #0a6b40;
+  opacity: 1;
+  transition: opacity var(--rail-fade);
+}
+.nav-caret {
+  position: absolute;          /* out of the flex flow, so it can never push
+                                  the icon or label around mid-animation */
+  right: 10px;
+  top: 50%;
   display: inline-flex;
   align-items: center;
   color: rgba(24, 84, 148, 0.35);
+  transform: translateY(-50%);
   opacity: 1;
-  transition: opacity 0.18s ease;
+  transition: opacity var(--rail-fade), transform 0.2s ease;
 }
-.sidebar-is-collapsed .nav-chevron {
+.nav-caret.is-open { transform: translateY(-50%) rotate(90deg); }
+.nav-item.active .nav-caret { color: rgba(24, 84, 148, 0.55); }
+.sidebar-is-collapsed .nav-badge,
+.sidebar-is-collapsed .nav-caret {
   opacity: 0;
-  width: 0;
-  overflow: hidden;
+  pointer-events: none;
 }
-.nav-item.active .nav-chevron { color: rgba(24, 84, 148, 0.55); }
 
-/* ---------- Sidebar footer ---------- */
-.sidebar-footer {
-  margin-top: auto;
-  padding: 0 6px 12px;
+.nav-sublist {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  margin-left: 19px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(24, 84, 148, 0.14);
 }
-.sidebar-footer-divider {
-  height: 1px;
-  background: rgba(24, 84, 148, 0.08);
-  margin: 0 4px 6px;
+.nav-subitem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.8px;
+  font-weight: 500;
+  color: rgba(24, 84, 148, 0.58);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.sidebar-footer-item {
-  color: rgba(24, 84, 148, 0.6);
-}
-.sidebar-footer-item:hover {
+.nav-subitem:hover {
   background: rgba(24, 84, 148, 0.05);
   color: rgba(24, 84, 148, 0.85);
 }
-.sidebar-logout-btn {
-  position: relative;
-  width: 100%;
-  border: 1px solid rgba(24, 84, 148, 0.12);
-  background: rgba(24, 84, 148, 0.03);
-  color: rgba(24, 84, 148, 0.7);
-  min-height: 42px;
-  padding: 0 12px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-  font-size: 13.5px;
-  font-weight: 500;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.sidebar-logout-btn:hover {
-  background: rgba(24, 84, 148, 0.07);
-  border-color: rgba(24, 84, 148, 0.18);
+.nav-subitem.active {
+  background: rgba(24, 84, 148, 0.10);
+  font-weight: 600;
   color: #185494;
 }
-.sidebar-logout-btn .nav-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
+.nav-subicon {
+  flex: 0 0 17px;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.72;
+}
+.nav-subitem.active .nav-subicon { opacity: 1; }
+
+/* ---------- Collapsed-rail tooltip ---------- */
+/* Rendered as a sibling of <aside>, not inside it: .sidebar-nav scrolls, and a
+   scroll container clips BOTH axes, so a tooltip parented inside it can never
+   reach past the rail however it is positioned. Fixed coordinates come from
+   the hovered row (see useRailTooltip). */
+.sidebar-tip {
+  position: fixed;
+  left: calc(var(--sidebar-w) + 10px);
   transform: translateY(-50%);
-  opacity: 0.6;
-}
-.sidebar-logout-btn:hover .nav-icon {
-  opacity: 1;
-}
-.sidebar-logout-btn .nav-label {
-  flex: 0 auto;
-  font-size: 13.5px;
+  z-index: 70;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: #222b3a;
+  color: #fff;
+  font-size: 12.5px;
   font-weight: 500;
-}
-.sidebar-is-collapsed .sidebar-logout-btn .nav-label {
-  opacity: 0;
-  width: 0;
+  line-height: 1.2;
+  white-space: nowrap;
   pointer-events: none;
+  box-shadow: 0 3px 10px rgba(16, 26, 44, 0.13);
+  animation: railTipIn 0.14s ease-out;
+}
+@keyframes railTipIn {
+  from { opacity: 0; transform: translateY(-50%) translateX(-3px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+/* Panels used to be yanked out of the DOM the instant the pointer left, so
+   they arrived softly and vanished hard. They now hold their place for the
+   length of a leave animation and dissolve on the way out. `forwards` keeps
+   the end state until React unmounts them a frame later. */
+.sidebar-tip.is-leaving {
+  animation: railTipOut 0.15s ease-in forwards;
+}
+@keyframes railTipOut {
+  to { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+}
+
+/* ---------- Collapsed-rail flyout (WhatsApp sub-items) ---------- */
+/* Same escape hatch as .sidebar-tip — fixed, outside <aside> — but this one is
+   interactive, so it keeps pointer events and its own hover handlers. */
+.sidebar-flyout {
+  position: fixed;
+  left: calc(var(--sidebar-w) + 10px);
+  z-index: 70;
+  min-width: 196px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 5px 16px rgba(24, 40, 65, 0.10);
+  /* Its own keyframe, NOT railTipIn: that one animates translateY(-50%),
+     which is the tooltip's vertical-centring transform. The flyout is
+     top-anchored and has no such transform, so borrowing it yanked the panel
+     up by half its height for the length of the animation and snapped it
+     back when the fill ended. */
+  animation: railFlyoutIn 0.13s ease-out;
+}
+@keyframes railFlyoutIn {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sidebar-flyout.is-leaving {
+  animation: railFlyoutOut 0.15s ease-in forwards;
+}
+@keyframes railFlyoutOut {
+  to { opacity: 0; transform: translateX(-5px); }
+}
+.sidebar-flyout-head {
+  padding: 7px 10px 9px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sidebar-flyout-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(24, 84, 148, 0.72);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sidebar-flyout-item:hover {
+  background: rgba(24, 84, 148, 0.06);
+  color: var(--brand-blue);
+}
+.sidebar-flyout-item.active {
+  background: rgba(24, 84, 148, 0.10);
+  font-weight: 600;
+  color: var(--brand-blue);
+}
+
+/* ---------- Sidebar footer: account + settings ---------- */
+/* No email: the name already identifies the session, and the address only ever
+   wrapped or ellipsised. Log out lives in the popover — settings has its own
+   permanent control right here, so repeating it there is a second door to the
+   same room. */
+.sidebar-footer {
+  position: relative;      /* anchors .sidebar-account-menu */
+  margin-top: auto;
+  flex-shrink: 0;
+  /* 6px matches .sidebar-nav's inset, which keeps the avatar on the same 34px
+     axis as the icons above it, in both states. */
+  padding: 0 6px 12px;
+}
+.sidebar-footer-divider {
+  height: 1px;
+  background: rgba(24, 84, 148, 0.11);
+  margin: 0 4px 8px;
+}
+
+/* The gear is absolutely positioned and TRANSFORMED between its two homes
+   rather than being re-flowed by flex-direction. flex-direction is not an
+   animatable property: switching it to column-reverse teleported the gear
+   above the avatar in a single frame, which is the jump you saw. A transform
+   on the same 0.3s curve as the rail means it travels there instead. */
+.sidebar-account-row {
+  position: relative;
+  height: 44px;
+  transition: height 0.3s ease-in-out;
+}
+/* 32 gear + 4 gap + 44 profile button. */
+.sidebar-is-collapsed .sidebar-account-row { height: 80px; }
+
+.sidebar-account-main {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  /* Stops short of the gear instead of running underneath it. At 100% the
+     hover pill — and the focus ring — enclosed the gear too, so the two read
+     as one control with an icon inside rather than as two separate buttons.
+     50px = the gear's 44 plus a 6px gap. */
+  width: calc(100% - 50px);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0 4px;          /* constant, like .nav-item's — pins the avatar */
+  border-radius: 999px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  transition: width 0.3s ease-in-out, background 0.18s ease;
+}
+/* Collapsed the gear has moved above, so the button may use the full row. */
+.sidebar-is-collapsed .sidebar-account-main { width: 100%; }
+.sidebar-account-main:hover { background: rgba(24, 84, 148, 0.06); }
+/* No backing behind the avatar on the rail, hover included: it is already a
+   filled circle, so a pill around it just drew a second one — and in dark
+   mode that pill is white, which is the ring you saw. Hovering opens the
+   panel, which is feedback enough. The :hover selector has to be restated
+   here because .sidebar-account-main:hover matches at equal specificity. */
+.sidebar-is-collapsed .sidebar-account-main,
+.sidebar-is-collapsed .sidebar-account-main:hover { background: transparent; }
+
+.sidebar-avatar {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--brand-blue);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+
+.sidebar-account-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: rgba(24, 84, 148, 0.9);
+  white-space: nowrap;
+}
+
+.sidebar-account-settings {
+  position: absolute;
+  right: 0;
+  bottom: 0;               /* flush with .sidebar-account-main's own baseline */
+  /* Square, and the same 44px as .sidebar-account-main is tall. Both round
+     with border-radius:999px, so matching the SIZES is what actually matches
+     the radii: at 36 the gear's hover circle came out at r18 against the
+     profile pill's r22, which read as a smaller copy of the same shape. */
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: rgba(24, 84, 148, 0.55);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+  transform: translate(0, 0);
+  transition: transform 0.3s ease-in-out, width 0.3s ease-in-out,
+              height 0.3s ease-in-out, background 0.15s ease, color 0.15s ease;
+}
+.sidebar-account-settings:hover {
+  background: rgba(24, 84, 148, 0.08);
+  color: rgba(24, 84, 148, 0.92);
+}
+.sidebar-account-settings.active {
+  background: rgba(24, 84, 148, 0.10);
+  color: var(--brand-blue);
+}
+/* Collapsed, the gear travels to sit above the avatar. -48px lifts it clear of
+   the 44px profile button plus a 4px gap; the X term re-centres it on the icon
+   axis. Derivation: anchored at right:0 its centre sits at (rail - 1 border -
+   8 rail-pad - 6 footer-pad - 16 half-gear), and it needs to be at rail/2, so
+   the shift is 31px - rail/2. The 1px is the rail's own border-right, which
+   box-sizing folds into --sidebar-w; leaving it out lands the gear a pixel
+   left of the axis. Expressed against --sidebar-w so it follows if the width
+   is retuned. */
+.sidebar-is-collapsed .sidebar-account-settings {
+  /* 32 on the rail, not 44. Up there the gear's neighbours are the 32px avatar
+     badge and the 32px nav discs, so a 44px circle was the odd one out — and
+     with border-radius:999px the size IS the radius (min(w,h)/2), so matching
+     it to the badge is what matches their curves. It keeps 44 when open, where
+     its neighbour is the 44px-tall profile button instead. */
+  width: 32px;
+  height: 32px;
+  transform: translate(calc(31px - var(--sidebar-w) * 0.5), -48px);
+}
+
+/* Popover — opens upward out of the rail, which is why .sidebar keeps
+   overflow: visible. */
+/* Anchored inside the rail when open. On the 68px rail a 190px panel can only
+   spill across the workspace, which reads as a panel escaping the sidebar —
+   so there it moves out to sit beside the rail, on the same 10px gutter the
+   tooltip and flyout use, where overlapping is clearly deliberate. */
+.sidebar-is-collapsed .sidebar-account-menu {
+  left: calc(var(--sidebar-w) + 2px);
+  /* Level with the avatar rather than stacked above the footer, so it reads as
+     belonging to the button it came from. 12px is the footer's bottom padding,
+     which is where the account row's own bottom edge sits. */
+  bottom: 12px;
+}
+.sidebar-account-menu {
+  position: absolute;
+  bottom: calc(100% - 4px);
+  left: 6px;
+  min-width: 190px;
+  max-width: min(260px, calc(100vw - 24px));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 5px 16px rgba(24, 40, 65, 0.10);
+  padding: 6px;
+  z-index: 60;
+  animation: accountMenuIn 0.14s ease-out;
+}
+@keyframes accountMenuIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sidebar-account-menu.is-leaving {
+  animation: accountMenuOut 0.15s ease-in forwards;
+}
+@keyframes accountMenuOut {
+  to { opacity: 0; transform: translateY(4px); }
+}
+.sidebar-account-menu-head {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-account-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: rgba(24, 84, 148, 0.75);
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sidebar-account-menu-item:hover {
+  background: rgba(24, 84, 148, 0.06);
+  color: var(--brand-blue);
+}
+.sidebar-account-menu-item.is-danger { color: var(--danger); }
+.sidebar-account-menu-item.is-danger:hover {
+  background: rgba(178, 59, 67, 0.08);
+  color: var(--danger);
 }
 
 /* ---------- Mobile overlay backdrop ---------- */
@@ -650,36 +1123,39 @@ button:disabled { cursor: default; }
    APP MAIN LAYOUT
    ============================================================ */
 .app-main {
+  /* Stated as calc(100vw - sidebar) rather than relying on flex alone: the
+     shell never scrolls the page, so there is no scrollbar inside 100vw to
+     subtract. flex:1 agrees with the calc and covers the mobile case where
+     the rail leaves the flow entirely. */
+  width: calc(100vw - var(--sidebar-w));
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-left: 12px;
+  padding-left: 0;
+  overflow: hidden;
+  transition: width 0.3s ease-in-out;
 }
-.app-header {
-  height: 60px;
-  background: #ffffff;
-  border: 1px solid rgba(24, 84, 148, 0.10);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  margin: 0 0 0 0;
-  flex-shrink: 0;
+/* The app's only scroll container now that the page itself does not scroll. */
+.workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--ws-pad-t) var(--ws-pad-x) var(--ws-pad-b);
 }
-.header-menu { width: 38px; height: 38px; border: 0; background: transparent; color: rgba(24, 84, 148, 0.55); display: grid; place-items: center; border-radius: 10px; }
-.header-menu:hover { background: rgba(24, 84, 148, 0.05); color: rgba(24, 84, 148, 0.8); }
-.header-spacer { flex: 1; }
-.header-right { display: flex; align-items: center; gap: 10px; color: rgba(24, 84, 148, 0.55); }
-.product-switcher { display: inline-flex; align-items: center; gap: 5px; padding: 7px 8px; font-size: 14px; font-weight: 600; }
-.header-icon { position: relative; width: 36px; height: 36px; border: 0; background: transparent; color: rgba(24, 84, 148, 0.5); display: grid; place-items: center; border-radius: 10px; transition: background 0.15s ease, color 0.15s ease; }
-.header-icon:hover { background: rgba(24, 84, 148, 0.05); color: rgba(24, 84, 148, 0.8); }
-.notification-badge { position: absolute; right: -2px; top: -2px; min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: #1a9f94; color: #fff; font-size: 10px; font-weight: 800; border: 2px solid #fff; }
-.logout-link { border: 0; background: transparent; color: var(--brand-blue); font-weight: 700; padding: 8px 4px; }
-.logout-link:hover { color: var(--brand-blue-dark); }
-.workspace { padding: 12px 0 20px; min-height: calc(100vh - 24px - 60px - 12px); }
+/* Opt-out for pages that want the full pane edge-to-edge (the WhatsApp
+   inbox). Cancels the gutter and grows back the height that gutter took, so
+   the page fills the workspace exactly instead of overflowing it. */
+.workspace-bleed {
+  height: calc(100% + var(--ws-pad-t) + var(--ws-pad-b));
+  margin: calc(var(--ws-pad-t) * -1) calc(var(--ws-pad-x) * -1) calc(var(--ws-pad-b) * -1);
+}
+/* The Suspense fallback is 100vh tall on its own; inside the workspace that
+   is taller than the pane and briefly adds a scrollbar on every lazy route. */
+.workspace .loading-screen { min-height: 100%; }
 
 /* ---------- Clients ---------- */
 .clients-page { position: relative; }
@@ -808,7 +1284,10 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1000px) {
-  .workspace { padding: 12px 0 24px; }
+  /* Tighten the gutter via the tokens, not a padding override — .workspace's
+     padding has to stay expressed in --ws-pad-*, or .workspace-bleed's
+     cancelling margins no longer match what they are cancelling. */
+  .app-shell { --ws-pad-x: 14px; --ws-pad-t: 14px; --ws-pad-b: 20px; }
   .clients-layout.has-details { grid-template-columns: 1fr; }
   .details-drawer { position: relative; top: auto; width: 100%; }
   .page-header { align-items: flex-start; }
@@ -822,7 +1301,8 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   .login-right { min-height: 260px; }
   .welcome-content h2 { font-size: 36px; }
 
-  /* On mobile: sidebar becomes a fixed overlay (out of layout flow) */
+  /* On mobile: sidebar becomes a fixed overlay (out of layout flow), so the
+     rail never eats a share of a small screen — it slides over it instead. */
   .sidebar {
     position: fixed;
     left: 0;
@@ -830,40 +1310,46 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
     bottom: 0;
     height: 100vh;
     z-index: 50;
-    width: 248px !important;
-    flex-basis: 248px !important;
-    border-radius: 0 16px 16px 0;
+    width: min(280px, 84vw) !important;
+    flex-basis: min(280px, 84vw) !important;
+    padding: 0 8px !important;
+    border-radius: 0 14px 14px 0;
     transform: translateX(0);
-    transition: transform 0.32s cubic-bezier(0.34, 1.12, 0.64, 1);
+    transition: transform 0.3s ease-in-out;
     box-shadow: 4px 0 32px rgba(24, 84, 148, 0.12);
   }
   .sidebar.sidebar-is-collapsed {
     transform: translateX(-100%);
   }
 
-  /* Labels/chevrons always visible on mobile (it's a full drawer) */
+  /* It is a full drawer when open, never a rail, so every collapsed-state
+     rule is undone — the drawer slides away at full width instead. */
   .sidebar-is-collapsed .nav-label,
-  .sidebar-is-collapsed .nav-chevron {
+  .sidebar-is-collapsed .nav-badge,
+  .sidebar-is-collapsed .nav-caret,
+  .sidebar-is-collapsed .sidebar-brand-word {
     opacity: 1;
-    transform: none;
-    width: auto;
     pointer-events: auto;
   }
-  .sidebar-is-collapsed .sidebar-logo-full {
-    opacity: 1;
+  /* No hover-to-reveal here: the drawer shows the whole logo and is dismissed
+     by its backdrop, so a toggle hidden on top of the logo would be a control
+     nobody can find. */
+  .sidebar-is-collapsed .sidebar-toggle {
+    position: static;
     transform: none;
-    visibility: visible;
-  }
-  .sidebar-is-collapsed .sidebar-logo-icon {
-    opacity: 0;
-  }
-  .sidebar-is-collapsed .sidebar-logout-btn .nav-label {
+    margin-left: auto;
     opacity: 1;
-    width: auto;
-    pointer-events: auto;
+  }
+  /* The account block keeps its open layout: the gear stays beside the avatar
+     rather than travelling above it, and the row keeps its single-row height. */
+  .sidebar-is-collapsed .sidebar-account-row {
+    height: 44px;
+  }
+  .sidebar-is-collapsed .sidebar-account-settings {
+    transform: none;
   }
 
-  /* Main content takes full width on mobile since sidebar is fixed */
+  /* Main content takes full width on mobile since the sidebar is fixed */
   .app-shell .app-main {
     width: 100%;
     min-width: 0;
@@ -888,8 +1374,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
     to { opacity: 1; }
   }
 
-  .app-header { padding: 0 16px; border-radius: 12px; height: 56px; }
-  .workspace { padding: 10px 0 20px; }
+  .app-shell { --ws-pad-x: 12px; --ws-pad-t: 12px; --ws-pad-b: 16px; }
   .page-header { flex-direction: column; align-items: stretch; gap: 14px; }
   .add-button { align-self: flex-start; }
   .list-toolbar { justify-content: stretch; }
@@ -953,7 +1438,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 @media (min-width: 1100px) {
   .clients-page.has-selection { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 390px); gap: 16px; align-items: start; }
   .clients-main-content { min-width: 0; }
-  .clients-side-panel { position: sticky; top: 84px; max-height: calc(100vh - 108px); }
+  .clients-side-panel { position: sticky; top: 0; max-height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b)); }
 }
 @media (max-width: 1099px) {
   .clients-page.has-selection { display: block; }
@@ -971,7 +1456,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .vendors-page { position: relative; }
 .vendors-page.has-selection { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 390px); gap: 16px; align-items: start; }
 .vendors-main-content { min-width: 0; }
-.vendors-side-panel { position: sticky; top: 84px; max-height: calc(100vh - 108px); }
+.vendors-side-panel { position: sticky; top: 0; max-height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b)); }
 
 @media (max-width: 1250px) {
   .vendors-page.has-selection { display: block; }
@@ -1482,7 +1967,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .so-page { position: relative; }
 .so-page.has-selection { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 390px); gap: 16px; align-items: start; }
 .so-main-content { min-width: 0; }
-.so-side-panel { position: sticky; top: 84px; max-height: calc(100vh - 108px); }
+.so-side-panel { position: sticky; top: 0; max-height: calc(100vh - var(--ws-pad-t) - var(--ws-pad-b)); }
 
 @media (max-width: 1250px) {
   .so-page.has-selection { display: block; }
@@ -1684,54 +2169,110 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   background: rgba(24, 84, 148, 0.2);
   color: #5ba0e0;
 }
-[data-theme="dark"] .nav-item.active .nav-chevron {
+/* The collapsed rail's disc carries the highlight instead of the pill, so it
+   needs the same dark treatment the pill got. */
+/* The themed .nav-item rules below tie with the unthemed .sidebar-is-collapsed
+   reset at (0,3,0) and come later, so on the rail dark mode was painting the
+   pill AND the disc — a rounded square sitting behind the circle. Restated one
+   level deeper so the reset wins. */
+[data-theme="dark"] .sidebar-is-collapsed .nav-item:hover,
+[data-theme="dark"] .sidebar-is-collapsed .nav-item.active {
+  background: transparent;
+}
+[data-theme="dark"] .sidebar-is-collapsed .nav-item:hover .nav-icon::before {
+  background: rgba(255, 255, 255, 0.04);
+}
+[data-theme="dark"] .sidebar-is-collapsed .nav-item.active .nav-icon::before {
+  background: rgba(24, 84, 148, 0.15);
+}
+[data-theme="dark"] .nav-item.active { background: rgba(24, 84, 148, 0.15); }
+[data-theme="dark"] .nav-item:hover  { background: rgba(255, 255, 255, 0.04); }
+/* A near-black bubble would sink into the dark page behind it. */
+[data-theme="dark"] .sidebar-tip {
+  background: #38404f;
+  color: #eef2f8;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .sidebar-flyout-item {
+  color: rgba(200, 215, 230, 0.8);
+}
+[data-theme="dark"] .sidebar-flyout-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #5ba0e0;
+}
+[data-theme="dark"] .sidebar-flyout-item.active {
+  background: rgba(24, 84, 148, 0.26);
+  color: #5ba0e0;
+}
+[data-theme="dark"] .nav-item.active .nav-caret {
   color: rgba(91, 160, 224, 0.5);
 }
-[data-theme="dark"] .nav-chevron {
+[data-theme="dark"] .nav-caret {
   color: rgba(180, 195, 215, 0.25);
+}
+/* #25d366 as text is 1.98:1 on white, so light mode uses a deeper green of
+   the same family; on the dark rail the brand green itself clears AA. */
+[data-theme="dark"] .nav-badge {
+  background: rgba(37, 211, 102, 0.16);
+  color: #25d366;
+}
+[data-theme="dark"] .nav-sublist {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .nav-subitem {
+  color: rgba(180, 195, 215, 0.55);
+}
+[data-theme="dark"] .nav-subitem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(200, 215, 230, 0.9);
+}
+[data-theme="dark"] .nav-subitem.active {
+  background: rgba(24, 84, 148, 0.22);
+  color: #5ba0e0;
 }
 [data-theme="dark"] .sidebar-footer-divider {
   background: rgba(255, 255, 255, 0.06);
 }
-[data-theme="dark"] .sidebar-footer-item {
-  color: rgba(180, 195, 215, 0.6);
+
+/* Sidebar toggle + account block */
+[data-theme="dark"] .sidebar-toggle,
+[data-theme="dark"] .sidebar-account-settings {
+  color: rgba(200, 210, 225, 0.55);
 }
-[data-theme="dark"] .sidebar-footer-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(200, 215, 230, 0.9);
-}
-[data-theme="dark"] .sidebar-logout-btn {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(200, 210, 225, 0.7);
-}
-[data-theme="dark"] .sidebar-logout-btn:hover {
+[data-theme="dark"] .sidebar-toggle:hover,
+[data-theme="dark"] .sidebar-account-settings:hover {
   background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(200, 210, 225, 0.9);
+}
+[data-theme="dark"] .sidebar-account-settings.active {
+  background: rgba(24, 84, 148, 0.24);
   color: #5ba0e0;
 }
-
-/* App header */
-[data-theme="dark"] .app-header {
-  background: #1a1d23;
-  border-color: #2a2e36;
+[data-theme="dark"] .sidebar-account-main:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
-[data-theme="dark"] .header-menu {
-  color: rgba(200, 210, 225, 0.55);
+/* Outranks the rule above, which is themed and so would otherwise win over
+   the unthemed .sidebar-is-collapsed reset and repaint the white ring. */
+[data-theme="dark"] .sidebar-is-collapsed .sidebar-account-main:hover {
+  background: transparent;
 }
-[data-theme="dark"] .header-menu:hover {
+[data-theme="dark"] .sidebar-account-name {
+  color: rgba(200, 215, 230, 0.92);
+}
+[data-theme="dark"] .sidebar-account-menu-item {
+  color: rgba(200, 215, 230, 0.8);
+}
+/* Restated for dark: the rule above shares .is-danger's specificity and comes
+   later, so without this Log out loses its red and reads as a normal item. */
+[data-theme="dark"] .sidebar-account-menu-item.is-danger {
+  color: var(--danger);
+}
+[data-theme="dark"] .sidebar-account-menu-item:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(200, 210, 225, 0.85);
+  color: #5ba0e0;
 }
-[data-theme="dark"] .header-right {
-  color: rgba(200, 210, 225, 0.55);
-}
-[data-theme="dark"] .header-icon {
-  color: rgba(200, 210, 225, 0.5);
-}
-[data-theme="dark"] .header-icon:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(200, 210, 225, 0.85);
+[data-theme="dark"] .sidebar-account-menu-item.is-danger:hover {
+  background: rgba(178, 59, 67, 0.16);
 }
 
 /* Tables */
@@ -2129,11 +2670,6 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 [data-theme="dark"] .skeleton {
   background: linear-gradient(90deg, #22252c 25%, #2a2e36 37%, #22252c 63%);
   background-size: 400% 100%;
-}
-
-/* Notification badge */
-[data-theme="dark"] .notification-badge {
-  border-color: #1a1d23;
 }
 
 /* Search clear */
