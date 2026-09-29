@@ -64,10 +64,25 @@
   // to exhaust it. This binding keeps no storage at all.
   // `namespace_id` is any stable integer-as-string unique within this Worker;
   // `period` accepts only 10 or 60.
+  //
+  // MEASURED BEHAVIOUR, 2026-09-29 — do NOT read "12 per 60s per IP" as a hard
+  // cap. Cloudflare counts per DATA CENTRE and documents the binding as
+  // "permissive, eventually consistent, and intentionally designed to not be
+  // used as an accurate accounting system". Tested against this Worker:
+  //
+  //   limit 12 → 82 requests, one stable IP, 56 of them landing in a single
+  //              colo (SIN): ZERO denials.
+  //   limit  1 →  6 requests: denied the 4th only, passed 1,2,3,5,6.
+  //
+  // So it does fire, just far later and less often than the number suggests,
+  // and one client spread over several colos gets a multiple of the limit. Treat
+  // it as a brake on runaway loops and accidental hammering — which it does do —
+  // and NOT as the thing protecting the API Setu quota. A hard cap needs a
+  // strongly-consistent counter (Durable Object) or a global daily budget.
   "ratelimits": [
     {
       "name": "GSTIN_RATE_LIMITER",
-      "namespace_id": "1001",
+      "namespace_id": "2001",
       "simple": { "limit": 12, "period": 60 }
     }
   ],

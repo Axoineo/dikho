@@ -27,10 +27,22 @@ import { logEvent } from '../../utils/logger.js'
  *                 digits rather than from any response field.
  *   NO TRADE NAME. V1 returns only `legalName`.
  *
- * Both are believed to need GSTN Tax Payer API **V2**, a separate subscription
- * on the same publisher. When that is approved, add a `fetchTaxpayerV2` beside
- * `fetchTaxpayer` — the field readers below already accept either spelling, so
- * the address container is the only genuinely new part.
+ * Not a quirk of the records we happened to test — CONFIRMED against GSTN's own
+ * OpenAPI contract (1673347440_gstn-v1.yaml, "Updated on 9th January 2023"),
+ * whose 200 schema lists exactly those ten properties and marks all ten
+ * `required`. There is no address or trade name to read. Getting them needs
+ * GSTN Tax Payer API **V2**, a separate subscription on the same publisher.
+ * When that is approved, add a `fetchTaxpayerV2` beside `fetchTaxpayer` — the
+ * field readers below already accept either spelling, so the address container
+ * is the only genuinely new part.
+ *
+ * The same contract says an unknown GSTIN is a `404 record_not_found` and that
+ * `legalName` has `minLength: 1`. Neither holds in practice: an unknown GSTIN
+ * answers **HTTP 200 with all ten keys present and every value null**
+ * (including `natureBusinessActivities`, typed as an array). Verified live
+ * 2026-09-29 with 07AAAAA0000A1Z5. That is why the nameless-record guard below
+ * exists and why it maps to a 404 ourselves — the upstream will not do it, and
+ * a null-filled 200 would otherwise autofill the form with blanks.
  *
  * API Setu hands back camelCase, NOT the abbreviated shape the public GST
  * portal search uses (`lgnm`, `pradr`, `ctb`, `dty`, `sts`, `rgdt`, `nba`,
