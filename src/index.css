@@ -442,15 +442,14 @@ button, input, textarea, select { border: 0; }
   --ws-pad-b: 24px;
   height: 100vh;
   display: flex;
-  /* The rail's rounded right corners expose THIS layer — the wedge at its
-     top-right and bottom-right sits inside the rail's box but outside its
-     rounded background. So this has to match whatever the wedge sits next to.
-     --page is right for that: it is exactly the gutter every ordinary page
-     already shows, so the wedge vanishes there; and the inbox's list pane
-     (--inbox-list) is within 0.5% of it, so the wedge is imperceptible there
-     too. --surface, tried first, made the wedge LIGHTER than the gutter and
-     turned it into a visible pale notch on every screen. */
-  background: var(--page);
+  /* The curve now belongs to .app-main, not the rail, so the wedge it exposes
+     always sits against the RAIL — one constant colour. --surface is the
+     rail's own fill, so the wedge is invisible on every screen.
+     Cutting the radius out of the rail instead could never work: that wedge
+     sits against whatever is to its right, which is the page gutter on most
+     modules but the inbox's list pane on the inbox. No single colour matches
+     both, which is why the notch kept reappearing on one screen or the other. */
+  background: var(--surface);
   padding: 0;
   gap: 0;
   overflow: hidden;
@@ -491,10 +490,9 @@ button, input, textarea, select { border: 0; }
   flex-direction: column;
   border: 0;
   border-right: 1px solid rgba(24, 84, 148, 0.14);
-  /* Rounded on the dashboard side only — the other three edges meet the
-     window, and a radius there would just leak the page colour into a corner
-     with nothing behind it. */
-  border-radius: 0 14px 14px 0;
+  /* Square. The rounded boundary is drawn by .app-main's left edge instead —
+     see the note on .app-shell's background. */
+  border-radius: 0;
   padding: 0 8px;
   transition:
     width 0.3s ease-in-out,
@@ -1251,6 +1249,11 @@ button, input, textarea, select { border: 0; }
   flex-direction: column;
   gap: 0;
   padding-left: 0;
+  /* The rounded boundary between rail and content. overflow:hidden is what
+     makes it bite — it clips the workspace (and the inbox's full-bleed panes)
+     to these corners, so every module curves away from the rail identically
+     regardless of what colour it paints. */
+  border-radius: 14px 0 0 14px;
   overflow: hidden;
   transition: width 0.3s ease-in-out;
 }
@@ -1260,6 +1263,9 @@ button, input, textarea, select { border: 0; }
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* The page tone lives here now: .app-shell has to be --surface for the
+     corner wedge, so the gutter can no longer inherit it from there. */
+  background: var(--page);
   padding: var(--ws-pad-t) var(--ws-pad-x) var(--ws-pad-b);
 }
 /* Opt-out for pages that want the full pane edge-to-edge (the WhatsApp
@@ -1429,7 +1435,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
     width: min(280px, 84vw) !important;
     flex-basis: min(280px, 84vw) !important;
     padding: 0 8px !important;
-    border-radius: 0 14px 14px 0;
+    border-radius: 0;
     transform: translateX(0);
     transition: transform 0.3s ease-in-out;
     box-shadow: 4px 0 32px rgba(24, 84, 148, 0.12);
@@ -1465,11 +1471,13 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
     transform: none;
   }
 
-  /* Main content takes full width on mobile since the sidebar is fixed */
+  /* Main content takes full width on mobile since the sidebar is fixed — and
+     square, because there is no rail beside it to curve away from. */
   .app-shell .app-main {
     width: 100%;
     min-width: 0;
     padding-left: 0;
+    border-radius: 0;
   }
   .app-shell .sidebar + .app-main {
     margin-left: 0;
