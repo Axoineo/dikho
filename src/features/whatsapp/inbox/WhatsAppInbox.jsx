@@ -27,11 +27,16 @@ function isViewable(m) {
 export default function WhatsAppInbox() {
   const [conversations, setConversations] = useState([])
   const [loadingConvs, setLoadingConvs] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [activeId, setActiveId] = useState(null)
   const [messages, setMessages] = useState([])
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [lightboxId, setLightboxId] = useState(null)
-  const [infoOpen, setInfoOpen] = useState(true)
+  // Closed by default. The thread is the work; contact details are a lookup
+  // you ask for, and defaulting them open cost ~320px of message width on
+  // every screen for information that rarely changes.
+  const [infoOpen, setInfoOpen] = useState(false)
   const [, setTick] = useState(0)
 
   const activeIdRef = useRef(null)
@@ -42,14 +47,27 @@ export default function WhatsAppInbox() {
     return () => clearInterval(t)
   }, [])
 
+  // The first load used to swallow its error, which meant a failed request
+  // rendered the same "No conversations yet" copy as a genuinely empty inbox —
+  // so an auth or network problem looked like having no customers. Surface it
+  // instead, and offer a retry.
   useEffect(() => {
     let alive = true
+    setLoadingConvs(true)
+    setLoadError(null)
     waApi.conversations()
-      .then((data) => { if (alive) setConversations(sortConvs(data.conversations || [])) })
-      .catch(() => {})
+      .then((data) => {
+        if (!alive) return
+        setConversations(sortConvs(data.conversations || []))
+      })
+      .catch((err) => {
+        if (!alive) return
+        console.error('[inbox] failed to load conversations', err)
+        setLoadError(err?.message || 'Could not reach the server.')
+      })
       .finally(() => { if (alive) setLoadingConvs(false) })
     return () => { alive = false }
-  }, [])
+  }, [reloadKey])
 
   const openConversation = useCallback(async (conv) => {
     setActiveId(conv.id)
@@ -164,11 +182,22 @@ export default function WhatsAppInbox() {
    <MediaTicketProvider>
     {/* Full-bleed panes divided by hairlines — no card, no outer radius, no
         shadow. The floating-card treatment is what made the inbox read as a
-        widget inside a dashboard rather than as a chat client. */}
-    <div className="workspace-bleed flex overflow-hidden bg-chat-shell">
+        widget inside a dashboard rather than as a chat client. The dividers
+        are the app's --line now, since the chrome either side of them is. */}
+    <div className="workspace-bleed flex overflow-hidden bg-surface">
       {/* Left — conversation list */}
-      <aside className="flex w-full max-w-[400px] shrink-0 flex-col border-r border-chat-ring">
-        <ChatList conversations={conversations} activeId={activeId} onSelect={openConversation} loading={loadingConvs} />
+      {/* The list is a distinct pane, not a column of the same sheet: its own
+          fill plus a divider stronger than --line, so the boundary between
+          "all chats" and the open thread reads at a glance. */}
+      <aside className="flex w-full max-w-[352px] shrink-0 flex-col border-r border-inbox-divider bg-inbox-list">
+        <ChatList
+          conversations={conversations}
+          activeId={activeId}
+          onSelect={openConversation}
+          loading={loadingConvs}
+          error={loadError}
+          onRetry={() => setReloadKey((n) => n + 1)}
+        />
       </aside>
 
       {/* Middle — active conversation */}

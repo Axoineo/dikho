@@ -1,14 +1,33 @@
 import { AuthedMedia } from './AuthedMedia'
 import { formatTime } from './inboxUtils'
 
+// Splits a body on the active search term so the matched run can be marked.
+// Case-insensitive, and the term is escaped — a customer message containing
+// "(" would otherwise throw when it reached the RegExp.
+function highlight(text, term) {
+  if (!term || !text) return text
+  const safe = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = String(text).split(new RegExp(`(${safe})`, 'ig'))
+  return parts.map((part, i) =>
+    part.toLowerCase() === term.toLowerCase()
+      ? <mark key={i} className="inbox-hit">{part}</mark>
+      : part,
+  )
+}
+
 // Delivery ticks: single grey (sent), double grey (delivered), double blue (read).
-function Ticks({ status }) {
-  const base = 'ml-0.5 inline-block align-middle'
+function Ticks({ status, mediaOnly = false }) {
+  const base = 'inline-block align-middle'
   if (status === 'read' || status === 'delivered') {
+    // On a photo the tick rides the scrim, where the light-mode blue would be
+    // as lost as the clock was; a brighter blue holds up against the image.
+    const readTone = mediaOnly ? 'text-[#7cd0f5]' : 'text-chat-tick'
     return (
-      <svg viewBox="0 0 18 12" width="16" height="11" className={`${base} ${status === 'read' ? 'text-chat-tick' : ''}`} fill="none"
-        stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 6.5l3.2 3.2L11 3" /><path d="M6.2 9.7L12.9 3" />
+      /* Pulled apart: at the original spacing the two checks read as one
+         thick glyph at 11px, so "delivered" and "read" looked identical. */
+      <svg viewBox="0 0 20 12" width="17" height="11" className={`${base} ${status === 'read' ? readTone : ''}`} fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 6.6l3.1 3.1L10.4 3.2" /><path d="M8.2 9.7L14.9 3.2" />
       </svg>
     )
   }
@@ -57,7 +76,7 @@ function CallRow({ message, label }) {
   )
 }
 
-export function MessageBubble({ message, onOpenMedia, grouped = true }) {
+export function MessageBubble({ message, onOpenMedia, grouped = true, searchTerm = '' }) {
   const outbound = message.direction === 'outbound'
   const hasMedia = message.type !== 'text' && (message.media_url || message.media_status)
   const isImageOrVideo = (message.media_mime || '').startsWith('image/') || (message.media_mime || '').startsWith('video/')
@@ -67,10 +86,14 @@ export function MessageBubble({ message, onOpenMedia, grouped = true }) {
   const mediaOnly = (hasMedia || isCall) && !bodyText && !placeholder
 
   return (
-    <div className={`flex px-2 sm:px-4 ${grouped ? 'mt-3' : 'mt-0.5'} ${outbound ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex px-2 sm:px-4 ${grouped ? 'mt-2' : 'mt-[3px]'} ${outbound ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`relative max-w-[76%] rounded-bubble shadow-bubble pb-2 pl-[9px] pr-[7px] pt-1.5 text-[14.2px] leading-[19px] sm:max-w-[65%]
-          ${mediaOnly ? 'pb-[22px]' : ''}
+        /* w-fit so the bubble is only as wide as its content — a six-digit OTP
+           gets a six-digit bubble. The cap is a reading measure (32rem) rather
+           than a share of the pane, so a long paragraph stays legible instead
+           of stretching across a wide monitor. */
+        className={`relative w-fit max-w-[min(72%,23rem)] rounded-bubble shadow-bubble pb-[5px] pl-[7px] pr-[6px] pt-[4px] text-[13.4px] leading-[18px]
+          ${mediaOnly ? 'pb-[19px]' : ''}
           ${outbound
             ? `bg-chat-bubble-out text-chat-bubble-out-text ${grouped ? 'rounded-tr-none' : ''}`
             : `bg-chat-bubble-in text-chat-text ${grouped ? 'rounded-tl-none' : ''}`}`}
@@ -87,25 +110,47 @@ export function MessageBubble({ message, onOpenMedia, grouped = true }) {
         {isCall && <CallRow message={message} label={message.body || 'Missed voice call'} />}
 
         {!isCall && hasMedia && (
-          <div className={`overflow-hidden ${bodyText ? 'mb-1' : ''} ${isImageOrVideo ? '-mx-0.5 -mt-0.5 rounded-lg' : ''}`}>
+          <div className={`overflow-hidden ${bodyText ? 'mb-1' : ''} ${isImageOrVideo ? '-mx-0.5 -mt-0.5 rounded-lg' : ''}
+            ${mediaOnly && !isImageOrVideo ? 'mb-3' : ''}`}>
             <AuthedMedia message={message} onOpen={() => onOpenMedia?.(message)} />
           </div>
         )}
 
+        {/* The timestamp is absolutely placed, and the last text line reserves
+            room for it with an inline spacer rather than the whole paragraph
+            carrying right padding. Padding indents EVERY line, which on a
+            multi-line message left a ragged empty column down the right side;
+            the spacer only affects the line the clock actually sits on. */}
         {placeholder && (
-          <p className={`italic text-chat-sub ${outbound ? 'pr-[68px]' : 'pr-[52px]'}`}>{placeholder}</p>
+          <p className="italic text-chat-sub">
+            {placeholder}
+            <span aria-hidden="true" className={`inline-block h-0 ${outbound ? 'w-[54px]' : 'w-[38px]'}`} />
+          </p>
         )}
         {bodyText && (
-          <p className={`whitespace-pre-wrap break-words ${outbound ? 'pr-[68px]' : 'pr-[52px]'}`}>{bodyText}</p>
+          <p className="whitespace-pre-wrap break-words">
+            {highlight(bodyText, searchTerm)}
+            <span aria-hidden="true" className={`inline-block h-0 ${outbound ? 'w-[54px]' : 'w-[38px]'}`} />
+          </p>
+        )}
+
+        {/* Over a picture the clock needs its own ground — on a white sky it
+            vanished, and the ticks with it. A scrim only under the corner it
+            occupies, so the image is otherwise untouched. */}
+        {mediaOnly && isImageOrVideo && (
+          <span aria-hidden="true" className="media-scrim pointer-events-none absolute inset-x-0 bottom-0 h-11 rounded-b-bubble" />
         )}
 
         {!isCall && (
-          <span className={`absolute bottom-[5px] right-2 flex select-none items-center gap-[3px] text-[11px] leading-[11px]
-            ${outbound ? 'text-chat-meta' : 'text-chat-sub'}`}>
+          <span className={`absolute bottom-[4px] right-[7px] z-[1] flex select-none items-center gap-[5px] text-[10.5px] leading-[10px]
+            ${mediaOnly && isImageOrVideo
+              ? 'text-white/95'
+              : outbound ? 'text-chat-meta' : 'text-chat-sub'}`}>
             {formatTime(message.wa_timestamp || message.created_at)}
-            {outbound && <Ticks status={message.status} />}
+            {outbound && <Ticks status={message.status} mediaOnly={mediaOnly && isImageOrVideo} />}
           </span>
         )}
+
       </div>
     </div>
   )

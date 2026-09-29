@@ -203,6 +203,7 @@ const WHATSAPP_ITEMS = [
 
 function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
   const { pathname } = useLocation()
+  const panelRef = useRef(null)
   const sectionActive = pathname.startsWith('/whatsapp')
   // Closed by default: the five sub-items only appear once the group is opened.
   // It opens itself on the way *into* the section (deep link, or a link from
@@ -214,6 +215,18 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
     if (sectionActive && !wasSectionActive.current) setOpen(true)
     wasSectionActive.current = sectionActive
   }, [sectionActive])
+
+  /* This group sits last in the rail, so opening it pushes five rows below the
+     fold — on a short window they simply were not there. Scroll the panel into
+     view once it has rendered, which also keeps the account block visible
+     because scrollIntoView stops as soon as the element fits. */
+  useEffect(() => {
+    if (!open || collapsed) return
+    const id = requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [open, collapsed])
 
   return (
     <div className="nav-group">
@@ -255,7 +268,7 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
           this project — is not there to close that gap, so the panel stayed
           visible in every state. The collapsed rail has no room for it. */}
       {open && !collapsed && (
-        <div className="nav-sublist">
+        <div className="nav-sublist" ref={panelRef}>
           {WHATSAPP_ITEMS.map((item) => (
             <NavLink
               key={item.to}

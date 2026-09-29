@@ -36,24 +36,33 @@
      consistent — that trade was reversed on 2026-09-27 by product decision.
      Scoped to --chat-* so no other screen moves. */
   --chat-shell: #ffffff;          /* list + info panels                     */
-  --chat-bar: #f0f2f5;            /* headers, composer, search field        */
-  --chat-canvas: #efeae2;         /* thread background (warm, not grey)     */
+  --chat-bar: #f1f4f8;            /* = --inbox-field                        */
+  /* The thread's SURFACES follow the dashboard now; only the outgoing bubble
+     keeps WhatsApp's green. The warm beige read as a foreign app sitting
+     between two white panes — three panels side by side need to differ by a
+     shade step, not by a different colour family. Ladder, lightest first:
+     list #fff -> canvas #eef1f6, incoming bubbles back at #fff so they still
+     lift off it. */
+  --chat-canvas: #eef1f6;
+  --chat-pattern: rgba(24, 84, 148, 0.10);   /* thread texture — see .chat-canvas */
   --chat-bubble-in: #ffffff;
   --chat-bubble-out: #d9fdd3;
   --chat-bubble-out-text: #111b21;
   --chat-raised: #ffffff;         /* day chips, system notices, popovers    */
-  --chat-ring: rgba(11, 20, 26, 0.08);
-  --chat-text: #111b21;
-  --chat-sub: #5b6a74;            /* WhatsApp ships #667781, which is 3.9:1
-                                     on the warm canvas — three shades down
-                                     clears AA everywhere and is visually
-                                     indistinguishable. 4.7:1 on #efeae2,
-                                     5.0:1 on #f0f2f5, 5.6:1 on #ffffff.     */
+  --chat-ring: rgba(24, 84, 148, 0.10);   /* the rail's hairline, not WA's   */
+  --chat-text: #263247;           /* = --text, so thread copy matches the app */
+  --chat-sub: #5f6c82;            /* = --muted. Chosen to clear 4.5:1 on the
+                                     app's own light surfaces, which is what
+                                     the canvas is made of now.              */
   --chat-accent: #008069;         /* WhatsApp's LIGHT-theme green (it uses
                                      #00a884 only in dark); white on it is
                                      4.9:1, where #00a884 would be 3.0:1.    */
   --chat-accent-ink: #017561;     /* green as TEXT — 4.8:1 on #ffffff       */
-  --chat-tick: #53bdeb;
+  /* WhatsApp's own #53bdeb is 1.92:1 on the light outgoing bubble (#d9fdd3)
+     — the read receipt was effectively invisible in light mode. This is the
+     same blue family at 4.07:1, so a double-blue tick is unmistakable. Dark
+     keeps #53bdeb, which already clears 3.74:1 on #005c4b. */
+  --chat-tick: #0f7bc4;
   --chat-chip: #d9fdd3;           /* active filter pill                     */
   --chat-row-active: #f0f2f5;
   --chat-row-hover: #f5f6f6;
@@ -61,6 +70,27 @@
   --chat-on-accent: #ffffff;      /* text/glyphs on an accent fill          */
   --chat-meta: rgba(17, 27, 33, 0.65);  /* 5.2:1 on the outgoing bubble     */
   --chat-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+
+  /* ---- Inbox CHROME (not the thread) ----------------------------------
+     The thread above keeps WhatsApp's palette, because that is what agents'
+     eyes are trained on. Everything AROUND it — conversation list, headers,
+     search, filters, contact panel, composer controls — follows the dashboard
+     instead, so the inbox stops reading as a foreign app bolted into the
+     shell. These are literal tints rather than opacity modifiers: Tailwind v3
+     cannot apply an alpha channel to a var() colour, so `bg-brand/10` would
+     silently emit nothing (see the note in tailwind.config.js). Values match
+     the rail's own highlights. */
+  --inbox-row-hover: rgba(24, 84, 148, 0.055);
+  --inbox-row-active: rgba(24, 84, 148, 0.10);
+  --inbox-control: rgba(24, 84, 148, 0.06);   /* icon-button hover disc      */
+  --inbox-chip: rgba(24, 84, 148, 0.10);      /* selected filter pill        */
+  --inbox-field: #f1f4f8;                     /* search + composer input     */
+  --inbox-panel: #fbfcfe;                     /* contact-panel block fill    */
+  --inbox-focus: rgba(24, 84, 148, 0.30);     /* keyboard focus ring         */
+  --inbox-scroll: rgba(24, 84, 148, 0.22);    /* scrollbar thumb, on hover   */
+  --inbox-divider: rgba(24, 84, 148, 0.13);   /* list | thread boundary      */
+  --inbox-list: #f7f9fc;                      /* list pane, a step off white */
+  --inbox-hit: rgba(24, 84, 148, 0.16);       /* search-match highlight      */
 }
 
 * { box-sizing: border-box; }
@@ -94,6 +124,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
    family each set their own background and are unaffected. */
 button { cursor: pointer; background-color: transparent; background-image: none; }
 button:disabled { cursor: default; }
+/* The other half of that same gap, and the one that shows up on every new
+   Tailwind screen: without preflight a <button> also keeps `border: 2px outset
+   ButtonBorder` and an <input> keeps `border: 2px inset`, both of which ignore
+   the theme. That is the stray outline around unselected filter pills and the
+   box drawn inside the inbox search field. Safe to zero globally: every
+   classed control in this stylesheet (.field input, .secondary-button,
+   .search-select-trigger, …) declares its own border and outranks this. */
+button, input, textarea, select { border: 0; }
 
 /* ============================================================
    GLOBAL FOUNDATION & ACCESSIBILITY
@@ -404,6 +442,14 @@ button:disabled { cursor: default; }
   --ws-pad-b: 24px;
   height: 100vh;
   display: flex;
+  /* The rail's rounded right corners expose THIS layer — the wedge at its
+     top-right and bottom-right sits inside the rail's box but outside its
+     rounded background. So this has to match whatever the wedge sits next to.
+     --page is right for that: it is exactly the gutter every ordinary page
+     already shows, so the wedge vanishes there; and the inbox's list pane
+     (--inbox-list) is within 0.5% of it, so the wedge is imperceptible there
+     too. --surface, tried first, made the wedge LIGHTER than the gutter and
+     turned it into a visible pale notch on every screen. */
   background: var(--page);
   padding: 0;
   gap: 0;
@@ -829,6 +875,76 @@ button:disabled { cursor: default; }
 }
 @keyframes railTipOut {
   to { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+}
+
+/* ---------- Inbox scrollbars ---------- */
+/* Idle the track and thumb are fully transparent, so a resting pane shows no
+   scrollbar at all; the thumb fades in when the pointer enters that pane. The
+   space is still reserved either way, so nothing reflows on hover.
+   ::-webkit-scrollbar-button is killed outright — those are the little end
+   arrows, which no modern client draws. Needs to out-rank the global
+   `*::-webkit-scrollbar-thumb` rule near the top of this file, which a class
+   selector does. */
+.inbox-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  /* Reserve the gutter permanently. Without this the rows reflow by ~10px the
+     moment the thumb appears, which is worse than just always showing it. */
+  scrollbar-gutter: stable;
+  transition: scrollbar-color 0.25s ease;
+}
+.inbox-scroll:hover,
+.inbox-scroll:focus-within {
+  scrollbar-color: var(--inbox-scroll) transparent;
+}
+.inbox-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.inbox-scroll::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.inbox-scroll::-webkit-scrollbar-track { background: transparent; }
+.inbox-scroll::-webkit-scrollbar-corner { background: transparent; }
+.inbox-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;     /* insets the thumb, so it reads slimmer */
+  border-radius: 999px;
+  background-clip: content-box;
+  transition: background-color 0.25s ease;
+}
+.inbox-scroll:hover::-webkit-scrollbar-thumb,
+.inbox-scroll:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--inbox-scroll);
+  background-clip: content-box;
+}
+
+/* Media-only bubbles put the clock ON the picture, where it lands on whatever
+   the photo happens to be — white sky and it disappears. WhatsApp fades a
+   scrim up from the bottom edge for exactly this; same here, sized to the
+   corner the timestamp occupies rather than the whole image. */
+.media-scrim {
+  background: linear-gradient(to top, rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0));
+}
+
+/* Search hit inside a message bubble. */
+.inbox-hit {
+  background: var(--inbox-hit);
+  border-radius: 3px;
+  padding: 0 1px;
+  color: inherit;
+}
+
+/* ---------- Inbox thread canvas ---------- */
+/* WhatsApp puts a doodle behind the thread so a short conversation does not
+   read as a blank slab. Same job here, done with a dot grid instead of an
+   illustration: it costs no asset, tiles at any size, and stays quiet enough
+   for a business tool — the tint is barely above the canvas in both themes
+   (0.055 on light, 0.035 on dark) so it reads as texture, never as pattern
+   competing with the messages. */
+/* Applied to the whole thread column, not just the scroller, so the texture
+   continues behind the floating composer instead of stopping at its top edge
+   and leaving it sitting on a flat slab. */
+.chat-canvas {
+  background-color: var(--chat-canvas);
+  background-image: radial-gradient(var(--chat-pattern) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: 0 0;
 }
 
 /* ---------- Collapsed-rail flyout (WhatsApp sub-items) ---------- */
@@ -2126,15 +2242,19 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
      intentionally the one screen that does NOT sit on the app's neutral-cool
      ramp; see the note on --chat-* in :root. */
   --chat-shell: #111b21;
-  --chat-bar: #202c33;
-  --chat-canvas: #0b141a;
-  --chat-bubble-in: #202c33;
+  --chat-bar: #23272f;            /* = --inbox-field                        */
+  /* Same ladder in the app's blacks rather than WhatsApp's:
+     list #1a1d23 -> canvas #101318, incoming bubble #232831 so it lifts off
+     the canvas the way the light one lifts off #eef1f6. */
+  --chat-canvas: #101318;
+  --chat-pattern: rgba(255, 255, 255, 0.035);
+  --chat-bubble-in: #232831;
   --chat-bubble-out: #005c4b;
   --chat-bubble-out-text: #e9edef;  /* 13.1:1 on #005c4b                    */
-  --chat-raised: #182229;
-  --chat-ring: rgba(134, 150, 160, 0.15);
-  --chat-text: #e9edef;
-  --chat-sub: #8696a0;            /* 5.2:1 on #111b21, 4.8:1 on #202c33     */
+  --chat-raised: #232831;
+  --chat-ring: rgba(255, 255, 255, 0.08);
+  --chat-text: #e2e5ea;           /* = --text in dark                       */
+  --chat-sub: #8b919c;            /* = --muted in dark                      */
   --chat-accent: #00a884;
   --chat-accent-ink: #21c063;     /* 7.1:1 on #111b21                       */
   --chat-tick: #53bdeb;
@@ -2145,6 +2265,19 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   --chat-on-accent: #111b21;      /* dark ink on #00a884 = 5.8:1            */
   --chat-meta: rgba(233, 237, 239, 0.75);  /* 4.6:1 on #005c4b              */
   --chat-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+
+  /* Inbox chrome — dark. Lifted off #1a1d23 the same way the rail's are. */
+  --inbox-row-hover: rgba(255, 255, 255, 0.04);
+  --inbox-row-active: rgba(24, 84, 148, 0.24);
+  --inbox-control: rgba(255, 255, 255, 0.06);
+  --inbox-chip: rgba(24, 84, 148, 0.28);
+  --inbox-field: #23272f;
+  --inbox-panel: #1e222a;
+  --inbox-focus: rgba(91, 160, 224, 0.45);
+  --inbox-scroll: rgba(255, 255, 255, 0.16);
+  --inbox-divider: rgba(255, 255, 255, 0.09);
+  --inbox-list: #171a20;
+  --inbox-hit: rgba(91, 160, 224, 0.30);
 }
 
 /* Dark-theme scrollbars: lift off the darker surface. */

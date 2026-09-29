@@ -1,19 +1,42 @@
+import { useState } from 'react'
 import { Avatar } from './Avatar'
 import { useMediaSrc } from './MediaTicketContext'
 import { displayName, sessionMsLeft, formatCountdown, formatLastActive } from './inboxUtils'
 
-function Block({ label, value }) {
+function Block({ label, value, onCopy }) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(onCopy)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    } catch { /* clipboard blocked — the value is selectable anyway */ }
+  }
   return (
-    <div className="mt-2.5 bg-chat-shell px-5 py-3.5">
-      <div className="text-[13px] text-chat-sub">{label}</div>
-      <div className="mt-0.5 break-words text-[15px] text-chat-text">{value || '—'}</div>
+    <div className="group flex items-start gap-2 rounded-2xl bg-inbox-panel px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-muted">{label}</div>
+        <div className="mt-1 break-words text-[13.5px] text-ink">{value || '—'}</div>
+      </div>
+      {onCopy && (
+        <button
+          type="button"
+          onClick={copy}
+          title={copied ? 'Copied' : `Copy ${label.toLowerCase()}`}
+          aria-label={`Copy ${label.toLowerCase()}`}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-inbox-control hover:text-ink"
+        >
+          {copied
+            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 4 4L19 6" /></svg>
+            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" /></svg>}
+        </button>
+      )}
     </div>
   )
 }
 
-// Right-hand details panel (the third pane), laid out like WhatsApp's contact
-// info drawer: a card on the canvas, then stacked blocks. Read-only summary
-// built entirely from data we already have — no extra API calls.
+/* Third pane. CHROME, so it follows the dashboard: a surface panel with
+   rounded blocks, matching the rail's radii and tints. */
 export function ContactPanel({ conversation, messages, onOpenMedia }) {
   const { srcFor } = useMediaSrc()
   if (!conversation) return null
@@ -24,34 +47,44 @@ export function ContactPanel({ conversation, messages, onOpenMedia }) {
   )
 
   return (
-    <aside className="hidden w-[340px] shrink-0 flex-col border-l border-chat-ring bg-chat-canvas xl:flex">
-      <div className="flex h-[59px] shrink-0 items-center px-5 text-[16px] text-chat-text bg-chat-bar">Contact info</div>
+    <aside className="hidden w-[320px] shrink-0 flex-col border-l border-inbox-divider bg-inbox-list xl:flex">
+      <div className="flex h-16 shrink-0 items-center border-b border-line px-5 text-[14.5px] font-semibold text-ink">
+        Contact info
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center bg-chat-shell px-5 pb-6 pt-7 text-center">
-          <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={100} />
-          <div className="mt-3 text-[19px] text-chat-text">{displayName(conversation)}</div>
-          <div className="mt-0.5 text-[15px] text-chat-sub">+{conversation.phone}</div>
+      <div className="inbox-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
+        <div className="flex flex-col items-center rounded-2xl bg-inbox-panel px-5 pb-5 pt-6 text-center">
+          <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={88} />
+          <div className="mt-3 text-[16px] font-semibold text-ink">{displayName(conversation)}</div>
+          <div className="mt-0.5 text-[13px] text-muted">+{conversation.phone}</div>
           {msLeft > 0 ? (
-            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-chat-chip px-3 py-1 text-[12.5px] font-medium text-chat-accent-ink">
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-semibold text-brand">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Replies open · {formatCountdown(msLeft)} left
             </span>
           ) : (
-            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12.5px] font-medium text-amber-700 dark:text-amber-300">
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-warn px-3 py-1 text-[12px] font-semibold text-amber-700 dark:text-amber-300">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Window closed · templates only
             </span>
           )}
         </div>
 
-        <Block label="Phone" value={`+${conversation.phone}`} />
+        <Block label="Phone" value={`+${conversation.phone}`} onCopy={`+${conversation.phone}`} />
         <Block label="Last active" value={formatLastActive(conversation.last_inbound_at)} />
 
         {media.length > 0 && (
-          <div className="mt-2.5 bg-chat-shell px-5 py-4">
-            <div className="mb-2.5 text-[13px] text-chat-sub">Media, links and docs · {media.length}</div>
-            <div className="grid grid-cols-3 gap-[3px]">
+          <div className="rounded-2xl bg-inbox-panel px-4 py-3.5">
+            <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted">
+              Media · {media.length}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
               {media.slice(-12).reverse().map((m) => (
-                <button key={m.id} type="button" onClick={() => onOpenMedia?.(m)} className="aspect-square overflow-hidden rounded bg-chat-ring">
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => onOpenMedia?.(m)}
+                  aria-label="Open media"
+                  className="aspect-square overflow-hidden rounded-xl bg-inbox-field"
+                >
                   <img src={srcFor(m.media_url)} alt="" className="h-full w-full object-cover transition-transform hover:scale-105" />
                 </button>
               ))}

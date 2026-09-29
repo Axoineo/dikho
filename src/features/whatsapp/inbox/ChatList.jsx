@@ -48,7 +48,10 @@ function decodePreview(conv) {
   return { text: raw, glyph: null }
 }
 
-export function ChatList({ conversations, activeId, onSelect, loading }) {
+/* The conversation list is CHROME, not thread, so it follows the dashboard:
+   rounded rows on a surface fill, brand-tinted selection, the rail's own
+   hover/active alphas. The thread opposite it keeps WhatsApp's palette. */
+export function ChatList({ conversations, activeId, onSelect, loading, error, onRetry }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
 
@@ -69,59 +72,94 @@ export function ChatList({ conversations, activeId, onSelect, loading }) {
   const unreadTotal = conversations.filter((c) => c.unread_count > 0).length
 
   return (
-    <div className="flex h-full flex-col bg-chat-shell">
-      {/* Panel bar — same height and fill as the chat header opposite it. */}
-      <header className="flex h-[59px] shrink-0 items-center justify-between bg-chat-bar px-5">
-        <h1 className="text-[19px] font-semibold tracking-tight text-chat-text">Inbox</h1>
+    <div className="flex h-full flex-col bg-inbox-list">
+      {/* Header — same 64px as the thread header opposite, so the two bars
+          line up across the divider. */}
+      <header className="flex h-16 shrink-0 items-center justify-between px-5">
+        <h1 className="text-[17px] font-semibold tracking-[-0.2px] text-ink">Inbox</h1>
         {unreadTotal > 0 && (
-          <span className="rounded-full bg-chat-accent px-2 py-0.5 text-[12px] font-semibold text-chat-on-accent">
+          <span className="rounded-full bg-brand px-2 py-[3px] text-[11.5px] font-bold leading-none text-white">
             {unreadTotal}
           </span>
         )}
       </header>
 
       {/* Search */}
-      <div className="px-3 py-[7px]">
-        <div className="flex h-[35px] items-center rounded-lg bg-chat-bar focus-within:ring-1 focus-within:ring-chat-accent">
-          <span className="grid w-12 shrink-0 place-items-center text-chat-sub">
+      <div className="px-3 pb-2">
+        <div className="flex h-10 items-center rounded-full bg-surface transition-shadow focus-within:ring-2 focus-within:ring-inbox-focus">
+          <span className="grid w-10 shrink-0 place-items-center text-muted">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
           </span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search name, number or message"
-            className="w-full bg-transparent pr-3 text-[14px] text-chat-text outline-none placeholder:text-chat-sub"
+            aria-label="Search conversations"
+            className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-muted"
           />
-          {query && <button onClick={() => setQuery('')} className="pr-3 text-chat-sub hover:text-chat-text" title="Clear">✕</button>}
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-inbox-control hover:text-ink"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 px-3 pb-2.5">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            aria-pressed={filter === f.key}
-            className={`h-[30px] rounded-full px-[13px] text-[13.5px] transition-colors
-              ${filter === f.key
-                ? 'bg-chat-chip font-medium text-chat-accent-ink'
-                : 'bg-chat-bar text-chat-sub hover:brightness-95'}`}
-          >
-            {f.label}{f.key === 'unread' && unreadTotal > 0 ? ` ${unreadTotal}` : ''}
-          </button>
-        ))}
+      {/* Segmented control, not two loose buttons: a shared track makes it read
+          as one either/or choice, and the raised thumb shows which side is
+          live. */}
+      <div className="px-3 pb-2.5">
+        <div role="tablist" aria-label="Filter conversations" className="inline-flex rounded-full bg-surface p-[3px]">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.key}
+              onClick={() => setFilter(f.key)}
+              className={`h-7 rounded-full px-3.5 text-[12.5px] transition-all
+                ${filter === f.key
+                  ? 'bg-inbox-chip font-semibold text-brand'
+                  : 'font-medium text-muted hover:text-ink'}`}
+            >
+              {f.label}{f.key === 'unread' && unreadTotal > 0 ? ` ${unreadTotal}` : ''}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Rows */}
-      <div className="flex-1 overflow-y-auto">
-        {loading && conversations.length === 0 && <div className="p-4 text-sm text-chat-sub">Loading conversations…</div>}
-        {!loading && shown.length === 0 && (
-          <div className="p-6 text-center text-sm text-chat-sub">
-            {conversations.length === 0
-              ? 'No conversations yet. They appear here when a customer messages your number.'
-              : 'No conversations match.'}
+      <div className="inbox-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {loading && conversations.length === 0 && (
+          <p className="px-3 py-4 text-[13px] text-muted">Loading conversations…</p>
+        )}
+
+        {/* A failed load is NOT an empty inbox, and must not read like one. */}
+        {!loading && error && conversations.length === 0 && (
+          <div className="mx-1 mt-2 rounded-2xl bg-tint-danger px-4 py-4 text-center">
+            <p className="text-[13px] font-semibold text-ink">Couldn&rsquo;t load conversations</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{error}</p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-3 rounded-full bg-brand px-4 py-1.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Try again
+            </button>
           </div>
+        )}
+
+        {!loading && !error && shown.length === 0 && (
+          <p className="px-5 py-10 text-center text-[13px] leading-relaxed text-muted">
+            {conversations.length === 0
+              ? 'No conversations yet \u2014 they\u2019ll appear here as soon as a customer messages your number.'
+              : 'No conversations match your search.'}
+          </p>
         )}
 
         {shown.map((conv) => {
@@ -131,40 +169,39 @@ export function ChatList({ conversations, activeId, onSelect, loading }) {
           return (
             <button
               key={conv.id}
+              type="button"
               onClick={() => onSelect(conv)}
-              aria-current={active}
-              className={`relative flex h-[72px] w-full items-center gap-[15px] px-[15px] text-left transition-colors
-                ${active ? 'bg-chat-row-active' : 'hover:bg-chat-row-hover'}`}
+              aria-current={active ? 'true' : undefined}
+              className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors
+                ${active ? 'bg-inbox-row-active' : 'hover:bg-inbox-row-hover'}`}
             >
-              <Avatar name={conv.wa_name || conv.contact_name} phone={conv.phone} avatarUrl={conv.avatar_url} size={49} />
+              <Avatar name={conv.wa_name || conv.contact_name} phone={conv.phone} avatarUrl={conv.avatar_url} size={44} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2.5">
-                  <span className="truncate text-[17px] font-normal text-chat-text">
+                  <span className={`truncate text-[14.5px] ${unread || active ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>
                     {displayName(conv)}
                   </span>
-                  <span className={`shrink-0 text-[12px] tabular-nums ${unread ? 'text-chat-accent-ink' : 'text-chat-sub'}`}>
+                  <span className={`shrink-0 text-[11.5px] tabular-nums ${unread ? 'font-semibold text-brand' : 'text-muted'}`}>
                     {formatListTime(conv.last_message_at)}
                   </span>
                 </span>
-                <span className="mt-0.5 flex items-center justify-between gap-2.5">
-                  <span className="flex min-w-0 items-center gap-1 text-[14px] text-chat-sub">
+                <span className="mt-[3px] flex items-center justify-between gap-2.5">
+                  <span className="flex min-w-0 items-center gap-1 text-[12.8px] text-muted">
                     {conv.last_message_direction === 'outbound' && (
-                      <svg viewBox="0 0 18 12" width="15" height="10" className="shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 6.5l3.2 3.2L11 3" /><path d="M6.2 9.7L12.9 3" /></svg>
+                      <svg viewBox="0 0 18 12" width="14" height="10" className="shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 6.5l3.2 3.2L11 3" /><path d="M6.2 9.7L12.9 3" /></svg>
                     )}
                     {preview.glyph && (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">{preview.glyph}</svg>
+                      <svg width="12.5" height="12.5" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">{preview.glyph}</svg>
                     )}
                     <span className="truncate">{preview.text}</span>
                   </span>
                   {unread && (
-                    <span className="ml-auto flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-chat-accent px-1.5 text-[12px] font-medium leading-none text-chat-on-accent">
+                    <span className="ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-bold leading-none text-white">
                       {conv.unread_count}
                     </span>
                   )}
                 </span>
               </span>
-              {/* Inset hairline, starting past the avatar as the client does. */}
-              <span className="pointer-events-none absolute bottom-0 left-[79px] right-0 h-px bg-chat-ring" />
             </button>
           )
         })}

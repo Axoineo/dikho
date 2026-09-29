@@ -70,6 +70,26 @@ export default {
           meta: 'var(--chat-meta)',
         },
 
+        // Inbox CHROME — the list, headers, search, filters, contact panel and
+        // composer controls. Separate from `chat` on purpose: `chat` is the
+        // thread, which deliberately keeps WhatsApp's palette, while these
+        // follow the dashboard so the surrounding UI matches the rest of the
+        // app. Defined for both themes in src/index.css.
+        inbox: {
+          'row-hover': 'var(--inbox-row-hover)',
+          'row-active': 'var(--inbox-row-active)',
+          control: 'var(--inbox-control)',
+          chip: 'var(--inbox-chip)',
+          field: 'var(--inbox-field)',
+          panel: 'var(--inbox-panel)',
+          // Literal rgba, not `ring-brand/30`: per the note above, an alpha
+          // modifier on a var() colour makes Tailwind emit NOTHING at all, so
+          // that focus ring was silently absent rather than merely wrong.
+          focus: 'var(--inbox-focus)',
+          divider: 'var(--inbox-divider)',
+          list: 'var(--inbox-list)',
+        },
+
         // WhatsApp's own client colours, for the message preview only.
         // Deliberately not themed: it mimics their app, not this dashboard.
         wa: {
