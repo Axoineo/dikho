@@ -1,0 +1,41 @@
+-- A hard daily ceiling on GSTIN lookups sent to API Setu.
+--
+-- GET /api/gstn/:gstin is mounted unauthenticated on purpose — the public
+-- vendor form has no session, and Turnstile cannot gate it (its tokens are
+-- single-use and spent at submit). That leaves our API Setu subscription
+-- reachable by anyone who finds the URL, and API Setu publishes no quota
+-- figure, so we cannot even tell how much abuse it would take to break vendor
+-- onboarding.
+--
+-- The per-IP rate limiter was supposed to cover this and does not. Measured
+-- 2026-09-29: at limit 12/60s, 82 requests from ONE IP with 56 landing in a
+-- single colo drew zero denials, because Cloudflare counts per data centre and
+-- documents the binding as "permissive, eventually consistent, and
+-- intentionally designed to not be used as an accurate accounting system". It
+-- is a brake on runaway loops, not a quota. Rotating IPs (trivial over IPv6,
+-- where one client holds a /64) defeats per-IP limiting outright.
+--
+-- A global counter is the only control that survives both IP rotation and
+-- colo-splitting, because it bounds TOTAL upstream calls regardless of who
+-- makes them or where they land.
+--
+-- Why this is in D1 at all, having been deliberately kept out of it:
+-- src/api/routes/gstn/index.js rejected D1 for the per-IP limiter because this
+-- database's free-tier row-write budget is load-bearing for WhatsApp, and
+-- migration 0006 records what happens when it runs out — campaign 13 died at
+-- 1,679 of 1,835 recipients. That reasoning does not carry over here. A capped
+-- counter BOUNDS ITS OWN WRITE COST: the UPDATE is guarded on `lookups < cap`,
+-- so once the ceiling is reached the statement modifies no row and costs no
+-- write. Daily writes can therefore never exceed the cap itself (500 by
+-- default — 0.5% of the free-tier budget, and far less than a single campaign).
+-- An unbounded per-IP limiter had no such ceiling, which is why it was refused.
+--
+-- Only cache MISSES are charged. Repeat lookups of the same GSTIN are served
+-- from the edge cache and never reach here, so a hundred people registering
+-- with the same GSTIN costs one unit.
+CREATE TABLE IF NOT EXISTS gstn_lookup_budget (
+  -- UTC date as YYYY-MM-DD. One row per day; old rows are harmless and keep a
+  -- usage history worth having, since API Setu shows us no usage counter.
+  day TEXT PRIMARY KEY,
+  lookups INTEGER NOT NULL DEFAULT 0
+);

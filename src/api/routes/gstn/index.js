@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
-import { logEvent } from '../../utils/logger.js'
+import { logEvent, logError } from '../../utils/logger.js'
 import { fetchTaxpayer } from '../../services/apisetu/gstn.js'
 import { ApiSetuError } from '../../services/apisetu/client.js'
-import { isGstinFormatValid, normalizeGstin } from '../../../lib/gstin.js'
+import { isGstinChecksumValid, isGstinFormatValid, normalizeGstin } from '../../../lib/gstin.js'
 
 /**
  * GSTIN → taxpayer lookup, backing the GSTIN autofill on the public vendor
@@ -17,8 +17,17 @@ import { isGstinFormatValid, normalizeGstin } from '../../../lib/gstin.js'
  *      anyone on gst.gov.in without a login, so this exposes nothing that was
  *      not already open. The thing actually worth protecting is our API Setu
  *      quota and key, and the key never leaves the Worker.
- *   2. Abuse has to cost something. Hence the format gate and the per-IP rate
- *      limit below, before any subrequest is spent.
+ *   2. Abuse has to cost something. Four gates, cheapest first: the format
+ *      check, the CHECK DIGIT (which alone rejects ~35 of every 36 made-up
+ *      GSTINs for free), the per-IP rate limit, and the edge cache. Only a
+ *      request that survives all four reaches consumeDailyBudget, and only
+ *      then does it spend a subrequest.
+ *
+ *      The per-IP limit is the weakest of these and must not be relied on —
+ *      see enforceRateLimit below for the measurements. The GLOBAL DAILY
+ *      BUDGET is what actually bounds our exposure, because it is the only one
+ *      that survives an attacker rotating IPs (trivial over IPv6) or spreading
+ *      across Cloudflare locations.
  *
  * The internal vendor / client / SO / PO forms are meant to reuse this exact
  * route rather than get their own: a signed-in user hitting it is strictly less
@@ -52,12 +61,28 @@ gstn.get('/:gstin', async (c) => {
 
   // Cheapest gate first: a malformed GSTIN can never exist upstream, so it is
   // rejected before it costs a rate-limit slot or a subrequest.
-  //
-  // Only the SHAPE is checked. The check digit is not enforced here on purpose
-  // (see gstinCheckDigit in src/lib/gstin.js) — the frontend warns about it and
-  // looks the GSTIN up anyway, so a valid GSTIN is never refused by us.
   if (!isGstinFormatValid(gstin)) {
     throw new HTTPException(400, { message: 'That does not look like a valid GSTIN.' })
+  }
+
+  // The check digit IS enforced, and this is the cheapest abuse control we
+  // have. A GSTIN's last character is derived from the other fourteen, so a
+  // made-up string passes only about 1 time in 36 — walking the GSTIN space to
+  // drain our API Setu subscription therefore costs an attacker ~36x more
+  // attempts for the same number of real lookups, and every rejection here is
+  // pure local arithmetic: no rate-limit slot, no subrequest, no quota.
+  //
+  // This was previously left unenforced on the grounds that the frontend warns
+  // and looks the GSTIN up anyway, so we would never refuse a valid one. That
+  // traded a real control for a hypothetical risk: the algorithm is fixed and
+  // well defined, and all five GSTINs confirmed real during this integration
+  // pass our implementation. A false rejection would also be loud rather than
+  // silent — it logs below, and the message tells the user to re-check.
+  if (!isGstinChecksumValid(gstin)) {
+    logEvent('gstn.checksum_rejected', { gstin })
+    throw new HTTPException(400, {
+      message: 'That GSTIN does not look right — please check it for a typo.',
+    })
   }
 
   await enforceRateLimit(c)
@@ -70,6 +95,11 @@ gstn.get('/:gstin', async (c) => {
     const cachedBody = await hit.json().catch(() => null)
     if (cachedBody) return c.json(cachedBody)
   }
+
+  // Charged only here, AFTER the cache miss, so the ceiling counts real
+  // upstream calls rather than requests. Repeat lookups of the same GSTIN cost
+  // nothing.
+  await consumeDailyBudget(c)
 
   let taxpayer
   try {
@@ -101,10 +131,77 @@ gstn.get('/:gstin', async (c) => {
 })
 
 /**
+ * Global ceiling on upstream lookups per UTC day — the one control that is not
+ * defeated by rotating IPs or by Cloudflare's per-colo rate-limit counters,
+ * because it bounds TOTAL calls regardless of who makes them or where they
+ * land. See migrations/0007_gstn_lookup_budget.sql for why this lives in D1
+ * when the per-IP limiter deliberately does not.
+ *
+ * Fails OPEN on a missing binding or an unset cap, and on any D1 error: the
+ * cost of being wrong is a lookup of already-public data, whereas failing
+ * closed would break vendor onboarding over a database hiccup. Contrast
+ * services/turnstile.js, which guards a WRITE and so must fail closed.
+ */
+async function consumeDailyBudget(c) {
+  const cap = Number(c.env.GSTN_DAILY_CAP)
+  if (!c.env.DB || !Number.isFinite(cap) || cap <= 0) {
+    logEvent('gstn.budget_disabled', { has_db: Boolean(c.env.DB), cap: c.env.GSTN_DAILY_CAP ?? null })
+    return
+  }
+
+  const day = new Date().toISOString().slice(0, 10)
+
+  let row
+  try {
+    // One statement, one row, one write — and no write at all once the ceiling
+    // is reached, because the guard on DO UPDATE stops the row from changing.
+    // That is what keeps this from being able to burn through D1's free-tier
+    // write budget the way an uncapped counter could (see migration 0006).
+    //
+    // RETURNING is what reports the outcome: under the cap the UPDATE runs and
+    // hands back the new total, at the cap it matches nothing and returns no
+    // row at all. So a null here means "over budget", not "query failed" —
+    // a genuine failure throws instead and is caught below.
+    row = await c.env.DB.prepare(
+      `INSERT INTO gstn_lookup_budget (day, lookups) VALUES (?1, 1)
+         ON CONFLICT(day) DO UPDATE SET lookups = lookups + 1
+           WHERE gstn_lookup_budget.lookups < ?2
+       RETURNING lookups`,
+    ).bind(day, cap).first()
+  } catch (err) {
+    logError('gstn.budget_unavailable', err)
+    return
+  }
+
+  if (!row) {
+    // Deliberately loud: this is the signal that either the form is being
+    // abused or the cap is set too low for real traffic, and nothing else
+    // reports it — API Setu shows us no usage counter.
+    logEvent('gstn.daily_cap_reached', { day, cap })
+    throw new HTTPException(503, {
+      message: 'GSTIN lookup has reached its daily limit. Please fill the form in manually.',
+    })
+  }
+
+  // Cheap early warning while there is still room to react.
+  if (row.lookups === Math.floor(cap * 0.8)) {
+    logEvent('gstn.budget_80pct', { day, cap, lookups: row.lookups })
+  }
+}
+
+/**
  * Per-IP throttle using the Workers Rate Limiting binding (GSTIN_RATE_LIMITER
- * in wrangler.api.jsonc) — no storage, no D1 writes. That matters: D1 on the
- * free plan caps row writes per day and the WhatsApp features depend on them,
- * so a rate limiter backed by D1 would trade one abuse problem for an outage.
+ * in wrangler.api.jsonc) — no storage, no D1 writes. An UNCAPPED per-IP counter
+ * in D1 would trade one abuse problem for an outage: the free tier caps row
+ * writes per day and the WhatsApp features depend on them (migration 0006
+ * records a campaign dying that way). consumeDailyBudget above does use D1,
+ * which is not a contradiction — being capped, it bounds its own write cost.
+ *
+ * Do not mistake this for a quota. Measured 2026-09-29: at 12/60s, 82 requests
+ * from one IP with 56 in a single colo drew zero denials, because Cloudflare
+ * counts per data centre and documents the binding as permissive and
+ * eventually consistent. It brakes runaway loops; the daily budget is what
+ * actually protects the subscription.
  *
  * Fails OPEN when the binding is absent (local `wrangler dev` without it) —
  * unlike the Turnstile check, which must fail closed. The worst case here is a

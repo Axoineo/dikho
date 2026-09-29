@@ -95,12 +95,6 @@ export function useGstinLookup(gstin, { mapTaxpayer, onAutofill, debounceMs = 50
     const derived = offlineVendorFields(clean)
     if (Object.keys(derived).length) autofillRef.current?.(derived, { source: 'derived' })
 
-    // Advisory only. The check digit is reported, never enforced: if this
-    // implementation were subtly wrong it would lock real vendors out of their
-    // own registration, so the lookup proceeds regardless and the directory
-    // gets the final say.
-    const checksumOff = !isGstinChecksumValid(clean)
-
     setState({ status: 'checking', message: 'Looking up GST details…', taxpayer: null })
 
     try {
@@ -137,10 +131,11 @@ export function useGstinLookup(gstin, { mapTaxpayer, onAutofill, debounceMs = 50
 
       setState({
         status: notFound ? 'notfound' : 'error',
+        // No checksum caveat here any more: a bad check digit never reaches
+        // this point, so a 404 means the directory genuinely has no such
+        // taxpayer rather than "you may have mistyped it".
         message: notFound
-          ? (checksumOff
-            ? 'No details found — please double-check this GSTIN. You can still fill the form in manually.'
-            : 'No details found for this GSTIN. You can still fill the form in manually.')
+          ? 'No details found for this GSTIN. You can still fill the form in manually.'
           : `${text || 'GST lookup is unavailable.'} Please fill the remaining fields manually.`,
         taxpayer: null,
       })
@@ -174,6 +169,23 @@ export function useGstinLookup(gstin, { mapTaxpayer, onAutofill, debounceMs = 50
       return undefined
     }
 
+    // A failed check digit means a typo: the last character is derived from the
+    // other fourteen, so at a full 15 characters this is arithmetic, not an
+    // incomplete entry. The route enforces this too and would answer 400, so
+    // calling it would spend a round trip and a rate-limit slot to be told what
+    // we already know. Stopping here is also what keeps a mistyped GSTIN from
+    // costing anything at all against the daily lookup budget.
+    if (!isGstinChecksumValid(clean)) {
+      abortRef.current?.abort()
+      attemptRef.current += 1
+      setState({
+        status: 'malformed',
+        message: 'That GSTIN does not look right — please check it for a typo.',
+        taxpayer: null,
+      })
+      return undefined
+    }
+
     const timer = setTimeout(() => { run(clean) }, debounceMs)
     return () => clearTimeout(timer)
   }, [gstin, enabled, debounceMs, run])
@@ -184,7 +196,7 @@ export function useGstinLookup(gstin, { mapTaxpayer, onAutofill, debounceMs = 50
 
   const retry = useCallback(() => {
     const clean = normalizeGstin(gstin)
-    if (clean.length === GSTIN_LENGTH && isGstinFormatValid(clean)) run(clean, { force: true })
+    if (clean.length === GSTIN_LENGTH && isGstinFormatValid(clean) && isGstinChecksumValid(clean)) run(clean, { force: true })
   }, [gstin, run])
 
   return { ...state, retry }

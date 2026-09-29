@@ -56,7 +56,20 @@
     //
     // Accurate rather than cosmetic: this genuinely is the host making the
     // call. Leave it empty to send no Referer at all.
-    "APISETU_REFERER": "https://dikho-api.fineeurox.workers.dev"
+    "APISETU_REFERER": "https://dikho-api.fineeurox.workers.dev",
+    // Hard ceiling on GSTIN lookups sent to API Setu per UTC day, counted in D1
+    // (migrations/0007_gstn_lookup_budget.sql). This — not the per-IP rate limit
+    // below — is what actually protects the subscription, because it is the only
+    // control an attacker cannot sidestep by rotating IPs or spreading across
+    // Cloudflare locations.
+    //
+    // 500 is ~10x any plausible real day (one lookup per vendor registration,
+    // and only cache MISSES are charged), while staying small enough that the
+    // counter's own D1 writes are bounded at 0.5% of the free-tier budget.
+    // RAISE THIS if `gstn.daily_cap_reached` shows up in `wrangler tail` during
+    // legitimate use; API Setu publishes no quota figure to size it against.
+    // Set to "0" to disable the ceiling entirely (fails open).
+    "GSTN_DAILY_CAP": "500"
   },
   // Per-IP throttle for GET /api/gstn/:gstin (src/api/routes/gstn/index.js).
   // Deliberately NOT backed by D1: that database's free-plan row-write budget
