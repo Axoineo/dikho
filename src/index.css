@@ -798,6 +798,19 @@ button, input, textarea, select { border: 0; }
   pointer-events: none;
 }
 
+/* Wrapper exists purely to animate the panel shut. Collapsing the rail used to
+   unmount these five rows in a single frame while the width eased over 300ms —
+   the rows blinked out and the rail kept moving without them. grid-template-rows
+   1fr -> 0fr is the one way to transition to an AUTO height, which is what this
+   panel has; max-height would need a magic number that breaks the moment an
+   item is added. */
+.nav-subwrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease-in-out;
+}
+.sidebar-is-collapsed .nav-subwrap { grid-template-rows: 0fr; }
+
 .nav-sublist {
   display: flex;
   flex-direction: column;
@@ -805,6 +818,9 @@ button, input, textarea, select { border: 0; }
   margin-left: 19px;
   padding-left: 10px;
   border-left: 1px solid rgba(24, 84, 148, 0.14);
+  /* Both required for the 0fr end of that animation to actually clip. */
+  min-height: 0;
+  overflow: hidden;
 }
 .nav-subitem {
   display: flex;

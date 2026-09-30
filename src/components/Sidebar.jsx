@@ -275,20 +275,26 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
           declaration on the same element, and Tailwind's preflight — off in
           this project — is not there to close that gap, so the panel stayed
           visible in every state. The collapsed rail has no room for it. */}
-      {open && !collapsed && (
-        <div className="nav-sublist" ref={panelRef}>
+      {/* Stays mounted while the rail collapses so it can animate shut with
+          everything else; hidden from assistive tech once closed, since the
+          same five links are then reachable through the rail's flyout. */}
+      {open && (
+        <div className="nav-subwrap" ref={panelRef} aria-hidden={collapsed || undefined}>
+        <div className="nav-sublist">
           {WHATSAPP_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
               onClick={onNavigate}
+              tabIndex={collapsed ? -1 : undefined}
               className={({ isActive }) => `nav-subitem${isActive ? ' active' : ''}`}
             >
               <span className="nav-subicon"><SidebarIcon name={item.icon} size={17} /></span>
               <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
+        </div>
         </div>
       )}
     </div>
@@ -501,8 +507,13 @@ function useEdgeFade(ref) {
     mo.observe(el, { childList: true, subtree: true })
     const ro = new ResizeObserver(update)
     ro.observe(el)
+    // The WhatsApp panel now closes by transition, not by unmounting, so its
+    // height lands after the animation — neither observer above would catch
+    // it and the fade would keep describing the old content height.
+    el.addEventListener('transitionend', update)
     return () => {
       el.removeEventListener('scroll', update)
+      el.removeEventListener('transitionend', update)
       mo.disconnect()
       ro.disconnect()
     }
