@@ -7,6 +7,7 @@ import whatsapp from './routes/whatsapp/index.js'
 import auth from './routes/auth/index.js'
 import publicRoutes from './routes/public/index.js'
 import gstn from './routes/gstn/index.js'
+import avatars from './routes/avatars/index.js'
 import contacts from './routes/contacts/index.js'
 import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
@@ -38,6 +39,12 @@ export function createApiApp() {
   // plus a per-IP rate limit — see routes/gstn/index.js. The internal forms are
   // meant to call this same route.
   app.route('/gstn', gstn)
+
+  // Profile pictures. Mixed auth, so it is not in the requireAuth loop below:
+  // GET /avatars/:userId is public (the URL lives in user_metadata and is
+  // rendered by a plain <img>), while POST carries requireAuth on the handler
+  // itself. See routes/avatars/index.js for why the read side is safe.
+  app.route('/avatars', avatars)
 
   // Dashboard routes — require a valid Supabase session. Both the bare path
   // and the wildcard are registered: Hono's `/x/*` does not match `/x`.
