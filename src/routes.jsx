@@ -2,6 +2,7 @@ import { lazy } from 'react'
 
 /* ── Authenticated routes (lazy-loaded) ────────────────────────────────── */
 export const ClientsPage = lazy(() => import('./features/clients/ClientsPage'))
+export const LeadsPage = lazy(() => import('./features/leads/LeadsPage'))
 export const VendorsPage = lazy(() => import('./features/vendors/VendorsPage'))
 export const SalesOrdersPage = lazy(() => import('./features/sales-orders/SalesOrdersPage'))
 export const PurchaseOrdersPage = lazy(() => import('./features/purchase-orders/PurchaseOrdersPage'))

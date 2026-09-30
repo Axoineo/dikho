@@ -11,6 +11,7 @@ import avatars from './routes/avatars/index.js'
 import contacts from './routes/contacts/index.js'
 import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
+import cgLeads from './routes/cgLeads/index.js'
 
 // Root Hono app for everything under /api. Kept separate from src/worker.js
 // so the SPA asset fallback never has to know about API internals.
@@ -48,13 +49,14 @@ export function createApiApp() {
 
   // Dashboard routes — require a valid Supabase session. Both the bare path
   // and the wildcard are registered: Hono's `/x/*` does not match `/x`.
-  for (const base of ['/contacts', '/campaigns', '/templates']) {
+  for (const base of ['/contacts', '/campaigns', '/templates', '/cg-leads']) {
     app.use(base, requireAuth)
     app.use(`${base}/*`, requireAuth)
   }
   app.route('/contacts', contacts)
   app.route('/campaigns', campaigns)
   app.route('/templates', templates)
+  app.route('/cg-leads', cgLeads)
 
   return app
 }

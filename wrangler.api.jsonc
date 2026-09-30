@@ -57,6 +57,26 @@
     // Accurate rather than cosmetic: this genuinely is the host making the
     // call. Leave it empty to send no Referer at all.
     "APISETU_REFERER": "https://dikho-api.fineeurox.workers.dev",
+    // Automated WhatsApp confirmation sent by POST /api/public/cg-lead when the
+    // /corporategifting form is submitted (src/api/routes/public/index.js).
+    // Non-secret, so — like TURNSTILE_HOSTNAMES above — it lives here rather
+    // than as a remote-only var a deploy could silently wipe. Override the
+    // name here (no code redeploy needed) if this turns out not to match the
+    // approved Meta template exactly.
+    "WHATSAPP_CG_LEAD_TEMPLATE_NAME": "client_conformation_",
+    "WHATSAPP_CG_LEAD_TEMPLATE_LANG": "en",
+    // Global ceiling on cg-lead WhatsApp sends per UTC day (migrations/
+    // 0009_cg_lead_whatsapp_daily_budget.sql) — the form is public and
+    // unauthenticated, so this is what actually bounds spend + WABA reputation
+    // risk from someone submitting many different phone numbers, not the
+    // per-number cooldown (which only stops repeats of the SAME number).
+    // 200 is a first guess for one landing page, not a measured figure —
+    // RAISE THIS if `cg_lead.whatsapp_daily_cap_reached` shows up in
+    // `wrangler tail` during legitimate traffic (e.g. a festive campaign
+    // pushing real visitors to this page). Set to "0" to disable the ceiling
+    // entirely (fails OPEN, unlike an unset/invalid value — see
+    // consumeCgLeadWhatsappBudget, which fails CLOSED on those).
+    "WHATSAPP_CG_LEAD_DAILY_CAP": "200",
     // Hard ceiling on GSTIN lookups sent to API Setu per UTC day, counted in D1
     // (migrations/0007_gstn_lookup_budget.sql). This — not the per-IP rate limit
     // below — is what actually protects the subscription, because it is the only

@@ -5,6 +5,7 @@ import PublicLayout from '../layouts/PublicLayout'
 import { PlaceholderPage } from '../components/PlaceholderPage'
 import {
   ClientsPage,
+  LeadsPage,
   VendorsPage,
   SalesOrdersPage,
   PurchaseOrdersPage,
@@ -53,6 +54,7 @@ export default function App() {
           <Route index element={<Navigate to="/clients" replace />} />
           <Route path="/dashboard" element={<PlaceholderPage title="Dashboard" />} />
           <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/leads" element={<LeadsPage />} />
           <Route path="/vendors" element={<VendorsPage />} />
           <Route path="/sales-orders" element={<SalesOrdersRoute />} />
           <Route path="/purchase-orders" element={<PurchaseOrdersRoute />} />

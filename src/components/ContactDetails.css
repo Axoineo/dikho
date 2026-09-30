@@ -177,6 +177,18 @@
   box-shadow: 0 4px 14px rgba(249, 175, 27, 0.42);
 }
 
+/* ---- WhatsApp button: brand green ---- */
+.cd-action-btn--whatsapp {
+  background: #25d366;
+  color: #06210f;   /* dark text for WCAG AA on the light brand green */
+  box-shadow: 0 2px 8px rgba(37, 211, 102, 0.30);
+}
+
+.cd-action-btn--whatsapp:hover {
+  background: #1fb655;
+  box-shadow: 0 4px 14px rgba(37, 211, 102, 0.42);
+}
+
 /* ---- Reduced-motion preference ---- */
 @media (prefers-reduced-motion: reduce) {
   .cd-action-btn {

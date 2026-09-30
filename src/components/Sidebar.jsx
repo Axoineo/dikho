@@ -41,6 +41,13 @@ function SidebarIcon({ name, size = 20 }) {
         <path d="M6.6 8.6h3.4M6.6 12h3.4M6.6 15.4h3.4M16 14.4h1.4M16 17.4h1.4" />
       </svg>
     ),
+    /* Funnel — lead intake narrowing toward a decision, distinct from the
+       person-pair "clients" glyph above. */
+    leads: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 5h16L13.5 13v6h-3v-6z" />
+      </svg>
+    ),
     so: (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2.8 4h2.3l2.4 10.6h9.2L19 7.2H6" />
@@ -553,6 +560,7 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
   const items = [
     { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: '/clients', label: 'Clients', icon: 'clients' },
+    { to: '/leads', label: 'Leads', icon: 'leads' },
     { to: '/vendors', label: 'Vendors', icon: 'vendors' },
     { to: '/sales-orders', label: 'Sales Orders', icon: 'so' },
     { to: '/purchase-orders', label: 'Purchase Orders', icon: 'po' },

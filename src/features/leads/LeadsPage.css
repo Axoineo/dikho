@@ -1,0 +1,143 @@
+/* Leads module — deliberately scoped and self-contained rather than reusing
+   the shared `.table-card table` system (src/index.css ~1315-1333). That
+   system applies `table-layout: fixed` GLOBALLY plus positional
+   `th:nth-child(N)` width percentages tuned for Clients' specific column
+   shapes (a 72px numeric ID column, a 34% "Company" column, etc). Any other
+   page with a different column count or header length silently inherits
+   those same percentages onto the WRONG columns — which is exactly what
+   produced the overlapping/garbled headers here before this file existed
+   ("Contact Person" squeezed into 72px meant for a short numeric id,
+   "WhatsApp Confirmation" squeezed into 10% meant for a one-word status
+   pill). Leads uses its own semantic per-column classes instead of position,
+   so adding a column later (e.g. a second lead source) can't silently
+   corrupt an unrelated column again. */
+
+/* ── Summary tiles ──────────────────────────────────────────────────────
+   Reclaims the space a slim page header used to leave empty now that the
+   sidebar (not a page-level tab bar) carries navigation — a quick, always-
+   current read on WhatsApp confirmation outcomes, the thing this module
+   exists to surface, without waiting to scan the table below. */
+.leads-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.leads-stat-tile {
+  flex: 1 1 150px;
+  min-width: 150px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.leads-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 800;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.leads-stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.leads-stat-tile--sent .leads-stat-value { color: var(--brand-blue); }
+[data-theme="dark"] .leads-stat-tile--sent .leads-stat-value { color: #5ba0e0; }
+.leads-stat-tile--delivered .leads-stat-value,
+.leads-stat-tile--read .leads-stat-value { color: #2d7a52; }
+[data-theme="dark"] .leads-stat-tile--delivered .leads-stat-value,
+[data-theme="dark"] .leads-stat-tile--read .leads-stat-value { color: #5cb87a; }
+.leads-stat-tile--failed .leads-stat-value { color: var(--danger); }
+
+/* ── Table ──────────────────────────────────────────────────────────── */
+.leads-table-wrapper { overflow-x: auto; }
+
+.leads-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  table-layout: auto;   /* content-driven, not the global fixed/nth-child system */
+}
+
+.leads-table th {
+  background: #f8fafc;
+  color: #77869d;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+[data-theme="dark"] .leads-table th {
+  background: #1e2128;
+  color: #7b8598;
+  border-bottom-color: var(--line);
+}
+
+.leads-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13.5px;
+  color: var(--text);
+  vertical-align: middle;
+}
+[data-theme="dark"] .leads-table td {
+  border-bottom-color: var(--line-soft);
+  color: #c0c7d1;
+}
+
+.leads-table tbody tr:hover { background: rgba(24, 84, 148, 0.035); }
+[data-theme="dark"] .leads-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+
+/* Named per-column widths — by semantic class, never by position. */
+.lt-col-lead { min-width: 200px; }
+.lt-col-source { min-width: 130px; }
+.lt-col-contact { min-width: 230px; }
+.lt-col-city { min-width: 110px; }
+.lt-col-status { min-width: 150px; }
+.lt-col-date { min-width: 100px; white-space: nowrap; }
+
+/* Leads is a quick-action, outreach-first table: the point of a row is to
+   call/WhatsApp/email someone, so those buttons stay visible rather than
+   hiding behind the hover-reveal Vendors uses (fine for a dense power-user
+   grid, but the WhatsApp button here carries no label text of its own —
+   `showValue={false}` — so a hover-only reveal would leave an unlabelled
+   blank space with no hint anything is there). */
+.leads-table .cd-action-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.lt-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.lt-source-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--brand-blue-soft);
+  color: var(--brand-blue);
+  white-space: nowrap;
+}
+[data-theme="dark"] .lt-source-chip {
+  background: rgba(24, 84, 148, 0.18);
+  color: #5ba0e0;
+}
