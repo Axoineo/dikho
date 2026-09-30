@@ -12,8 +12,10 @@ import './corporate-gifting.css'
    Dikho never has to scroll past a logo reel to reach it.
 
    The copy on this page is the copy that was here before, deliberately. The
-   redesign is presentation only — headline, form title, privacy note,
-   button labels and the success message are unchanged.
+   redesign is presentation only — headline, form title, privacy note and the
+   success message are unchanged. The one wording change is the submit button,
+   now "Explore The Catalogue" rather than "…Collection", to match what the
+   visitor actually receives.
 
    The one change that is not cosmetic: the country list is a frozen module
    (./dialCodes) rather than an import of `country-state-city`. That package
@@ -194,11 +196,15 @@ const Icon = {
   Check: (p) => (
     <svg width={p?.size || 14} height={p?.size || 14} {...base({ strokeWidth: 3 })}><path d="M20 6L9 17l-5-5" /></svg>
   ),
-  // The briefcase from the previous "Quick Access Form" header, kept as-is.
-  Briefcase: () => (
-    <svg width="20" height="20" {...base({ strokeWidth: 1.8 })}>
-      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+  // A wrapped gift. The briefcase this replaces said "corporate" but nothing
+  // about gifting, and read as generic admin chrome at 20px.
+  Gift: () => (
+    <svg width="21" height="21" {...base({ strokeWidth: 1.7 })}>
+      <rect x="3" y="11.5" width="18" height="9.5" rx="1.8" />
+      <rect x="1.8" y="7.2" width="20.4" height="4.3" rx="1.4" />
+      <path d="M12 7.2V21" />
+      <path d="M12 7.2H8.1a2.1 2.1 0 1 1 0-4.2C10.5 3 12 7.2 12 7.2z" />
+      <path d="M12 7.2h3.9a2.1 2.1 0 1 0 0-4.2C13.5 3 12 7.2 12 7.2z" />
     </svg>
   ),
   Alert: () => (
@@ -474,7 +480,7 @@ function Footer() {
   return (
     <footer className="cg-footer">
       <div className="cg-footer-row">
-        <span><Icon.Globe /> 2026 <strong>Dikho</strong>. All Rights Reserved.</span>
+        <span className="cg-footer-copy"><Icon.Globe /> 2026 <strong>Dikho</strong>. All Rights Reserved.</span>
         <span className="cg-footer-sep" aria-hidden="true">|</span>
         <span className="cg-footer-social">
           <a href="https://www.facebook.com/share/1DRPCoKmUz/" target="_blank" rel="noreferrer" aria-label="Dikho on Facebook"><Icon.Facebook /></a>
@@ -712,7 +718,7 @@ export default function PublicClientWelcome() {
         <section className="cg-wrap cg-form-section">
           <div className="cg-card cg-fade-in" style={{ animationDelay: '200ms' }}>
             <div className="cg-card-head">
-              <span className="cg-card-icon"><Icon.Briefcase /></span>
+              <span className="cg-card-icon"><Icon.Gift /></span>
               <div>
                 <div className="cg-card-title">Quick Access Form</div>
                 <div className="cg-card-sub">Please provide your details below to continue.</div>
@@ -829,9 +835,9 @@ export default function PublicClientWelcome() {
 
               <div className="cg-submit-row">
                 <button type="submit" className="cg-btn-pill" disabled={saving || verifying}>
-                  {verifying ? 'Verifying…' : saving ? 'Submitting…' : 'Explore The Collection'}
+                  {verifying ? 'Verifying…' : saving ? 'Submitting…' : 'Explore The Catalogue'}
                 </button>
-                <button type="submit" className="cg-btn-circle" disabled={saving || verifying} aria-label="Explore The Collection">
+                <button type="submit" className="cg-btn-circle" disabled={saving || verifying} aria-label="Explore The Catalogue">
                   <Icon.ArrowNE />
                 </button>
               </div>

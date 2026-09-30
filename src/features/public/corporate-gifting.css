@@ -63,7 +63,10 @@
   top: 10px;
   z-index: 60;
   width: calc(100% - 24px);
-  max-width: 560px;
+  /* Matches the form card's column width (.cg-wrap's 680px less its 28px
+     gutters) so the pill sits flush with the content beneath it. A header a
+     little wider than the card reads as a near-miss rather than a choice. */
+  max-width: 624px;
   margin: 10px auto 0;
   height: 58px;
   padding: 0 22px;
@@ -88,16 +91,25 @@
   line-height: 0;
 }
 
+/* The logo file is 420 units tall, but the gold spark sits alone in the top
+   85 and the letters only start at 112. So the wordmark's optical centre is
+   ~13% of the height BELOW the image box's centre, and flex centring lines the
+   BOX up rather than the letters — which is what made the lockup look like it
+   was sagging next to "Corporate Gifting". Shifting by a percentage rather
+   than pixels keeps it right at both breakpoint sizes. */
 .cg-topbar-logo {
   height: 28px;
   width: auto;
   display: block;
+  transform: translateY(-13%);
 }
 
+/* Sized to the cap height of the text beside it rather than the full line
+   box, so the three parts read as one lockup. */
 .cg-topbar-rule {
   width: 1px;
-  height: 24px;
-  background: rgba(24, 84, 148, 0.26);
+  height: 21px;
+  background: rgba(24, 84, 148, 0.28);
   flex-shrink: 0;
 }
 
@@ -109,6 +121,9 @@
   letter-spacing: 0.004em;
   color: #185494;
   white-space: nowrap;
+  /* Playfair's italic sits slightly high in its line box; this drops it back
+     onto the wordmark's optical centre. */
+  transform: translateY(0.5px);
 }
 
 /* ── Hero ──────────────────────────────────────────────────────────── */
@@ -950,6 +965,40 @@
 }
 
 .cg-footer-row > span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The copyright line must NOT be a flex container. In flex layout every text
+   node becomes its own item and `gap` applies between all of them, so
+   <strong>Dikho</strong> and the ". All Rights Reserved." that follows were
+   two items with 6px between them — which pushed the full stop away from the
+   word. Plain inline flow keeps the punctuation attached. */
+.cg-footer-row > .cg-footer-copy {
+  display: inline;
+  gap: 0;
+}
+
+/* No margin: the markup already has a literal space between the icon and
+   "2026", so a margin here is added ON TOP of it and the glyph drifts away
+   from the year. The text space alone is the right gap. */
+.cg-footer-copy svg {
+  vertical-align: -2px;
+}
+
+/* On a phone the row wraps awkwardly and the "|" ends up dangling next to
+   whichever half broke. Stack instead: socials first, copyright beneath, and
+   drop the separator entirely — the line break already does its job. */
+@media (max-width: 599px) {
+  .cg-footer-row {
+    flex-direction: column-reverse;
+    gap: 12px;
+  }
+
+  /* Has to out-specify `.cg-footer-row > span` above (0,1,1), which sets
+     display: inline-flex on every child — a bare .cg-footer-sep (0,1,0) loses
+     that cascade and the divider stays on screen. */
+  .cg-footer-row > .cg-footer-sep { display: none; }
+  .cg-footer-social { gap: 18px; }
+  .cg-footer-copy { font-size: 0.78rem; }
+}
 .cg-footer-row strong { color: #16233a; font-weight: 700; }
 .cg-footer-row svg { flex-shrink: 0; opacity: 0.75; }
 
@@ -1014,6 +1063,7 @@
   .cg-wrap { padding: 0 28px; }
   .cg-topbar { height: 64px; top: 14px; margin-top: 14px; }
   .cg-topbar-logo { height: 32px; }
+  .cg-topbar-rule { height: 24px; }
   .cg-topbar-name { font-size: 1.2rem; }
 
   .cg-hero { padding-top: 18px; padding-bottom: 8px; }
