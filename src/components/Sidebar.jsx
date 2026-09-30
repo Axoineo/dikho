@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 
 /* Outlined 24px glyphs on a shared 1.7 stroke, so the rail reads as one set.
    Each one names the thing rather than the money: a cart for what we sell, a
@@ -207,7 +207,6 @@ const WHATSAPP_ITEMS = [
 
 function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
   const { pathname } = useLocation()
-  const navigate = useNavigate()
   const panelRef = useRef(null)
   const sectionActive = pathname.startsWith('/whatsapp')
   // Closed by default: the five sub-items only appear once the group is opened.
@@ -245,25 +244,20 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
     return () => cancelAnimationFrame(id)
   }, [open, collapsed])
 
-  /* The row was toggle-only, so clicking "WhatsApp" itself went nowhere. It
-     now opens the group AND lands on the module's dashboard; clicking again
-     just folds the group, without navigating away from wherever you are.
+  /* Deliberately does NOT navigate. The row is a disclosure, not a
+     destination: it reveals the five pages and highlights itself, and the
+     workspace keeps showing whatever you were already on until you pick one.
 
-     On the collapsed rail there is no group to fold — the panel is clipped to
-     nothing and the sub-items live in the hover flyout instead. Toggling
-     `open` there changed nothing you could see, so the first click looked
-     dead and it took two to get anywhere. Collapsed, the row always
-     navigates. */
-  function handleTrigger() {
+     On the collapsed rail there is no panel to reveal — it is clipped to
+     nothing and the pages live in the flyout — so the click opens that
+     instead of toggling something invisible, which is what made the first
+     click read as dead up there. */
+  function handleTrigger(e) {
     if (collapsed) {
-      navigate('/whatsapp')
-      onNavigate()
+      onOpenFlyout?.(e)
       return
     }
-    if (open) { setOpen(false); return }
-    setOpen(true)
-    navigate('/whatsapp')
-    onNavigate()
+    setOpen((v) => !v)
   }
 
   return (
@@ -274,7 +268,11 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
           being switched off in a single frame by a JS prop. */}
       <button
         type="button"
-        className={`nav-item${sectionActive ? ' active' : ''}`}
+        /* Highlighted while the group is disclosed as well as while you are
+           inside it — clicking it has no other visible result when the
+           workspace deliberately stays put. Never on the rail, where `open`
+           is invisible and would strand the icon permanently blue. */
+        className={`nav-item${sectionActive || (!collapsed && open) ? ' active' : ''}`}
         onClick={handleTrigger}
         aria-expanded={open}
         data-tip="WhatsApp"
