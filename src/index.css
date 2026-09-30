@@ -693,6 +693,11 @@ button, input, textarea, select { border: 0; }
    sit on #1a1d23 and carry fine. Tuned per theme rather than shared. */
 .nav-item:hover        { background: rgba(24, 84, 148, 0.055); }
 .nav-item.active       { background: rgba(24, 84, 148, 0.10); }
+/* A disclosed group is NOT a selected page. No fill — only the label lifts
+   toward the active colour, which together with the rotated caret and the
+   visible sub-list is plenty. A fill here competes with the one row that
+   really is current. */
+.nav-item.is-open      { color: rgba(24, 84, 148, 0.92); font-weight: 500; }
 
 /* Collapsed the pill has no text to wrap, so the highlight becomes a disc
    around the icon instead. The disc lives on .nav-icon, not on .nav-item, so
@@ -2319,6 +2324,9 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 [data-theme="dark"] .nav-item.active {
   background: rgba(24, 84, 148, 0.2);
   color: #5ba0e0;
+}
+[data-theme="dark"] .nav-item.is-open {
+  color: rgba(200, 215, 230, 0.95);
 }
 /* The collapsed rail's disc carries the highlight instead of the pill, so it
    needs the same dark treatment the pill got. */

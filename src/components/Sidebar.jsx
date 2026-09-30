@@ -268,11 +268,11 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
           being switched off in a single frame by a JS prop. */}
       <button
         type="button"
-        /* Highlighted while the group is disclosed as well as while you are
-           inside it — clicking it has no other visible result when the
-           workspace deliberately stays put. Never on the rail, where `open`
-           is invisible and would strand the icon permanently blue. */
-        className={`nav-item${sectionActive || (!collapsed && open) ? ' active' : ''}`}
+        /* `active` is reserved for the row you are actually ON. Disclosure gets
+           its own lighter state instead: sharing `active` put a second "you
+           are here" pill in the rail while the workspace still showed another
+           module, which reads as a bug rather than as an open group. */
+        className={`nav-item${sectionActive ? ' active' : ''}${!collapsed && open && !sectionActive ? ' is-open' : ''}`}
         onClick={handleTrigger}
         aria-expanded={open}
         data-tip="WhatsApp"
