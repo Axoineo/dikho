@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 
 /* Outlined 24px glyphs on a shared 1.7 stroke, so the rail reads as one set.
    Each one names the thing rather than the money: a cart for what we sell, a
@@ -207,6 +207,7 @@ const WHATSAPP_ITEMS = [
 
 function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const panelRef = useRef(null)
   const sectionActive = pathname.startsWith('/whatsapp')
   // Closed by default: the five sub-items only appear once the group is opened.
@@ -240,6 +241,16 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
     return () => cancelAnimationFrame(id)
   }, [open, collapsed])
 
+  /* The row was toggle-only, so clicking "WhatsApp" itself went nowhere. It
+     now opens the group AND lands on the module's dashboard; clicking again
+     just folds the group, without navigating away from wherever you are. */
+  function handleTrigger() {
+    if (open) { setOpen(false); return }
+    setOpen(true)
+    navigate('/whatsapp')
+    onNavigate()
+  }
+
   return (
     <div className="nav-group">
       {/* Plain .nav-item, with the badge and caret as .nav-badge/.nav-caret
@@ -249,7 +260,7 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
       <button
         type="button"
         className={`nav-item${sectionActive ? ' active' : ''}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleTrigger}
         aria-expanded={open}
         data-tip="WhatsApp"
         onMouseEnter={collapsed ? onOpenFlyout : onShowTip}
