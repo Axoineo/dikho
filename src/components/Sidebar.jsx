@@ -182,9 +182,13 @@ function SidebarIcon({ name, size = 20 }) {
   return icons[name] || null
 }
 
-/* Header + five rows + padding. Used only to keep the hover panel on screen
-   when the group sits near the bottom of a short window. */
-const FLYOUT_H = 226
+/* Five 34px rows plus the panel's 6px padding. Used to keep the hover panel
+   on screen when the group sits near the bottom of a short window, and to
+   line its first row up with the rail button that opened it. */
+const FLYOUT_PAD = 6
+const FLYOUT_ITEM_H = 34
+const FLYOUT_BORDER = 1        // .sidebar-flyout's 1px border, top and bottom
+const FLYOUT_H = FLYOUT_BORDER * 2 + FLYOUT_PAD * 2 + FLYOUT_ITEM_H * 5
 
 /* Must match the .is-leaving animations in index.css: the panel stays mounted
    for this long after it is dismissed so it can animate out. */
@@ -553,8 +557,14 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
     if (!railActive) return
     clearTimeout(flyoutTimer.current)
     const r = e.currentTarget.getBoundingClientRect()
-    // Anchor to the row, but never let the panel run off the bottom.
-    setFlyout({ top: Math.min(r.top - 6, window.innerHeight - FLYOUT_H - 12), leaving: false })
+    // Line the FIRST ROW up with the button that opened it — not the panel's
+    // top edge, which left the list sitting high of its trigger. Then clamp so
+    // it never runs off the bottom of a short window.
+    const alignedTop = r.top + r.height / 2 - (FLYOUT_BORDER + FLYOUT_PAD + FLYOUT_ITEM_H / 2)
+    setFlyout({
+      top: Math.max(8, Math.min(alignedTop, window.innerHeight - FLYOUT_H - 12)),
+      leaving: false,
+    })
   }, [railActive])
   const closeFlyout = useCallback(() => {
     clearTimeout(flyoutTimer.current)
@@ -672,7 +682,6 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
           onMouseEnter={keepFlyout}
           onMouseLeave={closeFlyout}
         >
-          <div className="sidebar-flyout-head">WhatsApp</div>
           {WHATSAPP_ITEMS.map((item) => (
             <NavLink
               key={item.to}
