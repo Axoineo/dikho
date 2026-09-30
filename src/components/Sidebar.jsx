@@ -218,6 +218,10 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
   const wasSectionActive = useRef(sectionActive)
   useEffect(() => {
     if (sectionActive && !wasSectionActive.current) setOpen(true)
+    // Leaving the module folds the group. Five sub-items for a section you are
+    // no longer in is just noise wedged between the other nav rows. Only fires
+    // when sectionActive CHANGES, so opening the group by hand is untouched.
+    if (!sectionActive) setOpen(false)
     wasSectionActive.current = sectionActive
   }, [sectionActive])
 
@@ -243,8 +247,19 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
 
   /* The row was toggle-only, so clicking "WhatsApp" itself went nowhere. It
      now opens the group AND lands on the module's dashboard; clicking again
-     just folds the group, without navigating away from wherever you are. */
+     just folds the group, without navigating away from wherever you are.
+
+     On the collapsed rail there is no group to fold — the panel is clipped to
+     nothing and the sub-items live in the hover flyout instead. Toggling
+     `open` there changed nothing you could see, so the first click looked
+     dead and it took two to get anywhere. Collapsed, the row always
+     navigates. */
   function handleTrigger() {
+    if (collapsed) {
+      navigate('/whatsapp')
+      onNavigate()
+      return
+    }
     if (open) { setOpen(false); return }
     setOpen(true)
     navigate('/whatsapp')
