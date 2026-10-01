@@ -166,7 +166,10 @@
 /* ── Form card ─────────────────────────────────────────────────────── */
 
 .cg-form-section {
-  padding: 8px 0 0;
+  /* padding-top only. The shorthand would reset .cg-wrap's left/right gutter
+     to 0 (same specificity, later in the file), which let the card's side
+     borders sit flush with the screen edge on a phone. */
+  padding-top: 8px;
 }
 
 .cg-card {
