@@ -13,6 +13,7 @@ import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
 import cgLeads from './routes/cgLeads/index.js'
 import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
+import { maybeReconcileOnRequest } from './services/whatsapp/reconcile.js'
 
 // Root Hono app for everything under /api. Kept separate from src/worker.js
 // so the SPA asset fallback never has to know about API internals.
@@ -28,8 +29,14 @@ export function createApiApp() {
   // every 30s per isolate and dispatched via waitUntil, so it costs the
   // request nothing and never delays a response. Registered before the routes
   // so it covers every endpoint, including the unauthenticated ones.
+  // Both of these exist because this account's Cron Triggers never fire, so
+  // anything that used to rely on a schedule now rides on request traffic
+  // instead. Each is throttled per isolate, guarded against doing pointless
+  // work, and dispatched via waitUntil — they cost the request nothing and
+  // never delay a response.
   app.use('*', async (c, next) => {
-    maybeDispatchOnRequest(c)
+    maybeDispatchOnRequest(c)   // corporate-gifting confirmation queue (30s)
+    maybeReconcileOnRequest(c)  // parked WhatsApp delivery receipts (2 min)
     await next()
   })
 

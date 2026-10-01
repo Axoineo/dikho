@@ -1,6 +1,6 @@
 import { STATUS_COLUMN, STATUS_RANK, storedRankSql } from './messageStatus.js'
 import { processInboundMessage } from './inbound.js'
-import { logError } from '../../utils/logger.js'
+import { logEvent, logError } from '../../utils/logger.js'
 
 // Replays stored delivery receipts onto their message rows.
 //
@@ -99,6 +99,62 @@ export async function reconcileStatuses(db, { includeProcessed = false, sinceIso
   }
   const settled = await settleLedger(db)
   return { applied, settled }
+}
+
+// Opportunistic status reconcile, driven by request traffic.
+//
+// WHY: this sweep only ever ran on the `*/10 * * * *` cron, and that cron does
+// not fire on this account — see the cloudflare-cron-not-firing notes and
+// services/whatsapp/cgLeadConfirmation.js for the evidence (a probe row 7+
+// minutes overdue, a 100-second `wrangler tail` with zero invocations). So the
+// safety net for the receipt-before-wamid race described at the top of this
+// file has been disarmed: a parked receipt would sit 'unmatched' forever and
+// our delivery numbers would quietly under-report Meta's, which is exactly the
+// failure that hid 772 campaign-13 rejections once already.
+//
+// Checked 2026-10-01: nothing is currently stranded (0 actionable receipts, 0
+// inbound messages missing a row). This is about keeping it that way.
+//
+// GUARDED so it is nearly free when idle: the cheap probe below asks whether
+// any parked receipt actually has a message row to land on, and the full sweep
+// only runs if one does. That matters because there are permanently
+// unmatchable orphans in the ledger — 13 of them, receipts for sends we never
+// stored (superseded retries keep their old wamid) — and a naive
+// "are there unmatched rows?" check would be true forever and run the sweep on
+// every request. The probe reads the `processing_status` index, then does at
+// most a handful of `meta_message_id` lookups.
+//
+// reconcileInbound is deliberately NOT called here: its guard query is a
+// NOT EXISTS scan over every message-type event rather than an indexed lookup,
+// and it exists for a one-time historical repair (two pre-inbox messages from
+// 2026-09-24) rather than an ongoing race. It stays on the cron, for if the
+// cron ever starts working.
+let lastReconcileAt = 0
+const RECONCILE_INTERVAL_MS = 120_000
+
+export function maybeReconcileOnRequest(c) {
+  if (!c.env?.DB || !c.executionCtx) return
+  const now = Date.now()
+  if (now - lastReconcileAt < RECONCILE_INTERVAL_MS) return
+  lastReconcileAt = now
+
+  c.executionCtx.waitUntil((async () => {
+    try {
+      const actionable = await c.env.DB.prepare(
+        `SELECT 1 FROM webhook_events w
+         JOIN messages m
+           ON m.meta_message_id = substr(w.idempotency_key, 1, instr(w.idempotency_key, ':') - 1)
+         WHERE w.processing_status = 'unmatched'
+         LIMIT 1`,
+      ).first()
+      if (!actionable) return
+
+      const result = await reconcileStatuses(c.env.DB)
+      logEvent('whatsapp.reconcile.opportunistic', result)
+    } catch (err) {
+      logError('whatsapp.reconcile.opportunistic_failed', err)
+    }
+  })())
 }
 
 // Re-runs inbound customer messages that reached the ledger but never became a
