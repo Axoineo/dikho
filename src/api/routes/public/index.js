@@ -236,7 +236,17 @@ async function notifyCgLead(env, lead) {
     // Logged once per isolate-cache-miss rather than per send, and it is the
     // only record of what this template actually declares — worth having the
     // first time a send fails after someone edits it on Meta.
-    logEvent('cg_lead.template_shape', { templateName, language: sendLanguage, tokens })
+    // `buttons` is logged because buildComponents does NOT emit a button
+    // component: a template carrying a dynamic URL/copy-code button needs a
+    // button parameter of its own, and omitting it fails with the SAME 132000
+    // as a wrong body-parameter count. Without this line that case is
+    // indistinguishable from the one just fixed.
+    logEvent('cg_lead.template_shape', {
+      templateName,
+      language: sendLanguage,
+      tokens,
+      buttons: (template.buttons ?? []).map((b) => b?.type ?? 'unknown'),
+    })
 
     if (tokens.length > 0) {
       // The lead's name fills the FIRST declared variable ({{1}} in the
