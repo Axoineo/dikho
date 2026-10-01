@@ -54,7 +54,7 @@ const TESTIMONIAL = {
   // at a stable path with a long cache lifetime, so replacing the file in
   // place would leave returning visitors on the previous photo. Update this
   // whenever the image changes — `sha256sum public/clientele/anil.webp`.
-  photo: '/clientele/anil.webp?v=41ecd14a',
+  photo: '/clientele/anil.webp?v=4c5b8a80',
 }
 
 /* ─── Turnstile ────────────────────────────────────────────────────── */
@@ -868,7 +868,7 @@ export default function PublicClientWelcome() {
               src={TESTIMONIAL.photo}
               alt={TESTIMONIAL.name}
               width="520"
-              height="613"
+              height="603"
             />
             <div className="cg-quote-body">
               <span className="cg-quote-mark" aria-hidden="true">&ldquo;</span>
