@@ -1,6 +1,7 @@
 import { createApiApp } from './app.js'
 import { reconcileInbound, reconcileStatuses } from './services/whatsapp/reconcile.js'
 import { dispatchDueCgLeadConfirmations } from './services/whatsapp/cgLeadConfirmation.js'
+import { logEvent, logError } from './utils/logger.js'
 
 // Entry point for the standalone `dikho-api` Worker
 // (https://dikho-api.fineeurox.workers.dev).
@@ -31,10 +32,27 @@ export default {
   // Both fire together on the tens, as separate invocations.
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
-      if (event.cron === '* * * * *') {
+      // Logged first and unconditionally: `event.cron` is the only way to tell
+      // the two schedules apart, and an exact-string assumption about it is
+      // not worth trusting silently — a mismatch would stall the outbox with
+      // no visible error anywhere.
+      logEvent('cron.fired', { cron: event.cron })
+
+      // Runs on EVERY tick rather than only the every-minute schedule. It is
+      // one indexed SELECT that returns nothing the vast majority of the time,
+      // and making it unconditional means a cron-string surprise can never
+      // strand queued confirmations.
+      try {
         await dispatchDueCgLeadConfirmations(env)
-        return
+      } catch (err) {
+        logError('cron.cg_lead_dispatch_failed', err)
       }
+
+      // The reconciler is the heavy D1 sweep, so it stays off the
+      // every-minute schedule — running it 10x more often spends row-reads
+      // against the free-tier budget migration 0006 records running out once.
+      if (event.cron === '* * * * *') return
+
       await reconcileStatuses(env.DB)
       // processInboundMessage expects a request-shaped context; a cron only has
       // (env, ctx), so hand it the two properties it actually reads.

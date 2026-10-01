@@ -12,6 +12,7 @@ import contacts from './routes/contacts/index.js'
 import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
 import cgLeads from './routes/cgLeads/index.js'
+import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
 
 // Root Hono app for everything under /api. Kept separate from src/worker.js
 // so the SPA asset fallback never has to know about API internals.
@@ -20,6 +21,17 @@ export function createApiApp() {
 
   app.use('*', corsMiddleware())
   app.onError(errorHandler)
+
+  // Drains the corporate-gifting confirmation queue off ordinary traffic,
+  // because this account's Cron Triggers are not firing (verified 2026-10-01 —
+  // see maybeDispatchOnRequest for the evidence). Throttled to at most once
+  // every 30s per isolate and dispatched via waitUntil, so it costs the
+  // request nothing and never delays a response. Registered before the routes
+  // so it covers every endpoint, including the unauthenticated ones.
+  app.use('*', async (c, next) => {
+    maybeDispatchOnRequest(c)
+    await next()
+  })
 
   // Public: uptime checks, Meta's webhook (authenticated by verify token on
   // GET, and by the payload's own signature contract on POST), and Supabase's

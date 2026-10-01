@@ -113,9 +113,48 @@ export async function enqueueCgLeadConfirmation(env, lead) {
 
 /* ── Dispatch (cron path) ───────────────────────────────────────────────── */
 
+// Opportunistic dispatch, throttled per isolate.
+//
+// WHY THIS EXISTS: Cron Triggers are not firing on this account. Verified
+// 2026-10-01 — a probe row sat `pending` 7+ minutes past its scheduled_at with
+// an every-minute schedule registered, and a 100-second `wrangler tail`
+// captured zero invocations of any kind. It is not this code: the dispatcher
+// runs unconditionally on every tick (worker.js), and Cloudflare's own
+// community forum carries several open reports of Free-plan cron triggers
+// being registered but never dispatched during 2026.
+//
+// So the queue cannot depend on the cron alone. Any request to this Worker
+// also drains due messages, which makes delivery depend on traffic rather than
+// on a scheduler that is not running. The cron is deliberately LEFT IN PLACE —
+// if it starts working, this simply stops being the thing that fires first.
+//
+// Consequence worth knowing: with absolutely no API traffic, a queued message
+// waits for the next request. The dashboard, the Meta webhook and the public
+// forms all count as traffic, so this is mostly theoretical during business
+// hours — but it is a real difference from a true scheduler.
+//
+// Safe to run concurrently from many isolates: every row is claimed with an
+// atomic guarded UPDATE, so a row can only ever be sent once no matter how
+// many dispatchers race. The throttle only exists to keep the cost down.
+let lastDispatchAt = 0
+const OPPORTUNISTIC_INTERVAL_MS = 30_000
+
+export function maybeDispatchOnRequest(c) {
+  if (!c.env?.DB || !c.executionCtx) return
+  const now = Date.now()
+  if (now - lastDispatchAt < OPPORTUNISTIC_INTERVAL_MS) return
+  lastDispatchAt = now
+  // waitUntil: runs after the response is sent, so no caller ever waits on a
+  // Meta round trip that has nothing to do with their request.
+  c.executionCtx.waitUntil(
+    dispatchDueCgLeadConfirmations(c.env).catch((err) => logError('cg_lead.opportunistic_dispatch_failed', err)),
+  )
+}
+
 /**
- * Sends every queued confirmation whose delay has elapsed. Invoked once a
- * minute by the cron in worker.js.
+ * Sends every queued confirmation whose delay has elapsed. Invoked by the cron
+ * in worker.js and, because that cron is not currently firing, by
+ * maybeDispatchOnRequest above on ordinary API traffic.
  */
 export async function dispatchDueCgLeadConfirmations(env) {
   if (!env.DB) return
