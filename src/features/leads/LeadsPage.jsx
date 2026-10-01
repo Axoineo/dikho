@@ -3,7 +3,6 @@ import { supabase } from '../../lib/supabase'
 import { apiGet } from '../../lib/api'
 import { formatValue } from '../../lib/format'
 import { Icon } from '../../components/Icon'
-import { ContactHoverAction } from '../../components/ContactHoverAction'
 import './LeadsPage.css'
 
 // The manual follow-up message staff send from this page's WhatsApp button —
@@ -29,6 +28,36 @@ const LEAD_SOURCE = 'Corporate Gifting'
 // thing to join on.
 function leadPhoneKey(lead) {
   return `${lead.country_code ?? ''}${lead.mobile ?? ''}`.replace(/\D/g, '')
+}
+
+/* Row actions. Icon-only by design — see .lead-act in LeadsPage.css for why
+   the labelled drawer pills do not work at three-per-row in a table. */
+const ActIcon = {
+  call: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6.6 10.8a15.16 15.16 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1.02-.24 11.42 11.42 0 0 0 3.58.58 1 1 0 0 1 1 1V19a1 1 0 0 1-1 1A17 17 0 0 1 3 3a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.58 3.58a1 1 0 0 1-.25 1.02L6.6 10.8z"/></svg>
+  ),
+  wa: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.52 0-10 4.48-10 10 0 1.77.46 3.45 1.27 4.9L2 22l5.25-1.38a9.96 9.96 0 0 0 4.79 1.22h.01c5.52 0 10-4.48 10-10s-4.48-9.84-10.01-9.84zm5.84 14.3c-.25.7-1.45 1.34-2 1.42-.51.08-1.15.11-1.86-.12-.43-.14-.98-.32-1.68-.63-2.96-1.28-4.89-4.26-5.04-4.46-.15-.2-1.2-1.6-1.2-3.05 0-1.45.76-2.16 1.03-2.46.27-.3.59-.37.79-.37.2 0 .4 0 .57.01.18.01.43-.07.67.51.25.6.85 2.08.92 2.23.07.15.12.33.02.53-.1.2-.15.33-.3.5-.15.18-.31.4-.45.54-.15.15-.3.31-.13.61.17.3.76 1.25 1.63 2.02 1.12 1 2.06 1.31 2.36 1.46.3.15.48.13.65-.08.18-.2.75-.87.95-1.17.2-.3.4-.25.67-.15.27.1 1.73.82 2.02.97.3.15.5.22.57.35.07.13.07.75-.18 1.45z"/></svg>
+  ),
+  mail: (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 7l8.586 6.414a2 2 0 0 0 2.828 0L22 7"/></svg>
+  ),
+}
+
+function RowAction({ kind, href, label, external }) {
+  return (
+    <a
+      className={`lead-act lead-act--${kind}`}
+      href={href}
+      title={label}
+      aria-label={label}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noopener noreferrer' : undefined}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {ActIcon[kind]}
+    </a>
+  )
 }
 
 const STATUS_LABEL = { sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed' }
@@ -178,6 +207,7 @@ export default function LeadsPage() {
           </div>
         </div>
 
+        <div className="leads-stats-head">WhatsApp confirmations — counted per number (one per number per week)</div>
         <div className="leads-stats">
           <div className="leads-stat-tile leads-stat-tile--sent">
             <div className="leads-stat-label">WhatsApp Sent</div>
@@ -272,22 +302,35 @@ export default function LeadsPage() {
                     return (
                       <tr key={lead.id}>
                         <td className="lt-col-lead">
-                          <span className="cell-primary" title={lead.company_name || ''}>{formatValue(lead.company_name)}</span>
-                          <span className="cell-secondary" title={lead.name || ''}>{formatValue(lead.name)}</span>
+                          <span className="lt-lead-name" title={lead.company_name || ''}>{formatValue(lead.company_name)}</span>
+                          <span className="lt-lead-person" title={lead.name || ''}>{formatValue(lead.name)}</span>
                         </td>
                         <td className="lt-col-source"><span className="lt-source-chip">{LEAD_SOURCE}</span></td>
                         <td className="lt-col-contact">
-                          {phone ? (
-                            <div className="lt-phone-row">
-                              <ContactHoverAction type="phone" value={phone} />
-                              <ContactHoverAction type="whatsapp" value={phone} showValue={false} waMessage={FOLLOWUP_MESSAGE} />
-                            </div>
-                          ) : <span className="cell-primary">-</span>}
-                          {lead.email ? <ContactHoverAction type="email" value={lead.email} /> : <span className="cell-secondary">-</span>}
+                          <div className="lead-contact">
+                            {phone ? (
+                              <div className="lead-contact-line">
+                                <span className="lead-contact-val" title={phone}>{phone}</span>
+                                <RowAction kind="call" href={`tel:${phone.replace(/\s/g, '')}`} label={`Call ${phone}`} />
+                                <RowAction
+                                  kind="wa"
+                                  href={`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(FOLLOWUP_MESSAGE)}`}
+                                  label={`WhatsApp ${phone}`}
+                                  external
+                                />
+                              </div>
+                            ) : <span className="lead-contact-val">—</span>}
+                            {lead.email ? (
+                              <div className="lead-contact-line">
+                                <span className="lead-contact-val lead-contact-val--sub" title={lead.email}>{lead.email}</span>
+                                <RowAction kind="mail" href={`mailto:${lead.email}`} label={`Email ${lead.email}`} />
+                              </div>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="lt-col-city">{formatValue(lead.city)}</td>
                         <td className="lt-col-status"><WhatsAppStatusPill entry={statusEntry} /></td>
-                        <td className="lt-col-date cell-secondary">{formatValue(String(lead.created_at || '').slice(0, 10))}</td>
+                        <td className="lt-col-date"><span className="lt-date">{formatValue(String(lead.created_at || '').slice(0, 10))}</span></td>
                       </tr>
                     )
                   })

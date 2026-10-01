@@ -1,52 +1,61 @@
 /* Leads module — deliberately scoped and self-contained rather than reusing
    the shared `.table-card table` system (src/index.css ~1315-1333). That
    system applies `table-layout: fixed` GLOBALLY plus positional
-   `th:nth-child(N)` width percentages tuned for Clients' specific column
-   shapes (a 72px numeric ID column, a 34% "Company" column, etc). Any other
-   page with a different column count or header length silently inherits
-   those same percentages onto the WRONG columns — which is exactly what
-   produced the overlapping/garbled headers here before this file existed
-   ("Contact Person" squeezed into 72px meant for a short numeric id,
-   "WhatsApp Confirmation" squeezed into 10% meant for a one-word status
-   pill). Leads uses its own semantic per-column classes instead of position,
-   so adding a column later (e.g. a second lead source) can't silently
-   corrupt an unrelated column again. */
+   `th:nth-child(N)` width percentages tuned for the Clients page's specific
+   column shapes (a 72px numeric ID column, a 34% "Company" column, etc).
+   Any other page with a different column count silently inherits those same
+   percentages onto the WRONG columns — which produced overlapping, garbled
+   headers here ("Contact Person" squeezed into 72px meant for a short numeric
+   id). Vendors and Sales Orders each patched the same trap with their own
+   positional `nth-child` overrides; this file uses semantic per-column
+   classes instead, so adding or reordering a column later cannot silently
+   corrupt an unrelated one. */
 
 /* ── Summary tiles ──────────────────────────────────────────────────────
-   Reclaims the space a slim page header used to leave empty now that the
-   sidebar (not a page-level tab bar) carries navigation — a quick, always-
-   current read on WhatsApp confirmation outcomes, the thing this module
-   exists to surface, without waiting to scan the table below. */
-.leads-stats {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.leads-stat-tile {
-  flex: 1 1 150px;
-  min-width: 150px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 14px 16px;
-}
-
-.leads-stat-label {
+   Counts are per PHONE NUMBER, not per lead row: the send path allows one
+   confirmation per number per 7 days, so several leads sharing a number
+   (a repeat enquiry, or one buyer submitting for two brands) legitimately
+   map to a single message. The caption says so, because without it the
+   tiles read as contradicting the table. */
+.leads-stats-head {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 800;
   color: var(--muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.leads-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.leads-stat-tile {
+  flex: 1 1 130px;
+  min-width: 130px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 14px;
+}
+
+.leads-stat-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  font-weight: 800;
+  color: var(--muted);
+  margin-bottom: 3px;
 }
 
 .leads-stat-value {
-  font-size: 26px;
+  font-size: 21px;
   font-weight: 800;
   color: var(--text);
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .leads-stat-tile--sent .leads-stat-value { color: var(--brand-blue); }
@@ -62,7 +71,7 @@
 
 .leads-table {
   width: 100%;
-  min-width: 820px;
+  min-width: 760px;
   border-collapse: collapse;
   table-layout: auto;   /* content-driven, not the global fixed/nth-child system */
 }
@@ -70,7 +79,7 @@
 .leads-table th {
   background: #f8fafc;
   color: #77869d;
-  padding: 11px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   font-size: 11px;
@@ -86,9 +95,9 @@
 }
 
 .leads-table td {
-  padding: 12px 14px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--line-soft);
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--text);
   vertical-align: middle;
 }
@@ -101,37 +110,88 @@
 [data-theme="dark"] .leads-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 
 /* Named per-column widths — by semantic class, never by position. */
-.lt-col-lead { min-width: 200px; }
-.lt-col-source { min-width: 130px; }
-.lt-col-contact { min-width: 230px; }
-.lt-col-city { min-width: 110px; }
-.lt-col-status { min-width: 150px; }
-.lt-col-date { min-width: 100px; white-space: nowrap; }
+.lt-col-lead { min-width: 180px; }
+.lt-col-source { width: 1%; white-space: nowrap; }
+.lt-col-contact { min-width: 240px; }
+.lt-col-city { min-width: 100px; }
+.lt-col-status { width: 1%; white-space: nowrap; }
+.lt-col-date { width: 1%; white-space: nowrap; }
 
-/* Leads is a quick-action, outreach-first table: the point of a row is to
-   call/WhatsApp/email someone, so those buttons stay visible rather than
-   hiding behind the hover-reveal Vendors uses (fine for a dense power-user
-   grid, but the WhatsApp button here carries no label text of its own —
-   `showValue={false}` — so a hover-only reveal would leave an unlabelled
-   blank space with no hint anything is there). */
-.leads-table .cd-action-btn {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
+.lt-lead-name {
+  display: block;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lt-lead-person {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.lt-phone-row {
+.lt-date { color: var(--muted); font-size: 12.5px; }
+
+/* ── Row actions ────────────────────────────────────────────────────────
+   Icon-only squares rather than the labelled pills used in the contact
+   DRAWER (.cd-action-btn): at three actions per row, labelled pills were
+   wider than the data they belonged to, wrapped onto their own lines and
+   pushed rows past 100px tall. These stay on one line with the value they
+   act on. Always visible (not hover-revealed like Vendors) because
+   outreach is the whole point of this screen, and each carries a `title`
+   + `aria-label` since the glyph alone is the only affordance. */
+.lead-contact { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.lead-contact-line {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  min-width: 0;
 }
+
+.lead-contact-val {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lead-contact-val--sub { font-size: 12px; color: var(--muted); }
+
+.lead-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: var(--line-soft);
+  color: var(--muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lead-act:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.lead-act--call:hover { background: var(--brand-blue); color: #fff; }
+.lead-act--wa:hover   { background: #25d366; color: #06210f; }
+.lead-act--mail:hover { background: var(--accent); color: #1a1200; }
+
+[data-theme="dark"] .lead-act { background: rgba(255, 255, 255, 0.06); }
 
 .lt-source-chip {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 2px 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   background: var(--brand-blue-soft);
   color: var(--brand-blue);

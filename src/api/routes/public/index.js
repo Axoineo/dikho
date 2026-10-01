@@ -3,8 +3,8 @@ import { parseJson } from '../../middleware/errorHandler.js'
 import { ok } from '../../utils/response.js'
 import { verifyTurnstile } from '../../services/turnstile.js'
 import { callRpc } from '../../services/supabaseRpc.js'
-import { sendTemplateMessage } from '../../services/whatsapp/graph.js'
-import { sanitizeParam } from '../../../lib/templateVars.js'
+import { fetchApprovedTemplates, sendTemplateMessage } from '../../services/whatsapp/graph.js'
+import { buildComponents, sanitizeParam, templateTokens } from '../../../lib/templateVars.js'
 import { logEvent, logError } from '../../utils/logger.js'
 
 // Unauthenticated write endpoints for the two public forms. These are the only
@@ -125,6 +125,35 @@ async function claimTemplateSend(db, phone, templateName, cooldownDays) {
   return Boolean(row)
 }
 
+// Approved-template definitions, cached per isolate. The send path needs the
+// template's REAL shape (how many {{...}} it declares, and in which
+// component) because Meta rejects a mismatched parameter count outright —
+// production failed every cg-lead send with
+// `132000 Number of parameters does not match the expected number of params`
+// while hardcoding a single body parameter. Hardcoding any fixed count is the
+// same bug waiting to happen again the moment the template is edited on Meta's
+// side, so the count is derived instead.
+//
+// Cached because this costs a Workers subrequest and the definition changes
+// about never (editing an approved template requires re-approval from Meta).
+// A failed fetch is NOT cached, so a Meta blip doesn't pin a null for 10
+// minutes.
+let templateCache = { at: 0, list: null }
+const TEMPLATE_CACHE_MS = 10 * 60 * 1000
+
+async function getApprovedTemplate(env, name, language) {
+  if (!templateCache.list || Date.now() - templateCache.at > TEMPLATE_CACHE_MS) {
+    templateCache = { at: Date.now(), list: await fetchApprovedTemplates(env) }
+  }
+  const list = templateCache.list ?? []
+  // Exact language first; then same name in any language, since a template
+  // approved as e.g. `en_US` will not match a configured plain `en` and that
+  // mismatch is its own silent send failure.
+  return list.find((t) => t.name === name && t.language === language)
+    ?? list.find((t) => t.name === name)
+    ?? null
+}
+
 // Records the outcome of a cg-lead send as a plain row in the same `messages`
 // table campaigns use — deliberately WITHOUT campaign_id, contact_id or
 // conversation_id, all left NULL. That is what the dashboard's
@@ -189,13 +218,49 @@ async function notifyCgLead(env, lead) {
     return
   }
 
+  // Resolve the template's real shape before sending. Best-effort: if Meta is
+  // unreachable we fall back to the previous assumption (one body parameter)
+  // rather than skipping a confirmation entirely.
+  let template = null
+  try {
+    template = await getApprovedTemplate(env, templateName, languageCode)
+  } catch (err) {
+    logError('cg_lead.template_lookup_failed', err)
+  }
+
+  let components
+  let sendLanguage = languageCode
+  if (template) {
+    sendLanguage = template.language || languageCode
+    const tokens = templateTokens(template)
+    // Logged once per isolate-cache-miss rather than per send, and it is the
+    // only record of what this template actually declares — worth having the
+    // first time a send fails after someone edits it on Meta.
+    logEvent('cg_lead.template_shape', { templateName, language: sendLanguage, tokens })
+
+    if (tokens.length > 0) {
+      // The lead's name fills the FIRST declared variable ({{1}} in the
+      // intended template). Any further variables the template turns out to
+      // declare are filled with the ' ' fallback by buildComponents: we have
+      // no idea what they mean, but the parameter COUNT is what Meta is
+      // rejecting, and a blank is far better than no confirmation at all.
+      const map = { [tokens[0]]: { source: 'literal', value: name } }
+      components = buildComponents(template, map, {}, { fallback: ' ' })
+    }
+    // tokens.length === 0 leaves `components` undefined — a static send, which
+    // is exactly what a template with no variables requires.
+  } else {
+    logEvent('cg_lead.template_unresolved', { templateName, languageCode })
+    components = [{ type: 'body', parameters: [{ type: 'text', text: name }] }]
+  }
+
   let result
   try {
     result = await sendTemplateMessage(env, {
       to: phone,
       templateName,
-      languageCode,
-      components: [{ type: 'body', parameters: [{ type: 'text', text: name }] }],
+      languageCode: sendLanguage,
+      components,
     })
   } catch (err) {
     logError('cg_lead.whatsapp_send_exception', err)
@@ -204,6 +269,19 @@ async function notifyCgLead(env, lead) {
 
   if (!result.ok) {
     logError('cg_lead.whatsapp_send_failed', `${result.errorCode}: ${result.errorMessage}`)
+    try {
+      // Release the cooldown claim. The claim is taken BEFORE the send (so two
+      // simultaneous submits can only produce one message), which means a
+      // failure would otherwise lock this number out for the full 7 days over
+      // a message it never received — exactly what happened in production on
+      // 2026-10-01, where a template-parameter mismatch failed every send and
+      // each failure then blocked its own retry.
+      await env.DB.prepare(
+        'DELETE FROM template_send_cooldowns WHERE phone = ?1 AND template_name = ?2',
+      ).bind(phone, templateName).run()
+    } catch (err) {
+      logError('cg_lead.whatsapp_cooldown_release_failed', err)
+    }
     try {
       await recordCgLeadMessage(env.DB, { phone, status: 'failed', errorCode: result.errorCode, errorMessage: result.errorMessage })
     } catch (err) {
