@@ -13,7 +13,6 @@ import { statusTone, isIlikeTypeError } from '../../lib/status'
 import { writeRows } from '../../lib/writeRows'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
-import { generateTaxInvoice } from '../invoices/generateTaxInvoice'
 import SalesOrderDetails from './SalesOrderDetails'
 import {
   SO_COLOR_OPTIONS, blankSalesOrderForm, salesOrderToForm,
@@ -944,6 +943,9 @@ export default function SalesOrdersPage({ session }) {
 
   async function handleTIDownload(order) {
     try {
+      // pdf-lib + fontkit are ~1.1 MB and only this one button needs them, so
+      // they load on the click rather than with the page.
+      const { generateTaxInvoice } = await import('../invoices/generateTaxInvoice')
       await generateTaxInvoice(TEMPLATE_PATH, order)
     } catch (err) {
       console.error('[TI Download]', err)

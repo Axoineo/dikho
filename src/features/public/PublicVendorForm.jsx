@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { City, Country, State } from 'country-state-city'
+import { Country, State } from 'country-state-city'
 import { supabase } from '../../lib/supabase'
 import { apiPublicPost } from '../../lib/api'
 import { useGstinLookup } from '../../lib/useGstinLookup'
+import { useCitiesOfState } from '../../lib/useCities'
 import { GSTIN_LENGTH, normalizeGstin, taxpayerToVendorFields } from '../../lib/gstin'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import { Icon } from '../../components/Icon'
@@ -320,11 +321,7 @@ export default function PublicVendorForm() {
   const states = useMemo(() =>
     form.country_code ? State.getStatesOfCountry(form.country_code).sort((a, b) => a.name.localeCompare(b.name)) : [],
     [form.country_code])
-  const cities = useMemo(() =>
-    form.country_code && form.state_code
-      ? City.getCitiesOfState(form.country_code, form.state_code).sort((a, b) => a.name.localeCompare(b.name))
-      : [],
-    [form.country_code, form.state_code])
+  const cities = useCitiesOfState(form.country_code, form.state_code)
 
   function handleCountryChange(code) {
     const c = allCountries.find(x => x.isoCode === code)

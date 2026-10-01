@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
-import { Country, State, City } from 'country-state-city'
+import { Country, State } from 'country-state-city'
+import { useCitiesOfState } from '../../lib/useCities'
 import { VENDOR_ADDRESS_COLUMNS } from './vendorFilters'
 
 export default function AddVendorModal({ onClose, onSaved }) {
@@ -69,7 +70,7 @@ export default function AddVendorModal({ onClose, onSaved }) {
   }
 
   const states = useMemo(() => form.country_code ? State.getStatesOfCountry(form.country_code).sort((a, b) => a.name.localeCompare(b.name)) : [], [form.country_code])
-  const cities = useMemo(() => form.country_code && form.state_code ? City.getCitiesOfState(form.country_code, form.state_code).sort((a, b) => a.name.localeCompare(b.name)) : [], [form.country_code, form.state_code])
+  const cities = useCitiesOfState(form.country_code, form.state_code)
 
   useEffect(() => {
     async function loadMedia() {

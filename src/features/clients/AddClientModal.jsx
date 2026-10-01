@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
-import { Country, State, City } from 'country-state-city'
 
 export default function AddClientModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
