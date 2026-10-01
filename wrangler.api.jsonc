@@ -11,11 +11,22 @@
   "compatibility_date": "2026-08-20",
   "main": "src/api/worker.js",
   "workers_dev": true,
-  // Drains the delivery-receipt backlog (src/api/services/whatsapp/reconcile.js).
-  // Receipts that beat their own wamid into the database are parked as
-  // 'unmatched' by the webhook; this sweep applies them minutes later.
+  // Two schedules, routed apart on `event.cron` in src/api/worker.js:
+  //   "* * * * *"    sends due corporate-gifting confirmations
+  //                  (src/api/services/whatsapp/cgLeadConfirmation.js). The
+  //                  message is scheduled ~7 minutes after the form submit,
+  //                  which a Worker cannot wait out inside a request, so it is
+  //                  queued in D1 and dispatched here. Every minute is what
+  //                  keeps the delay accurate to within ~1 minute.
+  //   "*/10 * * * *" drains the delivery-receipt backlog
+  //                  (src/api/services/whatsapp/reconcile.js). Receipts that
+  //                  beat their own wamid into the database are parked as
+  //                  'unmatched' by the webhook; this sweep applies them later.
+  // Do NOT collapse these into one every-minute schedule: the reconciler is a
+  // heavier D1 sweep and running it 10x more often spends row-reads against a
+  // free-tier budget that migration 0006 records running out once already.
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": ["* * * * *", "*/10 * * * *"]
   },
   "observability": {
     "enabled": true
@@ -65,6 +76,11 @@
     // approved Meta template exactly.
     "WHATSAPP_CG_LEAD_TEMPLATE_NAME": "client_conformation_",
     "WHATSAPP_CG_LEAD_TEMPLATE_LANG": "en",
+    // Minutes between a /corporategifting submission and its WhatsApp
+    // confirmation. The message is queued in D1 at submit time and sent by the
+    // every-minute cron above, so the real delay is this value plus up to ~1
+    // minute. Set to "0" to send on the next cron tick instead of waiting.
+    "WHATSAPP_CG_LEAD_DELAY_MINUTES": "7",
     // Global ceiling on cg-lead WhatsApp sends per UTC day (migrations/
     // 0009_cg_lead_whatsapp_daily_budget.sql) — the form is public and
     // unauthenticated, so this is what actually bounds spend + WABA reputation
