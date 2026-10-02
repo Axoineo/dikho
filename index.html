@@ -148,6 +148,14 @@
          the page still has not arrived does it reverse (nearest letter back
          in first, for the same reason) before the D turns once and repeats.
 
+         Every curve that has to come to rest is an ease-in-out sine, whose top
+         speed is 1.59x its average. The curves used before peaked at 3.08x,
+         which crammed most of the journey into one burst in the middle and
+         read as a jolt, and the group's return ended at 2.6x and stopped dead.
+         The letters alone keep a fast exit on the way back, because they
+         disappear into the mask rather than stopping, and the quick exit is
+         what stops them queueing at the mouth.
+
          Nothing is ever scaled along one axis. The letters keep their true
          proportions the whole way; the tunnel is what hides them.
 
@@ -200,34 +208,34 @@
         @keyframes dk-open {
           0%            { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px); }
           7.5%          { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px);
-                          animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+                          animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           28.125%, 63.125% { transform: translate(0px, 0px) translate(133px, 264px) scale(1) translate(-133px, -264px);
-                          animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
+                          animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           85.3125%, 100% { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px); }
         }
 
         /* o leaves first and returns last; i leaves last and returns first. */
         @keyframes dk-slide-o {
           0%              { transform: translateX(-983px); }
-          7.5%            { transform: translateX(-983px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          7.5%            { transform: translateX(-983px); animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           19.6875%, 73.4375% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
           85.3125%, 100% { transform: translateX(-983px); }
         }
         @keyframes dk-slide-h {
           0%              { transform: translateX(-630px); }
-          10.3125%        { transform: translateX(-630px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          10.3125%        { transform: translateX(-630px); animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           22.5%, 70%        { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
           81.875%, 100%  { transform: translateX(-630px); }
         }
         @keyframes dk-slide-k {
           0%              { transform: translateX(-383px); }
-          13.125%         { transform: translateX(-383px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          13.125%         { transform: translateX(-383px); animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           25.3125%, 66.5625% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
           78.4375%, 100% { transform: translateX(-383px); }
         }
         @keyframes dk-slide-i {
           0%              { transform: translateX(-122px); }
-          15.9375%        { transform: translateX(-122px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          15.9375%        { transform: translateX(-122px); animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           28.125%, 63.125% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
           75%, 100%      { transform: translateX(-122px); }
         }
@@ -249,7 +257,7 @@
         }
 
         @keyframes dk-spin {
-          0%, 85.9375% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.42, 0, .14, 1); }
+          0%, 85.9375% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.37, 0, .63, 1); }
           100%          { transform: rotate(360deg); }
         }
       }
