@@ -105,7 +105,30 @@
     // RAISE THIS if `gstn.daily_cap_reached` shows up in `wrangler tail` during
     // legitimate use; API Setu publishes no quota figure to size it against.
     // Set to "0" to disable the ceiling entirely (fails open).
-    "GSTN_DAILY_CAP": "500"
+    "GSTN_DAILY_CAP": "500",
+    // Which GSTN Tax Payer API to call: "v2" (default) or "v1".
+    //
+    // V2 is a strict superset — trade name and the principal place of business
+    // (street/city/district/state/pincode) exist ONLY there, so V1 cannot fill
+    // the address fields at all. The V2 reader is written, unit-checked against
+    // the contract's own examples, and deployed.
+    //
+    // PINNED TO v1 because the key is NOT YET ENTITLED to V2. Tried 2026-09-29:
+    // /gstn/v2/taxpayers/... answers 401 invalid_authorization, "You are not
+    // authorized to use this API" — note that is the ENTITLEMENT error, not the
+    // "Header missing" one, so the key is valid and simply lacks V2. Each
+    // version is a separate API Setu subscription, and an API key generated
+    // before V2 was added does not automatically cover it.
+    //
+    // FLIP THIS TO "v2" once a key entitled to V2 is in place, and the address
+    // and trade-name fields start filling with no code change. Verify with:
+    //   curl -s .../api/gstn/27AAACR5055K1Z7 | grep -o '"apiVersion":"[^"]*"'
+    // Leaving it on v2 while unentitled is worse than useless: every lookup
+    // fails AND still spends a GSTN_DAILY_CAP unit, since the budget is charged
+    // before the upstream call.
+    //
+    // Anything unrecognised falls back to v2 and logs gstn.unknown_version.
+    "GSTN_API_VERSION": "v1"
   },
   // Per-IP throttle for GET /api/gstn/:gstin (src/api/routes/gstn/index.js).
   // Deliberately NOT backed by D1: that database's free-plan row-write budget
