@@ -152,8 +152,8 @@
 
          Constants: the D's centre in viewBox units is (133, 264) and the
          viewBox centre is (620.5, 210), hence the 487.5 / -54 offset that
-         parks the D dead centre. Each letter starts left of x=115, the narrowest
-         point of the D's contour, so the D hides it completely.
+         parks the D dead centre. Each letter waits with its right edge at 258, just
+         inside the mouth, where the mask hides it completely.
 
            0 - 330ms      D holds
            330 - 1238     o, h, k, i leave the D, 124ms apart, 536ms each
@@ -207,28 +207,28 @@
 
         /* o leaves first and returns last; i leaves last and returns first. */
         @keyframes dk-slide-o {
-          0%              { transform: translateX(-1136px); }
-          7.5%            { transform: translateX(-1136px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          0%              { transform: translateX(-983px); }
+          7.5%            { transform: translateX(-983px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
           19.6875%, 73.4375% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          85.3125%, 100% { transform: translateX(-1136px); }
+          85.3125%, 100% { transform: translateX(-983px); }
         }
         @keyframes dk-slide-h {
-          0%              { transform: translateX(-783px); }
-          10.3125%        { transform: translateX(-783px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          0%              { transform: translateX(-630px); }
+          10.3125%        { transform: translateX(-630px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
           22.5%, 70%        { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          81.875%, 100%  { transform: translateX(-783px); }
+          81.875%, 100%  { transform: translateX(-630px); }
         }
         @keyframes dk-slide-k {
-          0%              { transform: translateX(-536px); }
-          13.125%         { transform: translateX(-536px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          0%              { transform: translateX(-383px); }
+          13.125%         { transform: translateX(-383px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
           25.3125%, 66.5625% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          78.4375%, 100% { transform: translateX(-536px); }
+          78.4375%, 100% { transform: translateX(-383px); }
         }
         @keyframes dk-slide-i {
-          0%              { transform: translateX(-275px); }
-          15.9375%        { transform: translateX(-275px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          0%              { transform: translateX(-122px); }
+          15.9375%        { transform: translateX(-122px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
           28.125%, 63.125% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          75%, 100%      { transform: translateX(-275px); }
+          75%, 100%      { transform: translateX(-122px); }
         }
 
         /* The dot starts small and sunk inside the i, and is painted before it
@@ -266,18 +266,30 @@
         <path id="dk-h" d="M745.913 403.419C745.913 407.618 744.971 410.514 743.16 412.179C741.493 413.7 738.523 414.496 734.394 414.496H691.215C687.013 414.496 684.043 413.7 682.232 412.179C680.566 410.514 679.696 407.546 679.696 403.419V147.047C679.696 143.716 680.421 141.11 681.797 139.3C687.665 131.625 696.214 123.299 707.588 114.394C709.544 113.018 711.283 112.294 712.804 112.294C714.616 112.294 716.354 113.018 718.021 114.394C724.034 119.027 729.033 123.299 733.09 127.353C737.292 131.408 740.841 135.39 743.739 139.3C745.116 141.11 745.84 143.716 745.84 147.047V221.764H746.71C749.752 217.71 753.737 213.656 758.663 209.601C763.517 205.402 770.038 201.927 778.152 199.103C786.41 196.279 796.843 194.904 809.593 194.904C822.344 194.904 834.805 197.583 846.686 202.868C858.568 208.153 868.275 217.131 875.81 229.656C883.344 242.182 887.112 259.413 887.112 281.133V403.346C887.112 407.546 886.17 410.442 884.359 412.107C882.692 413.627 879.722 414.424 875.593 414.424H832.414C828.212 414.424 825.242 413.627 823.431 412.107C821.765 410.442 820.895 407.473 820.895 403.346V292.645C820.895 277.151 817.708 265.929 811.26 258.979C804.812 251.883 796.118 248.336 785.106 248.336C774.095 248.336 765.763 250.725 759.75 255.431C753.737 260.209 749.1 266.146 745.913 273.459V403.419Z" />
         <path id="dk-o" d="M1198.13 152.766C1170.23 127.571 1133.07 115.045 1086.7 115.045C1040.34 115.045 1000.13 127.788 971.295 153.345C942.606 178.686 928.334 217.131 928.334 268.536C928.334 319.94 942.171 356.43 969.918 381.771C997.665 407.111 1035.27 419.781 1082.79 419.781C1130.32 419.781 1170.31 406.46 1198.2 379.744C1226.09 353.1 1240.07 314.293 1240.07 263.395C1240.07 212.497 1226.09 177.672 1198.2 152.694L1198.13 152.766ZM1115.97 364.322C1084.53 364.322 1059.03 338.837 1059.03 307.415C1059.03 275.993 1084.53 250.508 1115.97 250.508C1147.41 250.508 1172.91 275.993 1172.91 307.415C1172.91 338.837 1147.41 364.322 1115.97 364.322Z" />
         <path id="dk-dot" d="M305.581 37.9382C304.494 39.3138 303.915 40.9066 303.915 42.7166C303.915 44.5267 304.494 46.1195 305.581 47.4951C306.668 48.7259 308.189 50.4635 310 52.708C313.912 57.3416 318.331 62.1201 323.185 67.1158C328.039 71.9667 333.328 76.6727 338.906 81.1616C341.152 82.8268 342.746 83.9852 343.688 84.492C344.775 84.9265 345.861 85.1437 346.803 85.1437C347.745 85.1437 348.832 84.9265 349.918 84.492C351.005 83.9128 352.599 82.8268 354.555 81.1616C359.843 76.6727 365.06 72.0391 370.059 67.1158C375.057 62.1201 379.477 57.4141 383.244 53.07C385.2 50.6808 386.721 48.7983 387.88 47.4227C389.112 46.0471 389.764 44.4543 389.764 42.6442C389.764 40.8342 389.112 39.2414 387.88 37.8658C386.794 36.3453 385.272 34.5353 383.461 32.4357C375.492 23.2407 365.857 13.7562 354.555 3.98206C351.077 1.30322 348.469 0 346.803 0C345.137 0 342.601 1.30322 339.269 3.98206C333.98 8.61573 328.691 13.3942 323.548 18.3899C318.404 23.2407 313.84 27.9468 309.928 32.4357C308.116 34.6801 306.668 36.4901 305.508 37.8658L305.581 37.9382Z" />
-        <!-- The tunnel. The D is a strongly rounded shape: at its waist it
-             reaches x=265, but at the top and bottom it pulls back to x=118.
-             Cutting on a straight line left up to 148 units of white between
-             the D and a letter arriving beside it, so the letters read as
-             sitting next to the D rather than coming out of it. This follows
-             the D's own right edge instead, sampled every 6 units and tucked
-             3 units under it so the seam hides beneath the D's ink. A letter
-             therefore always touches the D at the moment it appears, and
-             unwraps around the curve as it leaves. -->
-        <clipPath id="dk-tunnel" clipPathUnits="userSpaceOnUse">
-          <path d="M118,-900L118,114L167,120L187,126L201,132L211,138L219,144L226,150L232,156L236,162L241,168L244,174L248,180L250,186L253,192L254,198L256,204L258,210L259,216L260,222L261,228L261,234L262,240L262,246L262,252L262,258L262,264L262,270L262,276L262,282L261,288L260,294L260,300L259,306L257,312L256,318L254,324L252,330L250,336L248,342L245,348L241,354L237,360L233,366L228,372L222,378L215,384L207,390L197,396L183,402L164,408L115,414L115,1320L3400,1320L3400,-900Z" />
-        </clipPath>
+        <!-- The tunnel. A straight mouth at the D's widest point, x=266, with a
+             soft edge instead of a hard cut: the gradient is black left of the
+             mouth, so a letter waiting inside is completely hidden, and ramps
+             to white by x=308 so it dissolves into view over its first 42 units
+             out. Smoothstep rather than a linear ramp, which keeps both ends of
+             the fade gentle.
+
+             The band stops at 308 on purpose. The i comes to rest at 313, and
+             anything still inside the band would sit permanently half faded.
+
+             This is a mask rather than a clip because a clip can only cut; the
+             soft edge is the whole point. It costs one small offscreen
+             composite and nothing per frame, where a blur filter would cost a
+             multi-pass rasterise on every frame of the loop. -->
+        <linearGradient id="dk-fade" gradientUnits="userSpaceOnUse" x1="266" y1="0" x2="308" y2="0">
+          <stop offset="0" stop-color="#000000" />
+          <stop offset="0.25" stop-color="#282828" />
+          <stop offset="0.5" stop-color="#808080" />
+          <stop offset="0.75" stop-color="#d7d7d7" />
+          <stop offset="1" stop-color="#ffffff" />
+        </linearGradient>
+        <mask id="dk-tunnel" maskUnits="userSpaceOnUse" x="-1400" y="-300" width="2900" height="1000">
+          <rect x="-1400" y="-300" width="2900" height="1000" fill="url(#dk-fade)" />
+        </mask>
       </defs>
     </svg>
 
@@ -285,10 +297,10 @@
       <svg class="dk-mark" viewBox="0 0 1241 420" aria-hidden="true">
         <g class="dk-logo">
           <!-- Order matters twice over: the dot sits under the word so the i
-               hides it as it rises, and the D sits over the word so it covers
-               where the tunnel is tucked under its edge. -->
+               hides it as it rises, and the D sits over the word so it covers any
+               bleed at the mouth. -->
           <use class="dk-dot" href="#dk-dot" />
-          <g class="dk-word" clip-path="url(#dk-tunnel)">
+          <g class="dk-word" mask="url(#dk-tunnel)">
             <use class="dk-g dk-g1" href="#dk-i" />
             <use class="dk-g dk-g2" href="#dk-k" />
             <use class="dk-g dk-g3" href="#dk-h" />

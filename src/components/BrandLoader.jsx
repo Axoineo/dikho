@@ -9,8 +9,8 @@ import { useEffect, useState } from 'react'
  * (about 6 KB of path data that would otherwise sit in the main chunk), which
  * is also why the splash's <svg id="dk-defs"> block is never removed from the
  * DOM. Element order matters twice: the dot sits under the word so the i hides
- * it as it rises, and the D sits over the word so it covers the seam where the
- * tunnel is tucked under its edge.
+ * it as it rises, and the D sits over the word so it covers any bleed at
+ * the mouth of the tunnel.
  */
 const STALL_MS = 8000
 
@@ -29,7 +29,7 @@ export default function BrandLoader() {
       <svg className="dk-mark" viewBox="0 0 1241 420" aria-hidden="true">
         <g className="dk-logo">
           <use className="dk-dot" href="#dk-dot" />
-          <g className="dk-word" clipPath="url(#dk-tunnel)">
+          <g className="dk-word" mask="url(#dk-tunnel)">
             {['i', 'k', 'h', 'o'].map((glyph, n) => (
               <use key={glyph} className={`dk-g dk-g${n + 1}`} href={`#dk-${glyph}`} />
             ))}
