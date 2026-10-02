@@ -3,7 +3,7 @@ import { lazy } from 'react'
 const ATTEMPTS = 4
 const BASE_DELAY = 600
 
-/* React.lazy runs its factory exactly once and caches whatever it settles to —
+/* React.lazy runs its factory exactly once and caches whatever it settles to,
  * a rejection included. A route chunk that fails on a dropped connection is
  * therefore dead for the life of the page: Suspense keeps showing the fallback
  * even after the network comes back, which reads as the loading animation
@@ -14,8 +14,8 @@ const BASE_DELAY = 600
  * connection that cannot succeed.
  *
  * A request that never settles at all is a different failure and cannot be
- * fixed here — the browser keys module requests by URL, so re-importing returns
- * the same pending promise. BrandLoader offers a reload once it has been on
+ * fixed here: the browser keys module requests by URL, so re-importing just
+ * returns the same pending promise. BrandLoader offers a reload once it has been on
  * screen too long, which is the only real recovery for that case.
  */
 export function lazyWithRetry(load) {

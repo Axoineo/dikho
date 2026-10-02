@@ -2,13 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /* Public landing pages are lazy routes, so at runtime their chunk is only
-   requested once the main bundle has downloaded AND parsed — the two waits run
-   back to back instead of overlapping. index.html carries a small inline script
+   requested once the main bundle has downloaded AND parsed. The two waits then
+   run back to back instead of overlapping. index.html carries a small inline script
    that preloads the chunk for the path being visited; it needs the hashed
    filenames, which only exist after the bundle is generated. This plugin fills
    them in, keyed by path so a CRM visitor never fetches a public page's code.
 
-   Keys must stay lowercase and without a trailing slash — that is the shape the
+   Keys must stay lowercase and without a trailing slash, which is the shape the
    inline script normalises location.pathname to, which is also what lets the
    /Corporategifting capitalisation alias work. */
 const PUBLIC_ROUTES = {

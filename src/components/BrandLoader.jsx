@@ -6,16 +6,17 @@ import { useEffect, useState } from 'react'
  * Both the glyph paths and the keyframes live in index.html, because the splash
  * has to paint before any JavaScript arrives and so cannot depend on the bundle.
  * This component references those paths by id instead of shipping a second copy
- * — about 6 KB of path data that would otherwise sit in the main chunk — which
+ * (about 6 KB of path data that would otherwise sit in the main chunk), which
  * is also why the splash's <svg id="dk-defs"> block is never removed from the
- * DOM. Element order matters: the dot is painted before the word so the i hides
- * it until it clears the stem.
+ * DOM. Element order matters twice: the dot sits under the word so the i hides
+ * it as it rises, and the D sits over the word so it covers the seam where the
+ * tunnel is tucked under its edge.
  */
 const STALL_MS = 8000
 
 export default function BrandLoader() {
-  /* A chunk request that never settles cannot be retried — the browser keys
-   * module requests by URL — so after a while the only way out is a fresh load.
+  /* A chunk request that never settles cannot be retried, because the browser
+   * keys module requests by URL, so the only way out is a fresh load.
    * Without this the animation just loops, which reads as a hung page. */
   const [stalled, setStalled] = useState(false)
   useEffect(() => {
@@ -28,18 +29,18 @@ export default function BrandLoader() {
       <svg className="dk-mark" viewBox="0 0 1241 420" aria-hidden="true">
         <g className="dk-logo">
           <use className="dk-dot" href="#dk-dot" />
-          <use className="dk-d" href="#dk-d" />
           <g className="dk-word" clipPath="url(#dk-tunnel)">
             {['i', 'k', 'h', 'o'].map((glyph, n) => (
               <use key={glyph} className={`dk-g dk-g${n + 1}`} href={`#dk-${glyph}`} />
             ))}
           </g>
+          <use className="dk-d" href="#dk-d" />
         </g>
       </svg>
 
       {stalled && (
         <div className="brand-loader-stall">
-          <span>Still loading &mdash; your connection may have dropped.</span>
+          <span>This is taking longer than usual.</span>
           <button type="button" className="primary-button" onClick={() => window.location.reload()}>
             Reload
           </button>
@@ -61,7 +62,7 @@ export function AppReady() {
       window.__dikhoAppReady?.()
     }
 
-    // The frame is the normal path — it lets the route paint first. The timer
+    // The frame is the normal path, letting the route paint first. The timer
     // is the backstop: requestAnimationFrame is throttled to a standstill in a
     // background tab, and without it a page opened in one would sit behind the
     // splash until the 10s failsafe in index.html fired.
