@@ -1,20 +1,20 @@
-import { lazy } from 'react'
+import { lazyWithRetry } from './lib/lazyWithRetry'
 
 /* ── Authenticated routes (lazy-loaded) ────────────────────────────────── */
-export const ClientsPage = lazy(() => import('./features/clients/ClientsPage'))
-export const LeadsPage = lazy(() => import('./features/leads/LeadsPage'))
-export const VendorsPage = lazy(() => import('./features/vendors/VendorsPage'))
-export const SalesOrdersPage = lazy(() => import('./features/sales-orders/SalesOrdersPage'))
-export const PurchaseOrdersPage = lazy(() => import('./features/purchase-orders/PurchaseOrdersPage'))
-export const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
+export const ClientsPage = lazyWithRetry(() => import('./features/clients/ClientsPage'))
+export const LeadsPage = lazyWithRetry(() => import('./features/leads/LeadsPage'))
+export const VendorsPage = lazyWithRetry(() => import('./features/vendors/VendorsPage'))
+export const SalesOrdersPage = lazyWithRetry(() => import('./features/sales-orders/SalesOrdersPage'))
+export const PurchaseOrdersPage = lazyWithRetry(() => import('./features/purchase-orders/PurchaseOrdersPage'))
+export const SettingsPage = lazyWithRetry(() => import('./features/settings/SettingsPage'))
 
 /* ── WhatsApp Marketing ────────────────────────────────────────────────── */
-export const WhatsAppInbox = lazy(() => import('./features/whatsapp/inbox/WhatsAppInbox'))
-export const WhatsAppDashboard = lazy(() => import('./features/whatsapp/WhatsAppDashboard'))
-export const WhatsAppContacts = lazy(() => import('./features/whatsapp/WhatsAppContacts'))
-export const WhatsAppCampaigns = lazy(() => import('./features/whatsapp/WhatsAppCampaigns'))
-export const WhatsAppTemplates = lazy(() => import('./features/whatsapp/WhatsAppTemplates'))
+export const WhatsAppInbox = lazyWithRetry(() => import('./features/whatsapp/inbox/WhatsAppInbox'))
+export const WhatsAppDashboard = lazyWithRetry(() => import('./features/whatsapp/WhatsAppDashboard'))
+export const WhatsAppContacts = lazyWithRetry(() => import('./features/whatsapp/WhatsAppContacts'))
+export const WhatsAppCampaigns = lazyWithRetry(() => import('./features/whatsapp/WhatsAppCampaigns'))
+export const WhatsAppTemplates = lazyWithRetry(() => import('./features/whatsapp/WhatsAppTemplates'))
 
 /* ── Public routes (lazy-loaded, no auth required) ─────────────────────── */
-export const PublicVendorForm = lazy(() => import('./features/public/PublicVendorForm'))
-export const PublicClientWelcome = lazy(() => import('./features/public/PublicClientWelcome'))
+export const PublicVendorForm = lazyWithRetry(() => import('./features/public/PublicVendorForm'))
+export const PublicClientWelcome = lazyWithRetry(() => import('./features/public/PublicClientWelcome'))

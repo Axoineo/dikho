@@ -404,7 +404,41 @@ button, input, textarea, select { border: 0; }
   /* The D is drawn oversized at the head of the loop and deliberately spills
      out of its svg box; contain it so it cannot push the workspace around. */
   overflow: hidden;
+  position: relative;
 }
+
+/* Offered once the loader has been up long enough to mean something is wrong.
+   Absolutely positioned so the mark stays dead centre whether it shows or not. */
+.brand-loader-stall {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.route-boundary {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: var(--page);
+  color: var(--muted);
+}
+.route-boundary strong { font-size: 16px; color: var(--text); }
+.route-boundary p { margin: 0 0 8px; font-size: 13.5px; max-width: 34ch; line-height: 1.5; }
+.workspace .route-boundary { min-height: 100%; }
 
 /* ---------- App shell ---------- */
 /* Gemini-style shell: a fixed-height flex row of sidebar + main content, with

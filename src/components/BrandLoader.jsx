@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 /* The Dikho mark, running the same sequence as the boot splash: the D alone,
  * then the letters leaving it one at a time, then the dot rising into place.
@@ -11,7 +11,18 @@ import { useEffect } from 'react'
  * DOM. Element order matters: the dot is painted before the word so the i hides
  * it until it clears the stem.
  */
+const STALL_MS = 8000
+
 export default function BrandLoader() {
+  /* A chunk request that never settles cannot be retried — the browser keys
+   * module requests by URL — so after a while the only way out is a fresh load.
+   * Without this the animation just loops, which reads as a hung page. */
+  const [stalled, setStalled] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setStalled(true), STALL_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="brand-loader" role="status" aria-label="Loading">
       <svg className="dk-mark" viewBox="0 0 1241 420" aria-hidden="true">
@@ -25,6 +36,15 @@ export default function BrandLoader() {
           </g>
         </g>
       </svg>
+
+      {stalled && (
+        <div className="brand-loader-stall">
+          <span>Still loading &mdash; your connection may have dropped.</span>
+          <button type="button" className="primary-button" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </div>
+      )}
     </div>
   )
 }

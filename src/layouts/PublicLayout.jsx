@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import BrandLoader, { AppReady } from '../components/BrandLoader'
+import RouteBoundary from '../components/RouteBoundary'
 
 export default function PublicLayout() {
   useEffect(() => {
@@ -10,9 +11,11 @@ export default function PublicLayout() {
   }, [])
 
   return (
-    <Suspense fallback={<BrandLoader />}>
-      <Outlet />
-      <AppReady />
-    </Suspense>
+    <RouteBoundary>
+      <Suspense fallback={<BrandLoader />}>
+        <Outlet />
+        <AppReady />
+      </Suspense>
+    </RouteBoundary>
   )
 }

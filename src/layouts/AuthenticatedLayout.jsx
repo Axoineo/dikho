@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
 import BrandLoader, { AppReady } from '../components/BrandLoader'
+import RouteBoundary from '../components/RouteBoundary'
 import { Outlet } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
@@ -174,10 +175,12 @@ export default function AuthenticatedLayout() {
           button is gone — the layout is already edge to edge. */}
       <div className="app-main">
         <main className="workspace">
-          <Suspense fallback={<BrandLoader />}>
-            <Outlet context={{ session, themeMode, onThemeChange: handleThemeChange }} />
-            <AppReady />
-          </Suspense>
+          <RouteBoundary>
+            <Suspense fallback={<BrandLoader />}>
+              <Outlet context={{ session, themeMode, onThemeChange: handleThemeChange }} />
+              <AppReady />
+            </Suspense>
+          </RouteBoundary>
         </main>
       </div>
 
