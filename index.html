@@ -77,7 +77,12 @@
         overflow: hidden;
         transition: opacity 220ms ease;
       }
-      .dk-stage.dk-dark { background: #111318; }
+      /* Brand blue reads 2.42:1 on the dark page, which is why the mark
+         all but disappeared there. This is the same blue the app already
+         uses for focus rings in dark mode, and it lands at 6.68:1, close
+         to the 7.22:1 the brand blue gets on the light ground. The gold
+         dot stays as it is: it reads 9.89:1 on this background. */
+      .dk-stage.dk-dark { background: #111318; --dk-ink: #5ba0e0; }
       /* Shown only once the splash has been up long enough to mean something
          is wrong. Absolutely positioned so the mark stays dead centre whether
          it is visible or not. The button carries its own colours because the
@@ -134,43 +139,46 @@
            stage and the loader both clip, so it can spill out of the svg box. */
         overflow: visible;
       }
-      .dk-mark use { fill: #185494; }
+      .dk-mark use { fill: var(--dk-ink, #185494); }
       .dk-mark use.dk-dot { fill: #f9af1b; }
 
       /* ── The loop ──────────────────────────────────────────────────────
-         The D holds alone, then the letters leave it ONE AT A TIME. Each one
-         starts stacked inside the D, slides out through the tunnel cut at the
-         D's right edge, and glides to its own place. The furthest letter goes
-         first: that way every letter travels through space that is still
-         empty, so no two glyphs ever slide across each other. Then the dot
-         rises out of the i. That opening always runs to completion; only if
-         the page still has not arrived does it reverse (nearest letter back
-         in first, for the same reason) before the D turns once and repeats.
+         The D cannot simply settle into place before the word arrives: on its
+         own it belongs at the left of the lockup, so parking it there early
+         leaves a small mark stranded off to one side of the screen. It has to
+         stay centred until there is a word to be centred with.
 
-         Nothing is ever scaled along one axis. The letters keep their true
-         proportions the whole way; the tunnel is what hides them.
+         What it does not have to do is resize and travel at the same time.
+         Those used to run together with the letters, so on a phone three
+         things moved at once and the D appeared to be reaching for its final
+         place while the word was still coming out. They are separate beats
+         now: the D shrinks where it stands, holds for a moment, and only then
+         slides left, and that slide is what opens the gap the letters stream
+         into. One gesture at a time.
 
-         Constants: the D's centre in viewBox units is (133, 264) and the
-         viewBox centre is (620.5, 210), hence the 487.5 / -54 offset that
-         parks the D dead centre. Each letter waits with its right edge at 258, just
-         inside the mouth, where the mask hides it completely.
+         The group transform is written as the same four functions throughout
+         so the three states interpolate cleanly:
+           A  centred, 1.9x   the lone mark
+           B  centred, 1x     resized, still alone
+           C  identity        in the finished lockup
 
-           0 - 330ms      D holds
-           330 - 1238     o, h, k, i leave the D, 124ms apart, 536ms each
-           1293 - 1623    dot rises out of the i   <- opening done at 1623ms
-           1623 - 2420    complete, holding
-           2420 - 2681    dot sinks back into the i
-           2778 - 3754    i, k, h, o return, 151ms apart, accelerating in
-           3781 - 4400    D turns once */
+         Timeline over the 4400ms loop:
+           0 - 240ms     D holds, large and centred
+           240 - 640     D shrinks where it stands
+           640 - 740     a beat
+           740 - 1420    D slides left while o, h, k, i stream out behind it
+           1460 - 1680   dot rises out of the i   <- opening done at 1680ms
+           1680 - 2400   complete, holding
+           2400 - 2620   dot sinks back into the i
+           2660 - 3340   i, k, h, o return and the D slides back
+           3380 - 3780   D grows back where it stands
+           3820 - 4400   D turns once */
       @media (prefers-reduced-motion: no-preference) {
         .dk-mark .dk-logo {
           transform-box: view-box;
           transform-origin: 0 0;
           animation: dk-open 4400ms linear infinite;
         }
-        /* The clip stays on .dk-word and the travel on each glyph inside it:
-           an element's own transform moves its clip too, so the tunnel has to
-           live on an ancestor that never moves. */
         .dk-mark .dk-g {
           transform-box: view-box;
           transform-origin: 0 0;
@@ -193,63 +201,57 @@
           animation: dk-spin 4400ms linear infinite;
         }
 
-        /* Linear at the animation level so only the per-keyframe curves shape
-           the motion: a long decelerate on the way out, an even ease on the
-           way back. */
         @keyframes dk-open {
-          0%            { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px); }
-          7.5%          { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px);
-                          animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
-          28.125%, 63.125% { transform: translate(0px, 0px) translate(133px, 264px) scale(1) translate(-133px, -264px);
-                          animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          85.3125%, 100% { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px); }
+          0%, 5.4545%        { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px);
+                               animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          14.5455%, 16.8182% { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1) translate(-133px, -264px);
+                               animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          32.2727%, 60.4545% { transform: translate(0px, 0px) translate(133px, 264px) scale(1) translate(-133px, -264px);
+                               animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
+          75.9091%, 76.8182% { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1) translate(-133px, -264px);
+                               animation-timing-function: cubic-bezier(.55, 0, .3, 1); }
+          85.9091%, 100%     { transform: translate(487.5px, -54px) translate(133px, 264px) scale(1.9) translate(-133px, -264px); }
         }
 
-        /* o leaves first and returns last; i leaves last and returns first. */
+        /* o leaves first and returns last, so every letter travels through
+           space that is still empty and no two ever cross. */
         @keyframes dk-slide-o {
-          0%              { transform: translateX(-983px); }
-          7.5%            { transform: translateX(-983px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
-          19.6875%, 73.4375% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          85.3125%, 100% { transform: translateX(-983px); }
+          0%, 16.8182%       { transform: translateX(-983px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          24.7727%, 67.9545% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
+          75.9091%, 100%     { transform: translateX(-983px); }
         }
         @keyframes dk-slide-h {
-          0%              { transform: translateX(-630px); }
-          10.3125%        { transform: translateX(-630px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
-          22.5%, 70%        { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          81.875%, 100%  { transform: translateX(-630px); }
+          0%, 19.3182%       { transform: translateX(-630px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          27.2727%, 65.4545% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
+          73.4091%, 100%     { transform: translateX(-630px); }
         }
         @keyframes dk-slide-k {
-          0%              { transform: translateX(-383px); }
-          13.125%         { transform: translateX(-383px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
-          25.3125%, 66.5625% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          78.4375%, 100% { transform: translateX(-383px); }
+          0%, 21.8182%       { transform: translateX(-383px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          29.7727%, 62.9545% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
+          70.9091%, 100%     { transform: translateX(-383px); }
         }
         @keyframes dk-slide-i {
-          0%              { transform: translateX(-122px); }
-          15.9375%        { transform: translateX(-122px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
-          28.125%, 63.125% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
-          75%, 100%      { transform: translateX(-122px); }
+          0%, 24.3182%       { transform: translateX(-122px); animation-timing-function: cubic-bezier(.65, 0, .3, 1); }
+          32.2727%, 60.4545% { transform: translateX(0px); animation-timing-function: cubic-bezier(.55, 0, .75, .35); }
+          68.4091%, 100%     { transform: translateX(-122px); }
         }
 
-        /* The dot starts small and sunk inside the i, and is painted before it
-           in document order, so the i hides it until it clears the stem. It
-           reads as coming out of the letter rather than flying in. It only
-           turns opaque once the i has finished arriving, and turns transparent
-           again before the i leaves; outside that window there is no i to hide
-           behind. */
+        /* The dot only turns opaque once the i has finished arriving, and goes
+           transparent again before the i leaves. Outside that window there is
+           no i for it to hide behind. */
         @keyframes dk-dot-pop {
-          0%, 28.4%      { opacity: 0; transform: translateY(150px) scale(.4); }
-          29.4%           { opacity: 1; transform: translateY(150px) scale(.4);
-                            animation-timing-function: cubic-bezier(.25, 1.12, .5, 1); }
-          36.875%, 55%   { opacity: 1; transform: translateY(0px) scale(1);
-                            animation-timing-function: cubic-bezier(.45, 0, .75, .55); }
-          60.9375%, 61%  { opacity: 1; transform: translateY(150px) scale(.4); }
-          62.8125%, 100% { opacity: 0; transform: translateY(150px) scale(.4); }
+          0%, 32.5%          { opacity: 0; transform: translateY(150px) scale(.4); }
+          33.1818%           { opacity: 1; transform: translateY(150px) scale(.4);
+                               animation-timing-function: cubic-bezier(.25, 1.12, .5, 1); }
+          38.1818%, 54.5455% { opacity: 1; transform: translateY(0px) scale(1);
+                               animation-timing-function: cubic-bezier(.45, 0, .75, .55); }
+          59.5455%           { opacity: 1; transform: translateY(150px) scale(.4); }
+          60.2%, 100%        { opacity: 0; transform: translateY(150px) scale(.4); }
         }
 
         @keyframes dk-spin {
-          0%, 85.9375% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.42, 0, .14, 1); }
-          100%          { transform: rotate(360deg); }
+          0%, 86.8182% { transform: rotate(0deg); animation-timing-function: cubic-bezier(.42, 0, .14, 1); }
+          100%         { transform: rotate(360deg); }
         }
       }
     </style>
@@ -330,11 +332,11 @@
         } catch (e) { /* storage blocked, light ground is the safe default */ }
 
         /* The opening (D, the word sliding out, the dot seating itself)
-           finishes at 1623ms. The splash is never pulled before then, even if
+           finishes at 1680ms. The splash is never pulled before then, even if
            the page is ready first, so the mark is always seen whole rather
            than cut off mid-slide. After that it goes the moment the page is
            ready, from wherever the loop happens to be; the fade covers it. */
-        var INTRO_MS = 1650
+        var INTRO_MS = 1700
         var startedAt = (window.performance && performance.now) ? performance.now() : Date.now()
 
         /* If the page has not arrived by now, the animation on its own reads

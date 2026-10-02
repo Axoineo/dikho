@@ -1314,6 +1314,12 @@ button, input, textarea, select { border: 0; }
   height: calc(100% + var(--ws-pad-t) + var(--ws-pad-b));
   margin: calc(var(--ws-pad-t) * -1) calc(var(--ws-pad-x) * -1) calc(var(--ws-pad-b) * -1);
 }
+/* Brand blue reads 2.42:1 against the dark page, so the mark all but
+   disappears. Same blue the app uses for focus rings in dark mode: 6.68:1,
+   close to what the brand blue gets on the light ground. The gold dot is
+   left alone, it reads 9.89:1 there. */
+[data-theme="dark"] .brand-loader { --dk-ink: #5ba0e0; }
+
 /* The Suspense fallback is 100vh tall on its own; inside the workspace that
    is taller than the pane and briefly adds a scrollbar on every lazy route. */
 .workspace .brand-loader { min-height: 100%; }
