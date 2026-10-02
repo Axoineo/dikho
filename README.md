@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="public/dikho-logo.png" alt="Dikho Logo" width="350">
+  <img src="public/dikho-logo.svg" alt="Dikho Logo" width="350">
 </p>
 
 <p align="center">
