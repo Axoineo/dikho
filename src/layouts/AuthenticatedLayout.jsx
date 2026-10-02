@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from 'react'
+import BrandLoader, { AppReady } from '../components/BrandLoader'
 import { Outlet } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
@@ -142,10 +143,15 @@ export default function AuthenticatedLayout() {
   }
 
   if (session === undefined) {
-    return <div className="loading-screen">Loading...</div>
+    return <BrandLoader />
   }
   if (!session) {
-    return <Login onLogin={setSession} />
+    return (
+      <>
+        <Login onLogin={setSession} />
+        <AppReady />
+      </>
+    )
   }
 
   const collapsed = !sidebarOpen
@@ -168,8 +174,9 @@ export default function AuthenticatedLayout() {
           button is gone — the layout is already edge to edge. */}
       <div className="app-main">
         <main className="workspace">
-          <Suspense fallback={<div className="loading-screen">Loading...</div>}>
+          <Suspense fallback={<BrandLoader />}>
             <Outlet context={{ session, themeMode, onThemeChange: handleThemeChange }} />
+            <AppReady />
           </Suspense>
         </main>
       </div>

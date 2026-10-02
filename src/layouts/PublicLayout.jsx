@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
+import BrandLoader, { AppReady } from '../components/BrandLoader'
 
 export default function PublicLayout() {
   useEffect(() => {
@@ -9,8 +10,9 @@ export default function PublicLayout() {
   }, [])
 
   return (
-    <Suspense fallback={<div className="loading-screen">Loading...</div>}>
+    <Suspense fallback={<BrandLoader />}>
       <Outlet />
+      <AppReady />
     </Suspense>
   )
 }

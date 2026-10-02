@@ -391,27 +391,19 @@ button, input, textarea, select { border: 0; }
 .auth-error strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .auth-error p { margin: 0; font-size: 12px; line-height: 1.45; color: #963b41; word-break: break-word; }
 .auth-error-icon, .page-error-icon { display: inline-flex; color: var(--danger); margin-top: 1px; }
-.loading-screen {
+/* Shown on initial auth and every lazy route transition. The mark itself and
+   its wave animation are defined in index.html, next to the boot splash, so
+   the two are the same thing and there is one definition of each. */
+.brand-loader {
+  --dk-mark-w: 132px;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
   background: var(--page);
-  color: var(--muted);
-  font-size: 13.5px;
-  letter-spacing: 0.2px;
-}
-/* Branded spinner shown on initial auth and every lazy route transition. */
-.loading-screen::before {
-  content: "";
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 3px solid var(--line);
-  border-top-color: var(--brand-blue);
-  animation: spin 0.7s linear infinite;
+  /* The D is drawn oversized at the head of the loop and deliberately spills
+     out of its svg box; contain it so it cannot push the workspace around. */
+  overflow: hidden;
 }
 
 /* ---------- App shell ---------- */
@@ -1290,7 +1282,7 @@ button, input, textarea, select { border: 0; }
 }
 /* The Suspense fallback is 100vh tall on its own; inside the workspace that
    is taller than the pane and briefly adds a scrollbar on every lazy route. */
-.workspace .loading-screen { min-height: 100%; }
+.workspace .brand-loader { min-height: 100%; }
 
 /* ---------- Clients ---------- */
 .clients-page { position: relative; }
