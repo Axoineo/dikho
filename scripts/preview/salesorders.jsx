@@ -7,7 +7,12 @@
 // add/edit round trip can be exercised end to end.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import '../src/index.css'
+// Same stylesheets, in the same order, as src/main.jsx, so the page renders
+// here exactly as it does in the app.
+import '../../src/index.css'
+import '../../src/components/ContactDetails.css'
+import '../../src/tailwind.css'
+import Workspace from './Workspace.jsx'
 
 const CLIENTS = [
   { company_name: 'Aarav Retail Group Pvt Ltd', contact_person: 'Aarav Mehta' },
@@ -201,12 +206,12 @@ window.fetch = async (input, init = {}) => {
   return respond([])
 }
 
-const { __PreviewSalesOrdersPage: SalesOrdersPage } = await import('../src/App.jsx')
+const { default: SalesOrdersPage } = await import('../../src/features/sales-orders/SalesOrdersPage.jsx')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <div className="workspace">
+    <Workspace>
       <SalesOrdersPage session={{ user: { id: 'preview-user', email: 'ops@dikho.example.com' } }} />
-    </div>
+    </Workspace>
   </StrictMode>,
 )

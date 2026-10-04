@@ -2,7 +2,12 @@
 // redesign can be checked in the browser without a Supabase session.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import '../src/index.css'
+// Same stylesheets, in the same order, as src/main.jsx, so the page renders
+// here exactly as it does in the app.
+import '../../src/index.css'
+import '../../src/components/ContactDetails.css'
+import '../../src/tailwind.css'
+import Workspace from './Workspace.jsx'
 
 const MEDIA = [{ id: 1, name: 'Hoarding' }, { id: 2, name: 'Digital' }, { id: 3, name: 'Transit' }]
 const SUB_MEDIA = [
@@ -25,9 +30,9 @@ const VENDORS = Array.from({ length: 38 }, (_, index) => {
     id: 1000 + index,
     company_name: `${['Skyline', 'Metro', 'Prime', 'Vista', 'Orbit'][index % 5]} Media ${index + 1} Advertising Pvt Ltd`,
     alias: `${['Skyline', 'Metro', 'Prime', 'Vista', 'Orbit'][index % 5]}-${index + 1}`,
-    contact_person: 'Ravi Kulkarni',
+    contact_person: 'Sample Contact',
     country_dialcode: '+91',
-    contact: 9820000000 + index,
+    contact: '0000000000',
     email: `accounts${index + 1}@skylinemedia.example.com`,
     gstin: `24AAACS${1000 + index}Q1Z${index % 10}`,
     pan_number: `AAACS${1000 + index}Q`,
@@ -46,7 +51,7 @@ function respond(body, { start = 0, end = 0, total = 0 } = {}) {
 }
 
 // Enough of PostgREST's query grammar to make the filters observably real.
-window.fetch = async (input, init = {}) => {
+window.fetch = async (input) => {
   const url = new URL(typeof input === 'string' ? input : input.url)
   const table = url.pathname.split('/').pop()
   const offset = Number(url.searchParams.get('offset') || 0)
@@ -88,10 +93,10 @@ window.fetch = async (input, init = {}) => {
   return respond([])
 }
 
-const { __PreviewVendorsPage: VendorsPage } = await import('../src/App.jsx')
+const { default: VendorsPage } = await import('../../src/features/vendors/VendorsPage.jsx')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <div className="workspace"><VendorsPage /></div>
+    <Workspace><VendorsPage /></Workspace>
   </StrictMode>,
 )
