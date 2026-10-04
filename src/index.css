@@ -3073,6 +3073,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   position: sticky;
   top: 16px;
   z-index: 50;
@@ -3788,7 +3789,9 @@ select.pvf-input option[value=""] {
 .pvf-nav {
   display: flex;
   align-items: center;
-  padding: 0 28px 28px;
+  /* The step body above has no bottom padding, so this top padding is the
+     only thing keeping the buttons off the last field. */
+  padding: 24px 28px 28px;
   gap: 12px;
 }
 
@@ -4110,9 +4113,9 @@ select.pvf-input.has-error:focus,
   }
   .pvf-textarea { font-size: 16px !important; }
 
-  .pvf-nav { padding: 0 16px 20px; flex-direction: column-reverse; gap: 12px; }
+  .pvf-nav { padding: 20px 16px 20px; flex-direction: column-reverse; gap: 12px; }
   .pvf-nav-spacer { display: none; }
-  .pvf-btn-submit-pill, .pvf-btn-next, .pvf-btn-back { width: 100%; display: flex; text-align: center; justify-content: center; height: 48px; border-radius: 40px !important; }
+  .pvf-btn-submit-pill, .pvf-btn-next, .pvf-btn-submit, .pvf-btn-back { width: 100%; display: flex; text-align: center; align-items: center; justify-content: center; height: 48px; border-radius: 40px !important; }
   
   .pvf-footer { padding: 16px; }
   .pvf-footer-content { flex-direction: column; text-align: center; gap: 12px; }

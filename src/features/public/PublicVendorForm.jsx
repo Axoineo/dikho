@@ -596,7 +596,7 @@ export default function PublicVendorForm() {
         <img src="/dikho-logo.svg" alt="Dikho" className="pvf-logo" />
         <div className="pvf-topbar-text">
           <div className="pvf-topbar-title">Vendor Registration</div>
-          <div className="pvf-topbar-sub">Fill in your details our team will review and onboard you</div>
+          <div className="pvf-topbar-sub">Fill in your details below. Our team will review and onboard you shortly.</div>
         </div>
       </header>
 
