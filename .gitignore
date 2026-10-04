@@ -32,6 +32,8 @@ dist-ssr
 
 # Claude Code — machine-local overrides only; shared config stays tracked
 .claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
 
 # Supabase CLI local state
 supabase/.temp
