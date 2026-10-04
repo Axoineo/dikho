@@ -2139,9 +2139,9 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   .so-side-panel { margin-top: 16px; }
 }
 
-/* Seven columns pairing a primary value with its context. Widths sum to the
+/* Eight columns pairing a primary value with its context. Widths sum to the
    table min-width so nothing collapses; keep in step with SO_COLUMN_COUNT. */
-.so-page table { min-width: 1160px; }
+.so-page table { min-width: 1267px; }
 .so-page th,
 .so-page td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .so-page td { padding-top: 11px; padding-bottom: 11px; }
@@ -2153,6 +2153,13 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 .so-page th:nth-child(6), .so-page td:nth-child(6) { width: 130px; }
 .so-page th:nth-child(7), .so-page td:nth-child(7) { width: 72px; }
 .so-page th:nth-child(8), .so-page td:nth-child(8) { width: 90px; }
+/* "Actions" and "Download" are wider than 72px and 90px less the default 14px
+   side padding, so they were cut to an ellipsis. Both columns are centred, and
+   a centred label sits in the same place whatever the padding, so trimming it
+   here only moves the point at which the label would clip. Header cells only:
+   the buttons below keep the normal cell padding. */
+.so-page th.actions-column,
+.so-page th.download-column { padding-left: 6px; padding-right: 6px; }
 
 .so-page .table-wrapper { max-height: min(72vh, 860px); overflow-y: auto; }
 .so-page thead th { position: sticky; top: 0; z-index: 2; }
