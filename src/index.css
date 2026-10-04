@@ -189,8 +189,10 @@ button, input, textarea, select { border: 0; }
 .login-box {
   width: 416px;
   background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(32px) saturate(1.5);
+  /* Prefixed first. In the other order the production minifier drops the
+     unprefixed line, and Chrome and Firefox only read the unprefixed one. */
   -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  backdrop-filter: blur(32px) saturate(1.5);
   border: 1px solid rgba(24, 84, 148, 0.08);
   border-radius: 20px;
   padding: 38px 38px 34px;
@@ -3061,8 +3063,9 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 .pvf-topbar {
   background: rgba(234, 243, 250, 0.97);
-  backdrop-filter: blur(40px) saturate(200%);
+  /* Prefixed first, see .login-box. */
   -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 40px;
   margin: 16px auto;
