@@ -1,121 +1,161 @@
 # Security Policy
 
-## Overview
+Security issues involving authentication, authorization, customer/vendor data,
+financial records, messaging, public forms, file storage or infrastructure are
+in scope for private reporting.
 
-Security is an important part of the Dikho project. We take vulnerabilities involving authentication, authorization, user data, vendor/client information, API access, and infrastructure seriously.
+## Supported versions
 
-This policy explains which versions are supported and how to responsibly report security vulnerabilities.
+Only the current reviewed deployment and the active main branch receive
+security fixes. Older releases, abandoned branches and local forks are not
+supported.
 
-## Supported Versions
+## Report privately
 
-Dikho is currently under active development. Security fixes are generally applied to the latest stable version of the project.
+Do not disclose a suspected vulnerability through a public issue, discussion,
+pull request, commit message or shared chat. Contact the project administrator
+through the organization's approved private security channel.
 
-| Version                   | Supported          |
-| ------------------------- | ------------------ |
-| Latest stable release     | :white_check_mark: |
-| Development / main branch | :white_check_mark: |
-| Older releases            | :x:                |
+Include:
 
-> **Note:** The `main` branch may contain changes that are still under development. Production deployments should use a reviewed and tested release or commit.
+- the affected endpoint, component, policy or configuration;
+- reproducible steps using test data;
+- expected and observed behavior;
+- the practical impact and prerequisites;
+- a minimal proof of concept, if safe;
+- a suggested mitigation, if known.
 
-## Reporting a Vulnerability
+Do not include live credentials, OTPs, signed URLs, production documents,
+message contents or personal data. If evidence contains sensitive information,
+ask the administrator for an approved transfer method first.
 
-If you discover a potential security vulnerability, **please do not report it through a public GitHub issue, discussion, pull request, or other public channel.**
+## Response process
 
-Instead, report the vulnerability privately to the project administrator/security contact.
+Maintainers will aim to acknowledge the report, validate impact, prioritize a
+fix, coordinate rollout and notify the reporter when remediation is available.
+Timing depends on severity and operational risk. Allow reasonable remediation
+time before public disclosure.
 
-Your report should include:
+## In scope
 
-* A clear description of the vulnerability.
-* The affected component, feature, endpoint, or functionality.
-* Steps to reproduce the issue.
-* The potential security impact.
-* Proof-of-concept code or screenshots, if applicable.
-* Any suggested mitigation or fix, if you have one.
+- account takeover, OTP bypass and session flaws;
+- missing authorization or cross-user/cross-organization access;
+- unsafe RLS, Storage or service-role usage;
+- webhook forgery or replay with practical impact;
+- injection, XSS, request forgery and path traversal;
+- unauthorized message sending or quota/spend abuse;
+- upload abuse, malicious file handling and storage exhaustion;
+- disclosure of credentials, private media or business data;
+- meaningful security misconfiguration in Cloudflare or Supabase;
+- dependency vulnerabilities with a reachable application impact.
 
-Please avoid including real user data, passwords, API keys, access tokens, or other sensitive information in your report.
+## Out of scope without demonstrated impact
 
-## What Happens After Reporting
+- unsupported historical versions;
+- purely theoretical findings with no reachable path;
+- missing headers that do not create an exploitable condition by themselves;
+- social engineering or spam against contributors;
+- third-party platform issues outside this project's control;
+- denial-of-service or high-volume testing performed without written approval.
 
-We aim to:
+Never test against production in a way that changes data, sends messages,
+consumes paid quota, uploads files, degrades service or accesses another
+person's information without explicit authorization.
 
-1. Acknowledge the report as soon as reasonably possible.
-2. Review and reproduce the reported issue.
-3. Determine its severity and security impact.
-4. Work on a fix or mitigation when the vulnerability is confirmed.
-5. Notify the reporter when the issue has been resolved or when further information is required.
+## Credential classification
 
-Response and resolution times may vary depending on the severity and complexity of the vulnerability.
+The following are secrets and must exist only in approved server-side secret
+stores:
 
-## Responsible Disclosure
+- Supabase service-role credentials;
+- Meta access tokens and application secrets;
+- webhook signing and verification secrets;
+- Turnstile secret keys;
+- third-party API keys and mail provider credentials;
+- private keys, database passwords and recovery tokens;
+- OTPs, session tokens and signed media URLs.
 
-Please allow reasonable time for the project maintainers to investigate and address a confirmed vulnerability before publicly disclosing technical details.
+Supabase publishable keys, public site keys, API origins, template names and
+resource names are not authentication secrets, but still avoid unnecessary
+environment-specific values in documentation. Public identifiers never replace
+RLS, signature verification or authorization.
 
-Security researchers who responsibly report vulnerabilities are appreciated and will be credited where appropriate, unless they prefer to remain anonymous.
+## Safe secret handling
 
-## Security Scope
+- Use provider secret stores and interactive secret-entry commands.
+- Use placeholder values such as `<secret>` in documentation and examples.
+- Do not put secrets in CLI arguments when they may be retained in history.
+- Do not print secret-store values to logs or pipe them into copied output.
+- Keep production secrets out of local development when possible.
+- Restrict who can read, rotate and deploy each credential.
+- Rotate immediately if a secret enters Git, logs, chat, screenshots or an
+  unapproved device. Removing it from the latest commit is not remediation.
 
-Security reports may include, but are not limited to:
+## Secure engineering baseline
 
-* Authentication and session management vulnerabilities.
-* Authorization and privilege escalation.
-* OTP or passwordless authentication issues.
-* Account takeover vulnerabilities.
-* Insecure API endpoints.
-* Exposure of client, vendor, sales, purchase-order, or other business data.
-* Injection vulnerabilities.
-* Cross-site scripting (XSS).
-* Cross-site request forgery (CSRF).
-* Server-side security issues.
-* Sensitive information disclosure.
-* Improper access control.
-* Security issues involving third-party integrations.
-* Cloud, storage, database, or deployment misconfigurations.
+### Authentication and authorization
 
-## Out of Scope
+- Supabase validates identity; application and RLS rules decide permission.
+- `shouldCreateUser: false` keeps OTP sign-in invite-only but is not a role
+  system.
+- Sensitive routes require server-side role checks in addition to a valid JWT.
+- Session limits in the UI are defense in depth; server tokens remain subject
+  to their actual expiry and revocation behavior.
 
-The following generally do not qualify as security vulnerabilities unless they demonstrate a meaningful security impact:
+### Public endpoints
 
-* Issues affecting only outdated or unsupported versions.
-* Spam or social-engineering attempts against project contributors.
-* Denial-of-service testing without prior authorization.
-* Automated vulnerability scans that generate excessive traffic.
-* Vulnerabilities in third-party services that are outside the project's control.
-* Issues that require access to another user's credentials or private information.
-* Purely theoretical vulnerabilities without a practical security impact.
+- Verify Turnstile server-side, including expected action and hostname.
+- Treat Turnstile as bot friction, not a hard volume or spend ceiling.
+- Add global budgets/idempotency for operations that call paid APIs or send
+  messages.
+- Fail closed when verification configuration is absent.
 
-## Security Best Practices for Contributors
+### Webhooks
 
-Contributors should:
+- Verify signatures over the exact raw bytes before JSON parsing.
+- Reject stale signed requests where the protocol supplies a timestamp.
+- Store/process events idempotently because providers retry deliveries.
+- Never log a complete signed payload containing private content.
 
-* Never commit passwords, API keys, tokens, private keys, or other secrets to the repository.
-* Use environment variables or an appropriate secret-management system for sensitive configuration.
-* Avoid exposing production credentials in development or testing environments.
-* Follow the project's authentication and authorization patterns.
-* Validate and sanitize untrusted input.
-* Follow the principle of least privilege.
-* Review security-sensitive changes before merging them into `main`.
-* Avoid exposing sensitive information in logs, error messages, or client-side code.
+### Data and files
 
-## Secrets and Credentials
+- Enable RLS and use least-privilege policies for every exposed table.
+- Scope Storage access to the minimum organization, record, path and action.
+- Validate upload size, type and content; bound archive decompression.
+- Use private objects and short-lived access URLs/tickets.
+- Encrypt in transit and use provider-managed encryption at rest.
 
-If a secret is accidentally committed to the repository, **do not assume that deleting it from the latest commit is sufficient**.
+### Logging and errors
 
-The exposed credential should be considered compromised and rotated or revoked immediately.
+- External errors must not reveal stack traces, SQL, credential state or raw
+  upstream bodies.
+- Logs must redact secrets and minimize phone numbers, email addresses,
+  documents and message content.
+- Define log access and retention in the hosting platforms.
 
-This includes:
+## Known risks and remediation
 
-* API keys
-* Access tokens
-* Database credentials
-* SMTP credentials
-* Cloud credentials
-* Private keys
-* Authentication secrets
-* Service credentials
+The current repository audit is tracked in
+[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md). The highest priorities are:
 
-## Changes to This Policy
+1. move anonymous vendor-document upload behind server-side verification;
+2. replace broad vendor-document policies with scoped authorization;
+3. add role/organization authorization beyond a valid authenticated session;
+4. add strict resource limits to file import and media upload paths;
+5. add browser security headers and automated security tests.
 
-This security policy may be updated as the project architecture, deployment infrastructure, and security requirements evolve.
+Documentation updates do not close these findings. A finding is complete only
+after code/configuration changes are deployed and their effective behavior is
+verified.
 
-The latest version of this document applies to the project unless otherwise stated.
+## Required checks
+
+```bash
+npm run check
+npm audit --omit=dev
+```
+
+Also review effective production RLS and Storage policies. A repository schema
+snapshot may differ from live state.
+
+Last updated: 2026-10-04.

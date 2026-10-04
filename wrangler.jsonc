@@ -5,8 +5,11 @@
 	"observability": {
 		"enabled": true
 	},
-	// Dashboard SPA on manage.dikho.in. The API is a separate Worker —
-	// see wrangler.api.jsonc. No D1 or WhatsApp bindings belong here.
+	// Standalone SPA Worker. Production (manage.dikho.in) does NOT use it: the
+	// SPA is served by Cloudflare Pages, built from every push to main, so
+	// `npm run deploy` publishes this Worker without changing the live site.
+	// The API is a separate Worker, see wrangler.api.jsonc. No D1 or WhatsApp
+	// bindings belong here.
 	"main": "src/worker.js",
 	"assets": {
 		"directory": "dist",

@@ -1,6 +1,19 @@
-# Redesign the Dikho sign-in page
+# Archived implementation brief: sign-in redesign
 
-You are working in the Dikho repo: React 18 + Vite, Supabase auth, a large hand-written stylesheet in `src/index.css` plus Tailwind with preflight turned off. Redesign the sign-in screen (`src/features/auth/Login.jsx`). Change the look, layout, copy and UX. Keep the authentication logic working exactly as it does today.
+> [!NOTE]
+> This file preserves a sign-in redesign brief written on 2026-10-01. It was
+> not implemented: the current sign-in page predates it, and the components it
+> names do not exist. It is historical context, not the current development or
+> security guide. Verify behavior against the code and follow `SECURITY.md`,
+> `DEVELOPMENT.md`, and `docs/SECURITY-AUDIT.md` for current requirements. All
+> people, invoices, amounts and phone numbers in this brief are illustrative
+> test data.
+
+## Original brief
+
+### Redesign the Dikho sign-in page
+
+You are working in the Dikho repo: React 19 + Vite, Supabase auth, a large hand-written stylesheet in `src/index.css` plus Tailwind with preflight turned off. Redesign the sign-in screen (`src/features/auth/Login.jsx`). Change the look, layout, copy and UX. Keep the authentication logic working exactly as it does today.
 
 ## 0. Read first, then plan
 
@@ -237,7 +250,7 @@ Build it in `src/features/auth/BrandPanel.jsx` and give its root `data-theme="li
 
 ## 5. Done when
 
-- `npm run build` and `npm run lint` pass.
+- `npm run check` passes.
 - `grep -nE '#[0-9a-fA-F]{3,8}\b|rgba?\(' src/features/auth/Login.css` finds only `box-shadow` values.
 - **The original bug is gone:** run `localStorage.setItem('dikho-theme', 'dark')`, sign out and reload. The whole login is dark and legible, the selected tab is `#2a2e36` with light text, and the brand panel looks exactly as it does in light mode. Also check `light` and `system` (with the OS set to dark).
 - **Keyboard only:**

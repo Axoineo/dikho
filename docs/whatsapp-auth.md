@@ -1,102 +1,127 @@
-# WhatsApp login (template `dikho_auth`)
+# WhatsApp OTP Sign-In
 
-Staff can sign in to the dashboard with a one-time code delivered over WhatsApp,
-alongside the existing email login. Only pre-approved phone numbers can get in.
+Last updated: 2026-10-04
 
-## How it works
+Staff may sign in with a one-time code delivered through an approved WhatsApp
+authentication template. Supabase remains responsible for OTP generation,
+expiry, verification and session issuance; the API Worker only replaces the SMS
+delivery channel.
 
-Supabase still owns the OTP (generation, expiry, verification, session/JWT). We
-only change the **delivery channel** to WhatsApp using a Supabase **"Send SMS"
-auth hook** pointed at the `dikho-api` Worker.
+## Flow
 
-```
-Login page  ──signInWithOtp({ phone })──▶  Supabase Auth
-                                             │  generates the code
-                    Send-SMS hook (HMAC) ◀───┘
-   dikho-api Worker  /api/auth/whatsapp-otp
-        │  verifies signature, sends the code via `dikho_auth`
-        ▼
-   WhatsApp message  ──user types code──▶  verifyOtp({ phone, token, type:'sms' })
-                                             └─▶ real Supabase session
+```text
+Browser -- signInWithOtp(phone, shouldCreateUser:false) --> Supabase Auth
+Supabase -- signed Send SMS hook with OTP --> API Worker
+API Worker -- verify raw-body HMAC --> WhatsApp provider
+User -- code --> Browser -- verifyOtp(type:sms) --> Supabase Auth session
 ```
 
-The whitelist is enforced by `shouldCreateUser: false` on the client: Supabase
-refuses to generate a code — and never calls the hook — for a phone that is not
-already a Supabase Auth user. Unknown numbers get **no** message and **no** login.
+Only phone numbers already provisioned in Supabase Auth can request a code.
+`shouldCreateUser: false` prevents self-registration. Provisioning a user is
+therefore a security-sensitive administrator action because the current app
+does not yet have fine-grained roles.
 
-## One-time setup
+## Security properties
 
-### 1. Meta — the template
+- The Worker verifies the hook's timestamped Standard Webhooks signature over
+  the exact raw request body.
+- Requests outside the accepted timestamp window are rejected.
+- OTP values are passed only to the provider call and are not logged.
+- Meta credentials and the hook signing secret stay in the Worker secret store.
+- The client verifies the code with Supabase; the Worker cannot issue a session.
+- Unknown users receive no code because Supabase does not invoke the hook.
 
-Create/confirm `dikho_auth` as an **Authentication**-category template,
-**Approved**, language `en` (if it's `en_US`, set `WHATSAPP_AUTH_TEMPLATE_LANG`
-to `en_US`), with the **copy-code** button. The Worker already holds
-`WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID`.
+CORS does not authenticate the hook. Signature verification is the security
+boundary.
 
-### 2. Supabase — enable phone auth + the hook
+## Provider setup
 
-Works on the **Free plan** — the Send SMS hook is available on Free (no Twilio,
-no paid upgrade). Two *different* screens are involved:
+Create an approved authentication-category template containing the OTP and the
+expected copy-code button. Record only its non-secret name and language in
+configuration. Never place provider tokens or application secrets in docs.
 
-1. **Authentication → Providers → Phone:**
-   - **Enable phone confirmations** = ON.
-   - **SMS OTP Length** = `6` (must match the `dikho_auth` template).
-   - **SMS OTP Expiry** = `300`–`600` seconds. The default **60s is too short**
-     for WhatsApp — delivery plus app-switching routinely blows past it and the
-     user sees "expired".
-   - **Leave the Twilio fields blank.** The hook (step 2) overrides the built-in
-     provider, so no Twilio account is required. Ignore "Twilio Content SID (For
-     WhatsApp Only)" — that is Supabase's *native Twilio-WhatsApp* path (paid,
-     separate template), which we are deliberately not using.
-   - The "SMS Message" text (`Your code is {{ .Code }}`) is unused once the hook
-     is on — the code is delivered through the WhatsApp template instead.
-2. **Authentication → Hooks → Send SMS hook → Enable → HTTPS** (this is a
-   separate page from Providers):
-   URL: `https://dikho-api.fineeurox.workers.dev/api/auth/whatsapp-otp`
-   Copy the generated secret (looks like `v1,whsec_…`) → that is
-   `SUPABASE_SEND_SMS_HOOK_SECRET` in step 3.
+## Supabase setup
 
-### 3. Worker — secrets
+1. Enable phone confirmations.
+2. Keep the OTP length synchronized with the approved template.
+3. Choose an expiry long enough for delivery and app switching while remaining
+   appropriately short-lived.
+4. Configure the HTTPS Send SMS hook to:
 
-Store everything as **secrets**, never plaintext vars (a deploy silently wipes
-remote-only vars but never touches secrets):
+   ```text
+   <api-origin>/api/auth/whatsapp-otp
+   ```
+
+5. Copy the generated signing secret directly into the Worker secret store.
+   Do not paste it into source, Markdown, an issue or chat.
+
+The external provider fields for a built-in SMS service are not needed when the
+Send SMS hook owns delivery.
+
+## Worker configuration
+
+Set secret values interactively:
 
 ```bash
 npx wrangler secret put SUPABASE_SEND_SMS_HOOK_SECRET -c wrangler.api.jsonc
-npx wrangler secret put WHATSAPP_AUTH_TEMPLATE_NAME -c wrangler.api.jsonc   # dikho_auth
-npx wrangler secret put WHATSAPP_AUTH_TEMPLATE_LANG -c wrangler.api.jsonc   # en
+npx wrangler secret put WHATSAPP_ACCESS_TOKEN -c wrangler.api.jsonc
+npx wrangler secret put WHATSAPP_APP_SECRET -c wrangler.api.jsonc
 ```
 
-Then deploy: `npm run deploy:api` (Worker) and `npm run deploy` (dashboard).
-
-## Adding / removing users (the whitelist)
-
-Only numbers that exist as Supabase Auth users can log in.
-
-**Add — dashboard:** Authentication → Users → **Add user** → enter the phone in
-E.164 (`+919812345678`) → check **Auto Confirm User** → create.
-
-**Add — script:**
+Set template name/language and other non-secret identifiers through the reviewed
+environment configuration. Deploy with:
 
 ```bash
-SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
-  node scripts/add-auth-user.mjs +919812345678
+npm run deploy:api
 ```
 
-(The service-role key is admin-level — run locally only, never commit or ship it.)
+Do not run commands that print existing secret values for inclusion in a ticket
+or deployment transcript.
 
-**Remove access:** delete that user in Supabase (Authentication → Users). They
-can no longer request a code.
+## User provisioning
 
-## Troubleshooting
+Add or remove allowed users through the Supabase administrator interface or the
+repository's local administrator script. Use a test number in non-production.
 
-- **"This number isn't authorized"** on the login page → the phone isn't a
-  Supabase user yet. Add it (above). Confirm the stored phone is exact E.164.
-- **No WhatsApp message, but no client error** → check `npx wrangler tail
-  dikho-api`. A `signature_rejected` line means the hook secret in the Worker
-  doesn't match the one Supabase generated; re-copy it. A `send_failed` line
-  carries Meta's error code (e.g. template name/language mismatch, or the number
-  isn't reachable / hasn't opted in).
-- **Meta rejects the button component** → the `dikho_auth` template was created
-  without a copy-code button. Drop the `button` component in
-  `sendAuthTemplate` (`src/api/services/whatsapp/graph.js`) and keep only `body`.
+Example shape only:
+
+```bash
+SUPABASE_URL=<project-url> SUPABASE_SERVICE_ROLE_KEY=<secret> \
+  node scripts/add-auth-user.mjs <e164-phone>
+```
+
+This inline form can remain in shell history, so prefer temporary environment
+injection or an approved secret manager when operating on a real environment.
+Never share the resulting command history. The service-role key is fully
+privileged and must never enter the browser.
+
+Removing a Supabase Auth user prevents new OTP requests. For urgent revocation,
+also revoke active sessions using the provider's administrator controls.
+
+## Validation
+
+- Authorized test user receives a code and can sign in.
+- Unknown phone receives no code and cannot create an account.
+- Invalid/expired code does not create a session.
+- Replayed or invalid hook signature receives 401.
+- A stale hook timestamp is rejected.
+- Logs contain neither OTP nor authorization/signature values.
+- Rate limits prevent repeated OTP abuse without revealing user existence more
+  than the current product flow requires.
+
+## Troubleshooting safely
+
+- “Not authorized” normally means the user was not provisioned or the phone is
+  stored in a different normalized form.
+- A signature-rejected event means hook configuration and Worker configuration
+  disagree, or the request is invalid/stale. Compare configuration by rotating
+  and replacing the secret; do not log both values.
+- A provider send failure may indicate template, language, opt-in or account
+  configuration. Record only the provider error code and sanitized message.
+- Never copy a raw hook body into an issue because it contains an OTP and phone.
+
+## Related documentation
+
+- [Architecture](ARCHITECTURE.md)
+- [Deployment](DEPLOYMENT.md)
+- [Security audit](SECURITY-AUDIT.md)

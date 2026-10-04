@@ -1,144 +1,119 @@
 # Contributing to Dikho
 
-Welcome to the Dikho project! This guide outlines the setup process, coding conventions, and workflow for contributing to the repository.
+Dikho handles customer, vendor, financial and messaging data. Changes must be
+reviewable, least-privileged and safe to deploy independently across the SPA,
+API Worker and Supabase.
 
-## About Dikho
+## Before starting
 
-Dikho is an internal advertising operations platform (CRM) designed for Indian advertising agencies to manage clients, vendors, sales orders, and purchase orders.
+Read:
 
-## Tech Stack
+- [Shared agent instructions](AGENTS.md), when using Codex or Claude Code
+- [Development guide](DEVELOPMENT.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Security policy](SECURITY.md)
+- [Current security findings](docs/SECURITY-AUDIT.md)
 
-- **Frontend**: React 19 + Vite 8 (JavaScript/JSX, no TypeScript on frontend)
-- **Backend**: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
-- **Deployment**: Cloudflare Workers (primary), Docker (alternative)
-- **Linter**: oxlint with React plugin
-- **Styling**: Vanilla CSS with CSS custom properties (no Tailwind, no CSS-in-JS)
-- **Font**: Google Sans (loaded via Google Fonts)
-- **Runtime**: Node.js 20.x or 22.x
+Requirements are Node.js 20 or 22, npm, Git, and development-only Cloudflare
+and Supabase access appropriate to the task.
 
-## Prerequisites
+## Setup
 
-Before you begin, ensure you have the following installed:
-- Node.js (≥ 20)
-- npm
-- Git
-- A Supabase project (for database and authentication)
-- Wrangler CLI (installed via devDependency for Cloudflare deployment)
-- Supabase CLI (for deploying Edge Functions and migrations)
-
-## Setup Instructions
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Axoineo/dikho/
-   cd dikho
-   ```
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-3. **Configure environment variables**:
-   ```bash
-   cp .env.example .env.local
-   ```
-   Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local`.
-
-4. **Start the development server**:
-   ```bash
-   npm run dev
-   ```
-   The Vite dev server will start at [http://localhost:5173](http://localhost:5173).
-
-## Environment Variables
-
-### Frontend (`.env.local`)
-| Variable | Description |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon key (safe for browser) |
-
-### Edge Function Secrets (via `supabase secrets set`)
-| Variable | Description |
-|---|---|
-| `ALLOWED_ORIGINS` | Comma-separated origins for CORS |
-| `BREVO_API_KEY` | Optional, for new-device email alerts |
-| `BREVO_SENDER_EMAIL` | Optional, defaults to security@dikho.in |
-
-> [!NOTE]
-> The Supabase runtime automatically injects `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` into Edge Functions.
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `npm run dev` | Start Vite dev server |
-| `npm run build` | Production build |
-| `npm run lint` | Run oxlint |
-| `npm run preview` | Build + run locally via Wrangler |
-| `npm run deploy` | Build + deploy to Cloudflare Workers |
-
-## Code Organization
-
-```
-src/
-├── App.jsx              # Core monolith: auth, shell, clients, vendors, SOs, settings, utilities
-├── index.css            # Complete design system (CSS variables, themes, layouts)
-├── main.jsx             # React entry point
-├── supabase.js          # Supabase client initialization
-├── xlsx.js              # Zero-dep Excel export utility
-├── ContactDetails.jsx   # Contact card component
-├── ContactDetails.css   # Contact card styles
-├── ContactHoverAction.jsx # Table cell action buttons
-├── pages/
-│   ├── PurchaseOrders.jsx  # Purchase order module
-│   └── PublicVendorForm.jsx # Public vendor registration
-supabase/
-├── functions/device-check/ # Device tracking Edge Function (Deno/TypeScript)
-├── migrations/             # SQL migration files
+```bash
+git clone <repository-url>
+cd dikho
+npm ci
+cp .env.example .env.local
+cp .dev.vars.example .dev.vars
+npm run dev
 ```
 
-> [!WARNING]
-> `src/App.jsx` is currently a 4,900-line monolith encompassing the Login, Sidebar, Clients, Vendors, Sales Orders, Settings, and 30+ shared utility functions. **New modules should be added as separate files in `src/pages/` when possible.**
+Do not ask another contributor to send secrets through chat or a pull request.
+Use the approved provider secret store and access process.
 
-## Development Workflow
+## Workflow
 
-1. Create a feature branch from `main`: `git checkout -b feature/your-feature`
-2. Run the dev server: `npm run dev`
-3. Make your code changes.
-4. Run the linter: `npm run lint`
-5. Verify the build: `npm run build`
-6. Push your branch and open a Pull Request against `main`.
+1. Branch from the reviewed main branch.
+2. Keep the change focused; avoid unrelated formatting or generated files.
+3. Add or update tests for behavioral and security boundaries.
+4. Update the relevant documentation and migration/rollout instructions.
+5. Run the validation commands below.
+6. Explain risk, rollback and any remaining limitations in the pull request.
 
-## Coding Conventions
+Merging or pushing to `main` deploys the SPA to production through Cloudflare
+Pages within about a minute. Verify changes locally before they reach `main`.
 
-- **Branching**: Feature branches should always be created off `main`.
-- **Styling**: Strictly use CSS custom properties from `index.css`. Never use inline styles for theming. Ensure dark mode support by using `var(--token)` variables.
-- **Components**: Write functional components using React hooks. Do not use class components.
-- **State Management**: Rely exclusively on React hooks (`useState`, `useRef`, `useMemo`). No external state libraries (e.g., Redux, Zustand) are used.
-- **Imports from App.jsx**: Shared utilities (e.g., `formatMoney`, `splitGst`, `Icon`, `SearchableSelect`) are exported from `App.jsx`. Import them like `import { formatMoney } from '../App'`.
-- **Database Access**: Always use the shared Supabase client exported from `src/supabase.js`.
-- **Money Handling**: All money columns in the database are `numeric(14,2)`. Use `round2()` for all calculations. The UI must explicitly reconcile totals prior to every database write.
-- **Testing**: There is no formal test suite yet. Use the preview harnesses in `/preview/` for offline component testing.
+```bash
+npm run check
+npm audit --omit=dev
+```
 
-## Database Migrations
+## Code conventions
 
-Migration files are stored in `supabase/migrations/` and use the naming format `YYYYMMDD_description.sql`.
+- Use functional React components and hooks.
+- Use default exports for route-level page components and named exports for
+  reusable utilities.
+- Import shared browser clients from `src/lib/`.
+- Keep API routes in `src/api/routes/` and external integrations in
+  `src/api/services/`.
+- Use CSS custom properties and verify light, dark and small-screen layouts.
+- Do not introduce `dangerouslySetInnerHTML`, `eval`, or dynamic code execution
+  without a documented security review.
+- Bind database parameters and constrain any dynamic identifier to a fixed
+  allowlist.
+- Keep source files focused; split files when it clarifies ownership or testing.
 
-> [!TIP]
-> - Ensure migrations are idempotent. Use `IF NOT EXISTS` and `DROP POLICY IF EXISTS` followed by `CREATE POLICY`.
-> - Always end your migrations with `NOTIFY pgrst, 'reload schema';` to refresh the PostgREST schema cache.
+## Security requirements
 
-## Security Guidelines
+- Never commit credentials, OTPs, signed URLs, production personal data or
+  private keys, even temporarily.
+- Never expose a service-role key, provider token or secret through `VITE_`.
+- CORS limits browser access but is not authorization.
+- Require a server-side permission check for destructive, financial, export,
+  campaign and messaging operations.
+- Verify webhook signatures before parsing payloads.
+- Put strict byte and type limits on uploads and archive parsing.
+- Keep storage private and scope object policies by organization, record and
+  role; a bucket-wide authenticated policy needs explicit security approval.
+- Log event metadata rather than raw requests or personal content.
+- For public endpoints, document bot protection, rate limiting, global spend
+  limits and failure behavior.
 
-> [!CAUTION]
-> - **Never** commit `.env.local` or any secrets to Git.
-> - The `VITE_SUPABASE_PUBLISHABLE_KEY` is public by design; Row Level Security (RLS) acts as the access control layer.
-> - **Service-role keys must only be used server-side** (e.g., Edge Functions) and should never be exposed in `VITE_` variables.
-> - Always set `ALLOWED_ORIGINS` for Edge Function CORS in production.
-> - Thoroughly review RLS policies before deploying any schema changes.
+The anonymous vendor-document upload and broad historical document policies are
+known findings. Do not copy those patterns into another feature.
 
-## Useful Links
+## Database migrations
 
-- [Architecture Guide](docs/ARCHITECTURE.md)
-- [Database Schema](docs/DATABASE.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
+- D1 migrations belong in `migrations/`.
+- PostgreSQL/RLS/Storage migrations belong in `supabase/migrations/`.
+- Never edit a migration already applied to a shared environment; add a new one.
+- Use a safe `search_path` for `SECURITY DEFINER` functions.
+- Revoke implicit function execution grants before granting named roles.
+- Test both successful and forbidden operations.
+- Include rollout ordering when code and policy changes are coupled.
+- Include backup and rollback instructions for destructive changes.
+
+Do not deploy historical schema snapshots as though they were current ordered
+migrations.
+
+## Pull-request checklist
+
+- [ ] Scope and user-visible behavior are explained.
+- [ ] Trust boundaries and required roles are stated.
+- [ ] No secret or real production data appears in code, fixtures, screenshots
+      or documentation.
+- [ ] Error paths fail safely and do not leak internal details.
+- [ ] File processing has explicit resource limits.
+- [ ] RLS and Storage allow/deny cases were tested if affected.
+- [ ] Public abuse/spend controls were reviewed if affected.
+- [ ] Rollout and rollback steps are included if configuration changes.
+- [ ] `npm run check` (lint, tests, build, secret scan) and the dependency
+      audit were run.
+- [ ] Documentation reflects the final behavior.
+
+## Reporting a vulnerability
+
+Do not open a public issue or pull request containing vulnerability details.
+Follow the private reporting process in [SECURITY.md](SECURITY.md).
+
+Last updated: 2026-10-04.

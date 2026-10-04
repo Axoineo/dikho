@@ -1,285 +1,273 @@
-# Deployment Guide
+# Deployment and Operations Guide
 
-This document outlines the deployment and operations procedures for the Dikho project.
+Last updated: 2026-10-04
 
-## Primary Deployment: Cloudflare Workers
+Dikho has four independently deployed parts:
 
-Dikho uses Cloudflare Workers for its primary hosting, serving a React Single Page Application (SPA).
+1. the browser SPA, served by Cloudflare Pages and released by pushing to
+   `main`;
+2. the standalone API Worker with D1/R2/rate-limit bindings;
+3. Supabase PostgreSQL migrations and the `device-check` Edge Function;
+4. external provider configuration for Auth, WhatsApp, Turnstile, GST lookup
+   and optional alert email.
 
-### Configuration (`wrangler.jsonc`)
+Use placeholders in tickets and documentation. Never paste credential values,
+OTP values, signed URLs, resource IDs or production user data into deployment
+logs or chat.
 
-The project is configured to run as an SPA on Cloudflare Pages/Workers:
+## Prerequisites
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dikho-so-po",
-  "compatibility_date": "2026-08-20",
-  "observability": { "enabled": true },
-  "assets": { "not_found_handling": "single-page-application" }
-}
-```
+- reviewed commit and clean lockfile installation;
+- authorized Cloudflare and Supabase CLI sessions;
+- approved access to provider consoles;
+- backup/rollback plan for database or policy changes;
+- development or staging smoke-test results;
+- current secret inventory owned by the operations team.
 
-The `not_found_handling: "single-page-application"` setting routes all unmatched requests to `index.html`, enabling client-side routing.
-
-### Vite Configuration (`vite.config.js`)
-
-The `@cloudflare/vite-plugin` is utilized to integrate Vite builds with Cloudflare.
-
-```js
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { cloudflare } from "@cloudflare/vite-plugin";
-
-export default defineConfig({
-  plugins: [react(), cloudflare()],
-})
-```
-
-### Deploying to Cloudflare
-
-Ensure you are authenticated with Wrangler (`wrangler login`) and have a Cloudflare account configured.
+## Pre-deployment validation
 
 ```bash
-# Preview locally (builds then runs Wrangler dev server)
-npm run preview
-
-# Deploy to production
-npm run deploy  # runs: npm run build && wrangler deploy
+npm ci
+npm run check
+npm audit --omit=dev
 ```
 
-## Alternative Deployment: Docker
+`npm run check` includes the tests in `tests/`. They cover isolated security
+helpers only (session verification, Turnstile, webhook signatures and media
+tickets), so still perform the manual checks listed below.
 
-A multi-stage Dockerfile is provided for self-hosting.
+## Configuration classes
 
-### Dockerfile
+### Browser-public build variables
 
-```dockerfile
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_PUBLISHABLE_KEY
-RUN VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-    VITE_SUPABASE_PUBLISHABLE_KEY="$VITE_SUPABASE_PUBLISHABLE_KEY" \
-    npm run build
+These are embedded into JavaScript and visible to all users:
 
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
+| Variable | Purpose |
+| --- | --- |
+| `VITE_SUPABASE_URL` | Supabase public project API URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
+| `VITE_API_BASE` | API Worker public origin |
 
-### Build & Run
+No secret may use a `VITE_` prefix.
+
+### API Worker secrets
+
+Store these with the Cloudflare secret mechanism, entering values
+interactively:
+
+- Meta access/app credentials and webhook verification material;
+- Supabase hook signing secret and service-role key;
+- Turnstile secret;
+- GST provider API key;
+- any future private integration credential.
+
+Use commands shaped like:
 
 ```bash
-docker build \
-  --build-arg VITE_SUPABASE_URL=https://your-project.supabase.co \
-  --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-key \
-  -t dikho .
-
-docker run -p 80:80 dikho
+npx wrangler secret put <SECRET_NAME> -c wrangler.api.jsonc
 ```
 
-> [!WARNING]
-> The default `nginx:alpine` configuration does not handle SPA fallback routing. If you use Docker deployment, you must provide a custom `nginx.conf` that falls back to `index.html` for client-side routes to work correctly.
+Do not place a value in the command, documentation or shell history. Do not use
+a command that retrieves and prints an existing secret merely to copy it.
 
-### `.dockerignore`
+### API Worker non-secret configuration
 
+Non-secret values include explicit allowed origins/hostnames, public provider
+client identifiers, template names/languages, batch/concurrency settings and
+daily caps. These may live in configuration when environment-specific values
+are appropriate, but avoid documenting production-specific identifiers.
+
+### Supabase Edge Function secrets
+
+The platform injects its server credentials into the Edge Function. Configure
+the browser-origin allowlist and optional mail provider credentials through
+Supabase's secret store. Production must never rely on the local fallback
+origin.
+
+## Deploy the API Worker
+
+The API Worker uses `wrangler.api.jsonc` and `src/api/worker.js`.
+
+1. Confirm the correct account/environment.
+2. Verify secrets exist by name without retrieving their values.
+3. Verify D1, R2 and rate-limiter bindings target the intended environment.
+4. Apply pending D1 migrations.
+5. Deploy and inspect sanitized health/log output.
+
+```bash
+npx wrangler d1 migrations apply <database-name> --remote -c wrangler.api.jsonc
+npm run deploy:api
 ```
-node_modules
-dist
-.git
-.env
-.env.local
-npm-debug.log
+
+Do not copy a database identifier into documentation. Resolve it through the
+reviewed environment configuration.
+
+## Deploy the SPA
+
+Production serves the SPA from a Cloudflare Pages project connected to this
+repository. Every push to `main` builds the Vite `dist/` output and deploys it
+to production, usually within about a minute. **A push to `main` is a
+production release**: verify the change locally first, and never push to find
+out whether something works.
+
+Confirm a release landed by checking that its commit is the active production
+deployment:
+
+```bash
+npx wrangler pages deployment list --project-name <pages-project>
 ```
 
-## Supabase Edge Functions
+Comparing the hashed `assets/index-*.js` name in the live page with the one in
+a local `dist/index.html` built from the same commit is a quick second check.
+Also confirm the bundle uses the expected public API origin and contains no
+privileged configuration.
 
-### Device-Check Function
+`wrangler.jsonc`, `src/worker.js`, `npm run preview` and `npm run deploy`
+belong to a standalone SPA Worker that production does not use. `npm run
+deploy` succeeds but does not change the live site, so never use it as a
+release step.
 
-Location: `supabase/functions/device-check/index.ts`
+## Deploy Supabase changes
 
-Deploy the function using the Supabase CLI:
+### PostgreSQL migrations
+
+Review pending migrations, confirm the target project, take the required backup
+and apply through the approved Supabase workflow. Never apply a historical
+schema snapshot as a shortcut.
+
+Policy changes require explicit verification as `anon` and `authenticated`
+after deployment. A successful SQL command does not prove correct access.
+
+### Device-check Edge Function
+
 ```bash
 supabase functions deploy device-check
 ```
 
-### Edge Function Secrets
+Set `ALLOWED_ORIGINS` to the exact production browser origins. Configure the
+optional mail provider only through the Supabase secret store. Confirm an
+unknown origin receives no access-control origin header.
 
-Secrets must be set via the Supabase CLI. **Never place these in `.env.local` or any `VITE_` variable.**
+## Public-form lockdown rollout
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `SUPABASE_URL` | auto-injected | Supabase project URL |
-| `SUPABASE_ANON_KEY` | auto-injected | Validates caller JWT |
-| `SUPABASE_SERVICE_ROLE_KEY` | auto-injected | Bypasses RLS for device writes |
-| `ALLOWED_ORIGINS` | **yes** | Comma-separated browser origins for CORS |
-| `BREVO_API_KEY` | no | Enables new-device alert emails |
-| `BREVO_SENDER_EMAIL` | no | Sender address (defaults to security@dikho.in) |
+Public writes depend on coordinated code and database permissions. Safe order:
 
-```bash
-# Set production origins
-supabase secrets set ALLOWED_ORIGINS="https://dikho.in,https://www.dikho.in"
+1. Configure the API Worker secret names and non-secret allowlists.
+2. Deploy the API routes that verify Turnstile and call the narrow RPCs.
+3. Deploy the SPA that submits through those API routes.
+4. Verify both public forms end to end with test records.
+5. Apply the migration that removes browser-role RPC execution.
+6. Re-test success, rejected/missing token and direct-RPC denial.
 
-# Set email alerts (optional)
-supabase secrets set BREVO_API_KEY="your-brevo-api-key"
-```
+Applying the permission lockdown before the new SPA/API path is live breaks
+submissions. Deploying the new SPA before required secrets exist also breaks
+submissions because verification intentionally fails closed.
 
-> [!NOTE]
-> If `ALLOWED_ORIGINS` is unset, it defaults to `http://localhost:5173` for local development. Production browser requests will be blocked by CORS unless properly configured.
+The vendor-document upload is not yet protected by this flow; it still uses an
+anonymous Storage INSERT policy. Do not describe the public forms as fully
+Turnstile-protected until the upload is moved server-side and anonymous object
+mutation is removed.
 
-## Database Migrations
+## WhatsApp OTP rollout
 
-Migration files are located in `supabase/migrations/`. They are designed to be idempotent (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`).
+1. Confirm an approved authentication template exists in the provider console.
+2. Enable phone authentication and configure an appropriate OTP length/expiry.
+3. Configure the Send SMS hook to the API Worker endpoint.
+4. Store the generated hook signing secret and required Meta credentials in the
+   API Worker secret store.
+5. Deploy the API Worker.
+6. Test with an authorized test user and confirm an unknown number gets no OTP.
+7. Confirm invalid signatures are rejected and OTP values never appear in logs.
 
-Apply migrations:
-```bash
-# Push migrations to remote Supabase project
-supabase db push
-```
-Alternatively, copy-paste the migration contents into the Supabase Dashboard → SQL Editor.
+See [WhatsApp login](whatsapp-auth.md) for functional details.
 
-## Cloudflare Turnstile (public forms)
+## Security headers
 
-The two unauthenticated forms — `/vendor/register` and `/corporategifting` — are
-protected by Turnstile widget `0x4AAAAAAEnxgBvSPuBu7S85` ("managed" mode).
+The repository does not yet enforce a complete browser security-header set.
+Before enabling a strict Content Security Policy, remove/refactor inline script,
+style and event-handler requirements. Then deploy and test:
 
-**The widget alone protects nothing.** The token it produces is only meaningful
-because `POST /api/public/vendor` and `POST /api/public/cg-lead` on the
-`dikho-api` Worker verify it against Cloudflare's `siteverify` before writing
-(`src/api/services/turnstile.js`), and because `anon` no longer has `EXECUTE` on
-the underlying RPCs (`20260927000000_turnstile_lockdown.sql`). Removing either
-half turns the check back into decoration.
+- `Content-Security-Policy`, including restrictive `frame-ancestors`;
+- `Strict-Transport-Security` on HTTPS production hosts;
+- `X-Content-Type-Options: nosniff`;
+- a conservative `Referrer-Policy`;
+- a minimal `Permissions-Policy`.
 
-Three things are checked, not just `success`:
+Roll out CSP in report-only mode first, examine violations without collecting
+sensitive URL/query data, then enforce.
 
-| Check | Why |
-|-------|-----|
-| `success === true` | the challenge was actually solved |
-| `action` matches | a token minted on one form can't be replayed against the other |
-| `hostname` in allowlist | a token solved on an attacker's page is rejected |
+## Production smoke tests
 
-The `action` values are bound in two places and must stay in sync:
-`TURNSTILE_ACTION` in each form under `src/features/public/`, and
-`ACTION_VENDOR_REGISTER` / `ACTION_CG_LEAD` in `src/api/routes/public/index.js`.
-A widget rendered with no `action` gets no `action` back from `siteverify`, so a
-mismatch fails *every* submit — it shows up as `turnstile.rejected` in
-`wrangler tail`.
+### Public
 
-### Worker configuration
+- SPA routes load directly and on refresh.
+- Public forms accept a valid challenge and reject missing/replayed tokens.
+- Direct browser-role calls to protected write RPCs are denied.
+- GST lookup rejects malformed/checksum-invalid input and respects budget errors.
+- Anonymous Storage upload remains recorded as a known risk until remediated.
 
-| Variable | Notes |
-|----------|-------|
-| `TURNSTILE_SECRET` | Widget secret. `npx wrangler secret put TURNSTILE_SECRET --name dikho-api` |
-| `TURNSTILE_HOSTNAMES` | Comma-separated. Committed as a plain var in `wrangler.api.jsonc` (non-sensitive, and vars in the config file survive deploys). **Production must not include `localhost`/`127.0.0.1`** — `.dev.vars` overrides it locally. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Lets the Worker call the locked-down RPCs. Never `VITE_`-prefixed. |
-| `SUPABASE_URL` | Already required by `requireAuth`. |
-| `ALLOWED_ORIGINS` | Must include whatever origin serves the public forms, or their POST is blocked by CORS. |
+### Authenticated
 
-Read the secret without putting it on a command line or in chat:
-```bash
-npx wrangler turnstile widget get 0x4AAAAAAEnxgBvSPuBu7S85 --json | jq -er '.secret'
-```
+- Authorized email and WhatsApp OTP users can sign in.
+- Unknown users cannot create themselves through OTP.
+- Invalid/expired sessions receive 401 from protected API routes.
+- Contacts, campaigns and inbox flows operate with expected access.
+- Media URLs require a valid unexpired ticket.
+- Bulk deletion and campaign send access are tested against the current trusted
+  user model and will require role tests once RBAC is added.
 
-Verification fails **closed**: if `TURNSTILE_SECRET` or `TURNSTILE_HOSTNAMES` is
-missing, the forms break (HTTP 500) rather than silently accepting writes.
+### Webhooks and jobs
 
-### Rollout order (this ordering matters)
+- Invalid Meta and Supabase hook signatures are rejected.
+- Duplicate webhook delivery does not duplicate state.
+- Delayed sends and receipt reconciliation progress. Cron triggers do not fire
+  on the current Workers plan, so this relies on ordinary API traffic; see
+  [Configuration](CONFIGURATION.md#cloudflare-bindings-and-scheduled-work).
+- Daily caps stop further upstream spend without exposing internal details.
 
-The lockdown migration and the frontend are coupled the same way the Phase 1/2
-public-write split was:
+## Rollback
 
-1. Set `TURNSTILE_SECRET` and `SUPABASE_SERVICE_ROLE_KEY` on `dikho-api`
-   (`TURNSTILE_HOSTNAMES` ships in `wrangler.api.jsonc`, so a deploy sets it).
-2. `npm run deploy:api` — publishes `/api/public/*`. Safe on its own: the live
-   bundle still calls the RPCs directly, so nothing switches over yet.
-3. **Merge/push to `main`** — the SPA is a Cloudflare **Pages** project
-   (`dikho`, Git-connected, auto-builds Production from `main`). This is the step
-   that points the forms at the Worker. Note `npm run deploy` does *not* do this
-   — it deploys the unused `dikho-so-po` Worker, which no domain points at.
-4. Verify **both** public forms submit end to end.
-5. Apply `supabase/migrations/20260927000000_turnstile_lockdown.sql`.
+- Prefer deploying the previous reviewed application version for code rollback.
+  For the SPA, roll back to a previous production deployment in Cloudflare
+  Pages, then revert the commit on `main` so the next push does not redeploy
+  it. For the API Worker, use `wrangler rollback` or redeploy the last good
+  commit.
+- Database rollbacks must be forward migrations; do not rewrite migration
+  history or use destructive resets.
+- Do not restore anonymous/public grants as a convenience rollback. If a secure
+  path fails, disable the affected feature or restore the compatible server
+  version while preserving least privilege.
+- Rotate any credential that may have appeared in logs or an incorrect bundle.
 
-Two ordering hazards, both of which break the live forms:
+## Incident checklist
 
-- **Step 3 before step 1.** The forms start posting to the Worker, which fails
-  closed — missing `TURNSTILE_SECRET` returns 500, and a missing
-  `SUPABASE_SERVICE_ROLE_KEY` fails at the RPC call. Because step 3 is a plain
-  `git push`, this is easy to trigger by accident: set the secrets first.
-- **Step 5 before steps 2-3.** The deployed bundle is still calling the RPC as
-  `anon`, so every submit fails with "permission denied for function".
+1. Contain the affected route/integration without destroying evidence.
+2. Revoke/rotate exposed credentials through the owning provider.
+3. Preserve sanitized logs and relevant idempotency/audit records.
+4. Determine whether messages were sent, files accessed or data changed.
+5. Patch, test and deploy through the normal reviewed path.
+6. Complete any contractual/legal notification process.
+7. Record root cause and add a regression test.
 
-### Testing
+## Release checklist
 
-Cloudflare's dummy secrets exercise each branch without a real challenge:
+- [ ] The change was verified locally before it was pushed to `main`.
+- [ ] Correct cloud account and project confirmed.
+- [ ] Secret values are absent from source, docs and build output.
+- [ ] D1/Supabase migrations reviewed, backed up and ordered.
+- [ ] Effective RLS and Storage policies verified after apply.
+- [ ] API and SPA use the intended origins and bindings.
+- [ ] Production origin/hostname allowlists exclude local development hosts.
+- [ ] Public forms, OTP, authenticated API and media access smoke-tested.
+- [ ] Logs contain no tokens, OTPs, message bodies or unnecessary PII.
+- [ ] Open findings in [Security audit](SECURITY-AUDIT.md) were considered.
+- [ ] Rollback owner and procedure are known.
 
-```bash
-# always passes / always fails / always "already spent"
-for s in 1x0000000000000000000000000000000AA          2x0000000000000000000000000000000AA          3x0000000000000000000000000000000AA; do
-  curl -sS https://challenges.cloudflare.com/turnstile/v0/siteverify     -H 'Content-Type: application/x-www-form-urlencoded'     -d "secret=$s&response=dummy"; echo
-done
-```
+## Known operational gaps
 
-Tokens are **single-use** — a second `siteverify` call with the same token
-returns `timeout-or-duplicate`. Both forms therefore reset their widget after a
-failed submit, so a retry gets a fresh challenge instead of failing as a
-duplicate.
-
-## CI/CD: GitHub Actions
-
-Workflow: `.github/workflows/node.js.yml`
-
-- **Triggers**: Push to `main`, PRs targeting `main`
-- **Matrix**: Node.js 20.x and 22.x
-- **Steps**: `npm ci` → `npm run build` → `npm test`
-- **Note**: Automated deployment is *not* configured. Deployment is manual via `npm run deploy`.
-
-## Environment Variables Summary
-
-### Frontend (`.env.local`, gitignored)
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon (publishable) key |
-
-Only `VITE_`-prefixed variables are bundled into the browser. The anon key is public by design; data access control is handled by Row Level Security (RLS).
-
-### Docker Build Args
-Same as frontend variables, passed as `--build-arg` during `docker build`.
-
-## Production Checklist
-
-Before launching to production, complete the following checks:
-
-1. [ ] Set `ALLOWED_ORIGINS` on Edge Function to production domains
-2. [ ] Verify RLS policies are enabled on all tables
-3. [ ] Ensure service-role key is not exposed in any client-side code
-4. [ ] Review Supabase Auth settings (email templates, rate limits)
-5. [ ] Configure Cloudflare custom domain and SSL
-6. [ ] Set up Brevo API key for security alert emails (optional)
-7. [ ] Verify `.env.local` is NOT committed to Git
-8. [ ] Run `npm run build` successfully before deploying
-9. [ ] Test the public vendor registration form at `/vendor/register` works
-10. [ ] Verify device-check function is deployed: `supabase functions list`
-11. [ ] Set `TURNSTILE_SECRET`, `TURNSTILE_HOSTNAMES` and `SUPABASE_SERVICE_ROLE_KEY` on `dikho-api`
-12. [ ] Confirm `TURNSTILE_HOSTNAMES` in production excludes `localhost` and `127.0.0.1`
-13. [ ] Apply `20260927000000_turnstile_lockdown.sql` **only after** the Worker and SPA are live (see Rollout order)
-14. [ ] Confirm both public forms still submit after the lockdown migration
-
-## Known Limitations
-
-- Docker nginx configuration lacks SPA fallback routing (requires custom `nginx.conf`).
-- No automated deployment in CI (`npm run deploy` must be run manually).
-- No staging environment is configured.
-- No automated database backup strategy is currently documented.
-- Edge Function observability relies solely on Supabase dashboard logs.
-- The vendor form's document upload still goes straight from the browser to
-  Supabase storage under an anon INSERT policy, so it is **not** behind
-  Turnstile — a bot can push objects into `vendors_documents/` without touching
-  the verified RPC path. Closing this means proxying the upload through the
-  Worker (or moving it to R2).
+- anonymous vendor-document upload is outside the Turnstile boundary;
+- historical Storage policies need least-privilege replacement;
+- API and database access do not yet implement role/organization separation;
+- uploads/imports need stronger resource limits;
+- browser security headers and automated security regression tests are missing;
+- no complete backup/restore and retention runbook is stored in this repository.

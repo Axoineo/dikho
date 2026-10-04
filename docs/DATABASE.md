@@ -1,200 +1,186 @@
-# Dikho Database Schema Documentation
+# Database and Storage Guide
 
-## Overview
-The Dikho project uses PostgreSQL via Supabase. The database stores client, vendor, sales order, purchase order, and user device tracking information. 
+Last updated: 2026-10-04
 
-## Entity Relationship Diagram
-```mermaid
-erDiagram
-    salesorder ||--o{ salesorderdocument : "has items"
-    salesorderdocument }o--o| salesorderdocument : "so_item_id (PO to SO item)"
-    auth_users ||--o{ user_devices : "has"
-    auth_users ||--o{ login_events : "has"
-    vendors ||--o{ vendor_addresses : "has"
-    salesorder }o--o| vendor_addresses : "vendor_address_id (PO only)"
-    salesorder }o--o| auth_users : "created_by_id"
-    vendors }o--o| media : "has"
-    vendors }o--o| sub_media : "has"
-    media ||--o{ sub_media : "has"
-```
+Dikho uses two databases for different responsibilities:
 
-## Tables
+- Supabase PostgreSQL stores CRM, vendor, sales, purchase, invoice, payment,
+  device and public-lead records.
+- Cloudflare D1 stores WhatsApp contacts, conversations, messages, campaigns,
+  webhook events, budgets, cooldowns and delayed-send work.
 
-### 1. `salesorder`
-Parent Sales Order / Purchase Order header. Also reused as the PO header table.
+Supabase Storage contains business documents. Cloudflare R2 contains re-hosted
+WhatsApp media and avatars.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | bigint | PK, GENERATED ALWAYS AS IDENTITY | Auto-increment primary key |
-| order_number | text | NOT NULL | Human-readable order number |
-| unique_id | text | | System-generated unique ID (e.g. `PO-{timestamp}`) |
-| crm_reference_id | text | | External CRM reference |
-| company | text | NOT NULL | Client company name |
-| order_client_fullname | text | | Contact person name |
-| order_type | text | | ATL / TTL / BTL classification |
-| brand_name | text | | Brand being advertised |
-| multi_purpose_so | boolean | NOT NULL DEFAULT false | Multi-purpose sales order flag |
-| order_date | date | | Order creation date |
-| invoice_date | date | | Invoice date |
-| campaign_start_date | date | | Campaign start |
-| campaign_end_date | date | | Campaign end |
-| sub_total | numeric(14,2) | NOT NULL DEFAULT 0 | Sum of child taxable amounts |
-| tax_total | numeric(14,2) | NOT NULL DEFAULT 0 | Sum of child tax amounts |
-| total | numeric(14,2) | NOT NULL DEFAULT 0 | Grand total (sub_total + tax_total) |
-| payment_receipt_amount | numeric(14,2) | | Amount received as payment |
-| order_status | text | | Draft / Pending Approval / Approved / In Progress / Completed / Cancelled |
-| purchase_status | text | | Purchase workflow status |
-| order_color | text | | Visual status color indicator |
-| approved_by | text | | Name of approver |
-| approved_date | date | | Approval date |
-| complete_date | date | | Completion date |
-| invoice_courier | text | | Courier details for invoice |
-| created_by | text | | Display name/email of creator |
-| created_by_id | uuid | FK → auth.users(id) ON DELETE SET NULL | Auth user who created the record |
-| created_at | timestamptz | NOT NULL DEFAULT now() | Creation timestamp |
-| updated_at | timestamptz | NOT NULL DEFAULT now() | Last update timestamp |
-| vendor_address_id | bigint | FK → vendor_addresses(id) ON DELETE SET NULL | Selected vendor address for POs |
+This guide describes the intended schema from repository migrations. Always
+inspect the effective production schema and policies before making access-control
+decisions.
 
-**Indexes**: `salesorder_order_number_idx` (order_number), `salesorder_created_at_idx` (created_at DESC)
+## Supabase PostgreSQL
 
-### 2. `salesorderdocument`
-Child line items for SO and PO.
+The browser accesses many business tables through PostgREST with its Supabase
+session. PostgreSQL RLS is therefore a primary security boundary.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | bigint | PK, GENERATED ALWAYS AS IDENTITY | Auto-increment primary key |
-| sales_order_id | bigint | NOT NULL, FK → salesorder(id) ON DELETE CASCADE | Parent order |
-| type | text | | Item type (Media, Production, Printing, etc.) |
-| name | text | NOT NULL | Item name |
-| short_name | text | | Abbreviated name |
-| label | text | | Display label |
-| reference_type | text | | 'Sales Order' or 'Purchase Order' |
-| date | date | | Item date |
-| invoice_number | text | | Associated invoice number |
-| is_taxable | boolean | NOT NULL DEFAULT true | Whether GST applies |
-| gst_type | text | | CGST+SGST / IGST / UTGST+CGST |
-| taxable_amount | numeric(14,2) | NOT NULL DEFAULT 0 | Base taxable amount |
-| cgst_amount | numeric(14,2) | NOT NULL DEFAULT 0 | Central GST |
-| sgst_amount | numeric(14,2) | NOT NULL DEFAULT 0 | State GST |
-| igst_amount | numeric(14,2) | NOT NULL DEFAULT 0 | Integrated GST |
-| utgst_amount | numeric(14,2) | NOT NULL DEFAULT 0 | Union Territory GST |
-| tax_amount | numeric(14,2) | NOT NULL DEFAULT 0 | Total tax (sum of all GST) |
-| after_tax_amount | numeric(14,2) | NOT NULL DEFAULT 0 | Total with tax |
-| document_color | text | | Visual indicator |
-| document_note | text | | Free-text notes |
-| self_audit_completed | boolean | NOT NULL DEFAULT false | Self-audit flag |
-| file_url | text | | Attached file URL |
-| document_courier | text | | Courier details |
-| courier_status | text | | Courier tracking status |
-| purchase_order_id | bigint | | PO header ID (no FK yet) |
-| inv_id | bigint | | Invoice ID (no FK yet) |
-| inv_number | text | | Invoice number reference |
-| so_item_id | bigint | FK → salesorderdocument(id) ON DELETE SET NULL | Self-reference: links PO item to its parent SO item |
-| created_at | timestamptz | NOT NULL DEFAULT now() | Creation timestamp |
-| updated_at | timestamptz | NOT NULL DEFAULT now() | Last update timestamp |
+### Main domains
 
-**Indexes**: `salesorderdocument_sales_order_id_idx`, `salesorderdocument_so_item_id_idx`, `salesorderdocument_purchase_order_id_idx`
+| Domain | Representative objects | Purpose |
+| --- | --- | --- |
+| CRM | `clients`, `vendors`, `vendor_addresses` | Client/vendor master records |
+| Reference data | `media`, `sub_media`, `vendor_media` | Advertising categories |
+| Sales/procurement | `salesorders`, `salesorder`, `salesorderdocument`, `purchaseorders` | Orders and line items across schema generations |
+| Finance | `organization_profiles`, `invoices`, `invoice_lines`, `payments`, `payment_allocations`, `invoice_sequences`, `document_events` | Invoice/payment lifecycle and audit events |
+| Public intake | `cg_leads` and public-write RPCs | Corporate-gifting leads and vendor registration |
+| Login audit | `user_devices`, `login_events` | Per-user device and sign-in records |
 
-### 3. `user_devices`
-Device tracking for security.
+Some legacy and newer object names coexist. Check the feature query and the
+ordered migrations before renaming or removing an object.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | uuid | PK DEFAULT gen_random_uuid() | |
-| user_id | uuid | NOT NULL FK → auth.users(id) ON DELETE CASCADE | |
-| device_id | text | NOT NULL | Browser-generated UUID |
-| label | text | | Device type label (always 'web') |
-| first_seen | timestamptz | NOT NULL DEFAULT now() | First login from this device |
+### Public write RPCs
 
-**Constraints**: UNIQUE (user_id, device_id)
+Public vendor and corporate-gifting submissions use narrow `SECURITY DEFINER`
+functions. They:
 
-### 4. `login_events`
-Append-only login audit log.
+- whitelist inserted columns;
+- assign server-controlled defaults;
+- use an empty `search_path` and qualified object names;
+- are executable by the service role, not browser-facing roles, after the
+  Turnstile lockdown migration.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| id | uuid | PK DEFAULT gen_random_uuid() | |
-| user_id | uuid | NOT NULL FK → auth.users(id) ON DELETE CASCADE | |
-| device_id | text | NOT NULL | Device identifier |
-| is_new | boolean | NOT NULL DEFAULT false | Was this a new device? |
-| created_at | timestamptz | NOT NULL DEFAULT now() | Login timestamp |
+The API Worker verifies Turnstile before calling these functions. Re-granting
+anonymous execution would bypass that control.
 
-### 5. `vendors`
-Vendor master data — created outside tracked migrations.
-Contains: `company_name`, `contact_person`, `alias`, `email`, `phone`, `gstin`, `pan_number`, `vendor_type` (Individual/Organization), `media_id` (FK to media), `sub_media_id` (FK to sub_media), `status` (0=Pending, etc.), `vendor_document_file_path`, `vendor_document_file_name`, `payment_term_days`, `payment_term_type`, `registration_type`, `bank_name`, `ifsc_code`, `account_number`, `tds_percentage`, `tds_section`, and more.
+### RLS baseline
 
-### 6. `vendor_addresses`
-Vendor address records.
-Contains: `vendor_id` (FK to vendors), `address_line`, `city`, `state`, `country`, `zipcode`, `is_default`, and more.
+- RLS must remain enabled on all browser-exposed business tables.
+- `user_devices` and `login_events` allow users to view only their own rows;
+  writes are performed by the Edge Function service role.
+- Public reference tables may allow anonymous read when the data is intentionally
+  public and needed by a public form.
+- Direct anonymous mutation of vendor/client/lead tables is removed by the
+  lockdown migrations.
+- Several business and finance policies still grant all authenticated users
+  team-wide access. That is an explicit limitation of the current single-team
+  model, not safe multi-tenant isolation.
 
-### 7. `clients`
-Client directory.
-Contains: `company_name`, `contact_person`, `email`, `phone`, `gstin`, `pan_number`, `tds_percentage`, `tds_section`, and more.
+Before adding users with different trust levels, add organization membership
+and role-aware policies. Avoid new sensitive policies using unconditional
+`USING (true)` or `WITH CHECK (true)`.
 
-### 8. `media`
-Advertising media categories. Lookup table for ATL/TTL/BTL media types.
+### Finance invariants
 
-### 9. `sub_media`
-Advertising sub-media categories. Child lookup table linked to media, for sub-categories like Television, Radio, Digital Marketing, etc.
+Monetary columns use fixed-precision numeric values. Application and database
+logic should preserve:
 
-## Views
+- line total = taxable amount + tax amount;
+- tax amount = CGST + SGST + IGST + UTGST;
+- order subtotal = sum of line taxable amounts;
+- order tax total = sum of line tax amounts;
+- order grand total = subtotal + tax total;
+- issued invoices and their lines are immutable except through explicit void or
+  correction workflows;
+- payment allocations may not exceed their payment or invoice balance.
 
-### `purchaseorderdocuments`
-A view that projects PO line items with calculated profit:
-```sql
-SELECT
-  po_item.*,
-  po_item.taxable_amount AS po_before_tax,
-  so_item.taxable_amount AS so_item_before_tax,
-  (so_item.taxable_amount - po_item.taxable_amount) AS profit,
-  so.brand_name
-FROM salesorderdocument po_item
-LEFT JOIN salesorderdocument so_item ON so_item.id = po_item.so_item_id
-LEFT JOIN salesorder so ON so.id = so_item.sales_order_id
-WHERE po_item.purchase_order_id IS NOT NULL;
-```
+Security-definer financial functions must verify `auth.uid()` and any required
+organization/role before reading or mutating rows.
 
-## RLS Policies
+## Cloudflare D1
 
-| Table | Role | Access | Condition |
-|-------|------|--------|----------|
-| salesorder | authenticated | ALL (select, insert, update, delete) | `USING (true) WITH CHECK (true)` — team-wide visibility |
-| salesorderdocument | authenticated | ALL | `USING (true) WITH CHECK (true)` — team-wide visibility |
-| user_devices | authenticated | SELECT only | `auth.uid() = user_id` — own devices only |
-| login_events | authenticated | SELECT only | `auth.uid() = user_id` — own login history only |
-| vendors | anon | INSERT | `WITH CHECK (true)` — public registration |
-| vendors | anon | UPDATE | `USING (status = 0) WITH CHECK (status = 0)` — update pending vendors only |
-| vendor_addresses | anon | INSERT | `WITH CHECK (true)` — public address addition |
-| media | anon, authenticated | SELECT | `USING (true)` — public read |
-| sub_media | anon, authenticated | SELECT | `USING (true)` — public read |
+D1 migrations are in the top-level `migrations/` directory and are applied to
+the API Worker's configured database.
 
-> [!NOTE]
-> `user_devices` and `login_events` have no INSERT/UPDATE/DELETE policies for end users. The Edge Function writes via the service-role key (bypasses RLS).
+### Core tables
+
+| Table | Purpose | Sensitive content |
+| --- | --- | --- |
+| `contacts` | Campaign/import contacts and template attributes | Phone, name, email, company |
+| `campaigns` | Template campaign metadata and stored audience | Sender identity, audience IDs |
+| `messages` | Campaign and conversational messages/status | Phones, message bodies, media metadata |
+| `conversations` | One WhatsApp thread per phone | Phone, profile name, activity summary |
+| `webhook_events` | Idempotency/reconciliation ledger | Provider payload fragments |
+| `gstn_lookup_budget` | Global daily GST lookup count | Aggregate only |
+| `template_send_cooldowns` | Per-number/template send suppression | Phone and template |
+| `cg_lead_whatsapp_budget` | Global daily confirmation-send count | Aggregate only |
+| `cg_lead_outbox` | Delayed confirmation queue | Phone and lead name |
+
+D1 has no browser-facing SQL endpoint. All access passes through the API Worker,
+so route authentication and authorization are its row-access boundary.
+
+### Idempotency and message ordering
+
+- Campaign sends claim recipient rows before calling Meta.
+- A unique campaign/contact constraint prevents duplicate sends for the same
+  campaign recipient.
+- Webhook events use stable idempotency keys.
+- Delivery receipts can precede storage of the provider message ID; unmatched
+  receipts are retained and reconciled later.
+- Campaign audience IDs are stored so interrupted sends can identify recipients
+  never attempted.
+
+### Budgets
+
+Daily budget tables place a hard upper bound on upstream requests/sends. Their
+updates are guarded so a reached cap stops additional writes and spend. A
+per-IP edge limiter is a useful brake but is not treated as an accounting-grade
+global limit.
 
 ## Storage
-- **Bucket**: `Dikho` (private, `public: false`)
-- Used for vendor documents uploaded during registration
-- Files stored at path: `vendors_documents/{vendor_id}/{timestamp}-{filename}`
-- Signed URLs generated for viewing: `supabase.storage.from('Dikho').createSignedUrl(path, expiry)`
 
-## Migration History
-1. `20260821_device_tracking.sql` — Creates `user_devices` and `login_events` tables with RLS
-2. `20260829_salesorder.sql` — Creates `salesorder` and `salesorderdocument` tables with indexes and RLS
-3. `20260904_po_relationships.sql` — Adds `so_item_id` FK, `vendor_address_id`, creates `purchaseorderdocuments` view
-4. `20260905_public_vendor_form_rls.sql` — Adds anon RLS policies for public vendor registration, creates storage bucket
+### Supabase Storage
 
-## Money Invariants
-The UI guarantees these before every database write:
-- Per item: `taxable_amount + tax_amount = after_tax_amount`
-- Per item: `tax_amount = cgst_amount + sgst_amount + igst_amount + utgst_amount`
-- Per order: `sub_total = Σ taxable_amount`, `tax_total = Σ tax_amount`, `total = Σ after_tax_amount`
-- Tolerance: `MONEY_EPSILON = 0.005` (half a paisa)
+The business-document bucket is private and consumers generate short-lived
+signed URLs. The current public vendor flow still performs a browser-direct
+anonymous INSERT under a vendor-document prefix. This is a known high-priority
+risk because it bypasses Turnstile and server-side file validation.
 
-> [!IMPORTANT]
-> Money columns are `numeric(14,2)` — max value ₹99,99,99,99,99,999.99 (12 digits before decimal).
+Historical authenticated policies also allow broad bucket-level actions. The
+target policy model is:
 
-## Conventions and Notes
-- **Purchase Orders (POs)**: The `salesorder` table is reused as the Purchase Order header table.
-- **PO Item to PO Header link**: The `purchase_order_id` in `salesorderdocument` links to a PO header, but currently has no foreign key constraint.
-- **Invoice linking**: The `inv_id` in `salesorderdocument` lacks a foreign key constraint currently.
-- **PO to SO item linking**: A self-referencing foreign key `so_item_id` links a PO item to its parent SO item within the `salesorderdocument` table.
+- anonymous users have no direct object mutation;
+- a server issues or performs one narrowly scoped upload after verification;
+- reads are scoped by organization/vendor permission;
+- update/delete require an appropriate staff role;
+- object paths are server-generated and immutable identifiers are used;
+- size, type, retention and orphan-cleanup controls are enforced.
+
+### Cloudflare R2
+
+R2 stores WhatsApp media and avatars. WhatsApp objects are returned only with a
+valid short-lived media ticket. Avatar reads are public but can address only a
+validated user UUID under the fixed avatar prefix.
+
+Media tickets are bearer capabilities. Do not store them in logs, analytics,
+referrers or permanent database fields.
+
+## Migration directories and order
+
+- `supabase/migrations/`: ordered Postgres, RLS and Storage changes.
+- `migrations/`: ordered Cloudflare D1 changes.
+- `remote_schema.sql` and imported remote-schema migrations: historical
+  snapshots used for reference/bootstrap, not proof of current production state.
+- `supabase/seed/`: development/seed material, not production migrations.
+
+Never edit an already-deployed migration. Add a forward migration with explicit
+rollback guidance. Policy migrations coupled to new code require a staged
+rollout so the old client is not cut off before the new server path is live.
+
+## Secure migration checklist
+
+- [ ] Back up affected data and document rollback.
+- [ ] Use the correct database/environment and verify the target before apply.
+- [ ] Enable RLS before granting browser-facing table access.
+- [ ] Test allowed and denied operations as `anon` and `authenticated`.
+- [ ] Scope policies by organization, owner and role where data is sensitive.
+- [ ] Revoke implicit `PUBLIC` execution from security-definer functions.
+- [ ] Use an explicit safe `search_path` and qualified object names.
+- [ ] Avoid logging migration output containing row data or credentials.
+- [ ] Confirm effective policies after deployment, not only migration success.
+- [ ] Run public-form and authenticated smoke tests after policy changes.
+
+## Data retention and privacy
+
+Define retention for webhook ledgers, login events, failed outbox rows, imported
+contacts, WhatsApp media and orphan documents. Logs and operational tables
+should retain only what is needed for reconciliation, compliance and incident
+response. Any deletion process must preserve required financial audit records.
+
+See [Security audit](SECURITY-AUDIT.md) for the open database/storage actions.
