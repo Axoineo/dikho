@@ -89,7 +89,7 @@ export async function verifyTurnstile(c, token, expectedAction) {
   // retryable, or a misconfigured deploy looks like a passing blip forever.
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    logEvent('turnstile.siteverify_error', { status: res.status, body: detail.slice(0, 200) })
+    logEvent('turnstile.siteverify_error', { status: res.status, upstream_error: detail.slice(0, 200) })
     if (res.status >= 400 && res.status < 500) {
       throw new HTTPException(500, { message: 'Security check is not configured correctly on the server' })
     }

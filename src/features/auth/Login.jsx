@@ -44,6 +44,17 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
+  // Why the last session ended, when it was not this person's own choice
+  // (an administrator signed them out or suspended them). Shown once.
+  const [notice] = useState(() => {
+    try {
+      const text = sessionStorage.getItem('dikho-signout-notice')
+      sessionStorage.removeItem('dikho-signout-notice')
+      return text
+    } catch {
+      return null
+    }
+  })
   const otpRefs = useRef([])
 
   // The E.164 phone actually sent to Supabase — kept so verify/resend use the
@@ -273,6 +284,8 @@ export default function Login({ onLogin }) {
 
           <h1>Sign in to your account</h1>
           <p className="login-subtitle">Access your Dikho Dashboard</p>
+
+          {notice && <p className="login-notice" role="status">{notice}</p>}
 
           <div className="login-method-toggle" role="tablist" aria-label="Sign-in method">
             <button

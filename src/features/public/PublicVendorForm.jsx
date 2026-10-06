@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Country, State } from 'country-state-city'
 import { supabase } from '../../lib/supabase'
-import { apiPublicPost } from '../../lib/api'
+import { apiPublicPostForm } from '../../lib/api'
 import { useGstinLookup } from '../../lib/useGstinLookup'
 import { useCitiesOfState } from '../../lib/useCities'
 import { GSTIN_LENGTH, normalizeGstin, taxpayerToVendorFields } from '../../lib/gstin'
@@ -494,21 +494,6 @@ export default function PublicVendorForm() {
     try {
       const ph = form.contact.replace(/\D/g, '')
 
-      // Upload the document FIRST under a random id, so the whole registration
-      // is a single atomic RPC. The anon role has no direct INSERT/SELECT/
-      // UPDATE/DELETE on vendors — see migration 20260925000000_public_write_rpcs.
-      // A failed RPC rolls the vendor+address back automatically; a document
-      // uploaded here but never referenced is harmlessly orphaned in storage.
-      let documentPath = null
-      if (documentFile) {
-        const safe = documentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-        const path = `vendors_documents/${crypto.randomUUID()}/${safe}`
-        const { error: upErr } = await supabase.storage.from('Dikho').upload(path, documentFile, {
-          cacheControl: '3600', upsert: false, contentType: documentFile.type || 'application/octet-stream',
-        })
-        if (!upErr) documentPath = path
-      }
-
       const p_vendor = {
         alias: form.alias.trim() || null,
         contact_person: form.contact_person.trim() || null,
@@ -532,9 +517,8 @@ export default function PublicVendorForm() {
         vendor_ifsc_code: form.vendor_ifsc_code.trim().toUpperCase() || null,
         vendor_account_number: form.vendor_account_number.trim() || null,
         vendor_confirm_account_number: form.vendor_confirm_account_number.trim() || null,
-        vendor_document_file_name: documentFile?.name || null,
-        vendor_document_file_path: documentPath,
-        // `status` and `opening_balance` are assigned server-side by the RPC.
+        // `status` and `opening_balance` are assigned server-side by the RPC,
+        // and the document path/name by the Worker after it stores the file.
       }
 
       const p_address = {
@@ -546,16 +530,19 @@ export default function PublicVendorForm() {
         zipcode: form.zipcode.trim() || null,
       }
 
-      // Through the API Worker, not supabase.rpc: the Worker verifies the
-      // Turnstile token against siteverify and only then calls
-      // public_register_vendor with the service-role key. The anon role no
-      // longer has EXECUTE on that function — see migration
-      // 20260927000000_turnstile_lockdown.sql.
-      await apiPublicPost('/vendor', {
+      // Through the API Worker, not supabase.rpc or Storage: the Worker
+      // verifies the Turnstile token against siteverify, checks the document's
+      // size and real file type, stores it under a key it generates, and only
+      // then calls public_register_vendor with the service-role key. The anon
+      // role can neither execute that function nor write to Storage.
+      const body = new FormData()
+      body.append('payload', JSON.stringify({
         'cf-turnstile-response': captchaToken,
         vendor: p_vendor,
         address: p_address,
-      })
+      }))
+      if (documentFile) body.append('document', documentFile, documentFile.name)
+      await apiPublicPostForm('/vendor', body)
 
       setSubmitted(true)
     } catch (err) {

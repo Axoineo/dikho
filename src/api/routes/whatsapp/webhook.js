@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { ok, fail } from '../../utils/response.js'
 import { logEvent, logError } from '../../utils/logger.js'
+import { readBoundedBytes } from '../../utils/body.js'
 import { verifyMetaSignature } from '../../services/whatsapp/verifyMetaSignature.js'
 import { processInboundMessage } from '../../services/whatsapp/inbound.js'
 import { broadcast } from '../../services/whatsapp/realtime.js'
@@ -79,6 +80,19 @@ function extractEvents(payload) {
   return events
 }
 
+// Counts by kind for the received-payload log line, e.g.
+// { events: 3, message: { text: 1 }, status: { delivered: 1, read: 1 } }.
+function summarizeEvents(events) {
+  const summary = { events: events.length, message: {}, status: {} }
+  for (const event of events) {
+    const key = event.type === 'status' ? event.status : event.raw?.type
+    const bucket = event.type === 'status' ? summary.status : summary.message
+    const name = typeof key === 'string' ? key.slice(0, 32) : 'unknown'
+    bucket[name] = (bucket[name] ?? 0) + 1
+  }
+  return summary
+}
+
 // Applies a delivery/read receipt to the matching outbound message, then pushes
 // the tick change to open agent tabs so the bubble's status icon updates live.
 // Returns true when the receipt landed on a message row. A false means the
@@ -144,8 +158,10 @@ async function processEvent(c, event) {
 // backoff for up to 7 days, which outlives a midnight-UTC quota reset.
 webhook.post('/', async (c) => {
   // Read the raw body once — the signature is computed over these exact bytes,
-  // and re-serialising parsed JSON would not reproduce them.
-  const raw = await c.req.text()
+  // and re-serialising parsed JSON would not reproduce them. Bounded because
+  // this happens before the signature check; Meta's batched payloads are tens
+  // of kilobytes, so 2 MB only ever stops someone who is not Meta.
+  const raw = new TextDecoder().decode(await readBoundedBytes(c, 2 * 1024 * 1024))
 
   const signatureOk = await verifyMetaSignature(
     raw,
@@ -167,7 +183,9 @@ webhook.post('/', async (c) => {
   }
 
   const events = extractEvents(payload)
-  logEvent('whatsapp.webhook.received', payload)
+  // A summary, never the payload: it carries customer phone numbers, profile
+  // names and message text, none of which belongs in Worker logs.
+  logEvent('whatsapp.webhook.received', summarizeEvents(events))
 
   for (const event of events) {
     // Claim the event. The UNIQUE index on idempotency_key is what makes

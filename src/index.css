@@ -4220,3 +4220,16 @@ select.pvf-input.has-error:focus,
     transition-delay: 0ms !important;
   }
 }
+
+/* Page a person's permissions do not cover (src/components/AccessDenied.jsx). */
+.access-denied { max-width: 460px; margin: 12vh auto 0; text-align: center; padding: 0 16px; }
+.access-denied-icon { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; background: var(--brand-blue-soft); color: var(--brand-blue); margin-bottom: 14px; }
+[data-theme="dark"] .access-denied-icon { color: #8fbfec; }
+.access-denied h1 { margin: 0 0 8px; font-size: 21px; color: var(--text); }
+.access-denied p { margin: 0 0 18px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.access-denied .primary-button { display: inline-flex; align-items: center; text-decoration: none; padding: 0 18px; }
+
+/* Why the last session ended, on the sign-in screen (an admin signed them out). */
+.login-notice { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: rgba(249, 175, 27, 0.16); color: inherit; font-size: 13px; line-height: 1.5; }
+[data-theme="dark"] .settings-card-desc a { color: #8fbfec; }
+.inbox-readonly-note { margin: 0; padding: 14px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; background: var(--surface); }

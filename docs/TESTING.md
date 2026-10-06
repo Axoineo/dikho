@@ -1,6 +1,6 @@
 # Testing and Verification Guide
 
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-05
 
 The repository has a small automated test suite for security-critical helpers.
 `npm run check` runs lint, those tests, the production build and the
@@ -31,6 +31,12 @@ mocked) and generate their keys in memory. CI runs them on Node 20 and 22.
 | `tests/turnstile.test.js` | Turnstile verification: fail-closed configuration, token bounds, hostname and action checks, upstream, parsing and network failures |
 | `tests/webhook-signatures.test.js` | Meta HMAC and Standard Webhooks signatures: raw-body binding, rotated keys, timestamp tolerance and malformed headers |
 | `tests/media-ticket.test.js` | Media tickets: expiry, tampering, wrong keys and malformed tickets |
+| `tests/require-auth.test.js` (staff cases) | Sessions without a staff role, with a string/unknown/user-editable role, banned users, and unreachable or malformed auth responses |
+| `tests/upload-limits.test.js` | Bounded body reading (declared and streamed), malformed JSON/multipart, file signatures and display-name cleaning |
+| `tests/parse-sheet-limits.test.js` | Contact import parser: XLSX decompression bombs, entry counts, encryption, broken offsets, wide rows; CSV/JSON row, column and cell limits |
+| `tests/public-vendor-upload.test.js` | Public vendor route: server-chosen keys, ignored caller paths, disguised/empty/oversized documents refused before Turnstile, cleanup on rejection |
+| `tests/otp-hook-and-media.test.js` | OTP hook refusing non-staff and oversized requests; media served with download/sandbox headers and unsatisfiable ranges |
+| `tests/logger.test.js` | Log redaction by key and by content |
 
 Add new tests in the same style: import the module under test directly, mock
 every external call and use obviously synthetic values.
@@ -68,16 +74,17 @@ Never use production personal data in screenshots or fixtures.
 
 ## API tests to add
 
-Session verification, Turnstile, webhook signatures and media tickets are
-covered above. Prioritize isolated tests for:
+Session and staff verification, Turnstile, webhook signatures, media tickets,
+upload and import limits and log redaction are covered above. Prioritize isolated tests for:
 
-- future role/organization authorization;
+- per-role permissions, once the matrix is decided;
+- RLS, Storage and Realtime allow/deny cases against a local Supabase Postgres
+  in CI (run by hand for the staff and storage migrations; see the hardening
+  task brief for the method);
 - duplicate and replayed webhook deliveries against the idempotency ledger;
-- contact import byte/row/column/decompression limits;
 - public GST and WhatsApp daily budgets;
 - campaign claims, retries and duplicate requests;
-- status reconciliation for out-of-order receipts;
-- upload type/size/content validation.
+- status reconciliation for out-of-order receipts.
 
 Mock external providers. Tests must not send real WhatsApp messages, consume a
 paid API quota or write a shared cloud database.

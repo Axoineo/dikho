@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { AccessContext, canOpen } from '../lib/access'
 
 /* Outlined 24px glyphs on a shared 1.7 stroke, so the rail reads as one set.
    Each one names the thing rather than the money: a cart for what we sell, a
@@ -178,6 +179,14 @@ function SidebarIcon({ name, size = 20 }) {
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
     ),
+    /* A person beside a small shield: people, and what they may do. */
+    users: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="7.8" r="3.3" />
+        <path d="M2.8 19.8a6.3 6.3 0 0 1 9.9-5.1" />
+        <path d="M17.6 12.6 21 13.9v2.6c0 2.2-1.5 3.6-3.4 4.3-1.9-.7-3.4-2.1-3.4-4.3v-2.6Z" />
+      </svg>
+    ),
     logout: (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9.4 20.6H5.4a2 2 0 0 1-2-2V5.4a2 2 0 0 1 2-2h4" />
@@ -212,7 +221,7 @@ const WHATSAPP_ITEMS = [
   { to: '/whatsapp/templates', label: 'Templates', icon: 'template' },
 ]
 
-function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
+function WhatsAppGroup({ items, collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
   const { pathname } = useLocation()
   const panelRef = useRef(null)
   const sectionActive = pathname.startsWith('/whatsapp')
@@ -316,7 +325,7 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
       {open && (
         <div className="nav-subwrap" ref={panelRef} aria-hidden={collapsed || undefined}>
         <div className="nav-sublist">
-          {WHATSAPP_ITEMS.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -339,12 +348,13 @@ function WhatsAppGroup({ collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyo
 /* Who is signed in, derived from the Supabase session. Supabase only
    guarantees `email`; a name and picture are whatever the identity provider
    put in user_metadata, so both are optional and fall back to initials. The
-   email is used to derive a name but is never displayed. */
-function readAccount(session) {
+   email is used to derive a name but is never displayed. The staff profile's
+   name, set in User Management, wins when there is one. */
+function readAccount(session, staffName) {
   const user = session?.user
   const meta = user?.user_metadata || {}
   const email = user?.email || ''
-  const raw = meta.full_name || meta.name || meta.user_name || (email ? email.split('@')[0] : 'Account')
+  const raw = staffName || meta.full_name || meta.name || meta.user_name || (email ? email.split('@')[0] : 'Account')
   const name = raw.charAt(0).toUpperCase() + raw.slice(1)
   const initials = name
     .split(/[\s._-]+/)
@@ -359,7 +369,8 @@ function readAccount(session) {
    above it once collapsed. The popover holds log out and nothing else;
    settings already has a permanent control right here. */
 function SidebarAccount({ collapsed, session, onLogout, onShowTip, onHideTip }) {
-  const { name, initials, avatarUrl } = readAccount(session)
+  const access = useContext(AccessContext)
+  const { name, initials, avatarUrl } = readAccount(session, access?.full_name)
   /* null when closed; { leaving } while mounted, so the panel can animate out
      instead of being pulled from the DOM the moment it is dismissed. */
   const [menu, setMenu] = useState(null)
@@ -557,7 +568,12 @@ function useEdgeFade(ref) {
 }
 
 export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session }) {
-  const items = [
+  // Only what this person may open. Hiding is navigation, not security: the
+  // pages and the data behind them check the same permissions.
+  const access = useContext(AccessContext)
+  const allowed = (item) => canOpen(access, item.to)
+  const whatsappItems = WHATSAPP_ITEMS.filter(allowed)
+  const allItems = [
     { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: '/clients', label: 'Clients', icon: 'clients' },
     { to: '/leads', label: 'Leads', icon: 'leads' },
@@ -569,7 +585,9 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
     { to: '/payment-receipts', label: 'Payment Receipt', icon: 'receipt' },
     { to: '/payment-requests', label: 'Payment Request', icon: 'paymentrequest' },
     { to: '/courier', label: 'Document Courier', icon: 'courier' },
+    { to: '/users', label: 'User Management', icon: 'users' },
   ]
+  const items = allItems.filter(allowed)
 
   const navRef = useRef(null)
   const fade = useEdgeFade(navRef)
@@ -678,14 +696,15 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
             </NavLink>
           ))}
 
-          <WhatsAppGroup
+          {whatsappItems.length > 0 && <WhatsAppGroup
+            items={whatsappItems}
             collapsed={collapsed}
             onNavigate={handleNav}
             onShowTip={showTip}
             onHideTip={hideTip}
             onOpenFlyout={openFlyout}
             onCloseFlyout={closeFlyout}
-          />
+          />}
         </nav>
 
         <SidebarAccount
@@ -714,7 +733,7 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
           onMouseEnter={keepFlyout}
           onMouseLeave={closeFlyout}
         >
-          {WHATSAPP_ITEMS.map((item) => (
+          {whatsappItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

@@ -2,12 +2,19 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
 import { parseContactFile } from '../../utils/parseSheet.js'
+import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
 import { normalisePhone } from '../../utils/phone.js'
 import { normalizeKey } from '../../../lib/templateVars.js'
+import { requirePermission } from '../../middleware/requireAuth.js'
 
 const contacts = new Hono()
 
 const MAX_IMPORT_ROWS = 5000
+
+// A 5,000-row contact sheet is well under 1 MB as CSV and smaller as XLSX.
+// The cap applies to the whole request before it is buffered; parseSheet.js
+// then bounds what those bytes may expand into.
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024
 
 // Header hints. Detection does not depend on these — the phone column is found
 // by which column actually holds phone numbers — but a matching name breaks ties
@@ -74,7 +81,8 @@ function detectField(columns, field, phoneColumn) {
 
 /* ── GET /api/contacts ─────────────────────────────────────────────────── */
 
-contacts.get('/', async (c) => {
+// Campaign senders pick recipients from this list too.
+contacts.get('/', requirePermission('wa_contacts.view', 'campaigns.send'), async (c) => {
   const search = (c.req.query('search') || '').trim()
   const limit = Math.min(Number(c.req.query('limit')) || 2000, 5000)
 
@@ -104,10 +112,10 @@ function safeParse(text) {
 
 /* ── POST /api/contacts/import ─────────────────────────────────────────── */
 
-contacts.post('/import', async (c) => {
-  const form = await c.req.formData().catch(() => null)
-  const file = form?.get('file')
-  if (!file || typeof file.arrayBuffer !== 'function') {
+contacts.post('/import', requirePermission('wa_contacts.import'), async (c) => {
+  const form = await readBoundedFormData(c, MAX_IMPORT_BYTES)
+  const file = formFile(form, 'file')
+  if (!file) {
     throw new HTTPException(400, { message: 'No file uploaded under the "file" field' })
   }
 
@@ -202,8 +210,8 @@ contacts.post('/import', async (c) => {
 // to wipe the entire contacts pool. Conversations/messages keep their history
 // (contact_id is SET NULL by the FK, but we also do it explicitly here for
 // safety in case the FK isn't enforced).
-contacts.delete('/', async (c) => {
-  const body = await c.req.json().catch(() => null)
+contacts.delete('/', requirePermission('wa_contacts.delete'), async (c) => {
+  const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
   const { contactIds, all } = body

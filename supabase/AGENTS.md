@@ -25,6 +25,10 @@ These instructions extend the repository root `AGENTS.md` for
 - Test allowed and denied operations as both `anon` and `authenticated`.
 - Revoke direct anonymous table/RPC access when a verified Worker path is the
   intended boundary.
+- Every new `public` table needs the restrictive `staff members only` policy
+  (see `docs/DATABASE.md`); a signed-in session alone is not staff.
+- Security-definer functions callable by `authenticated` must check
+  `public.is_staff()` themselves.
 - Inspect effective production policies after deployment.
 
 ## Security-definer functions
@@ -38,7 +42,8 @@ These instructions extend the repository root `AGENTS.md` for
 
 - A private bucket does not make broad object policies safe.
 - Scope read/write/delete by organization, record, path and role.
-- Do not add new anonymous object mutation.
+- Do not add new anonymous object mutation. Public uploads go through a
+  verified Worker route that writes with the service role.
 - Signed URLs are bearer capabilities and must not be logged or stored
   permanently.
 

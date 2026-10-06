@@ -49,8 +49,17 @@ export async function callRpc(c, fn, args) {
     // PostgREST surfaces the RPC's own `raise exception` text here (e.g.
     // "company_name is required"). Log it, but return a generic message: these
     // are validation guards the frontend already enforces, so a caller seeing
-    // them is either misusing the endpoint or probing it.
-    logError(`rpc.${fn}.failed`, new Error(`${res.status}: ${text.slice(0, 500)}`))
+    // them is either misusing the endpoint or probing it. Only the code and
+    // message are logged: PostgREST's `details` echoes submitted values (a
+    // duplicate-key error quotes the key), which is form data, not diagnostics.
+    let code = null
+    let message = text.slice(0, 200)
+    try {
+      const parsed = JSON.parse(text)
+      code = parsed?.code ?? null
+      message = String(parsed?.message ?? '').slice(0, 200)
+    } catch { /* non-JSON body: keep the truncated text, scrubbed by the logger */ }
+    logError(`rpc.${fn}.failed`, `${res.status} ${code ?? ''} ${message}`.trim())
     throw new HTTPException(400, { message: 'Submission was rejected. Please check your details and try again.' })
   }
 

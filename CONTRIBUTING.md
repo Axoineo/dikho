@@ -11,6 +11,8 @@ Read:
 - [Shared agent instructions](AGENTS.md), when using Codex or Claude Code
 - [Development guide](DEVELOPMENT.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Permissions](docs/PERMISSIONS.md)
+- [Configuration](docs/CONFIGURATION.md)
 - [Security policy](SECURITY.md)
 - [Current security findings](docs/SECURITY-AUDIT.md)
 
@@ -39,6 +41,10 @@ Use the approved provider secret store and access process.
 4. Update the relevant documentation and migration/rollout instructions.
 5. Run the validation commands below.
 6. Explain risk, rollback and any remaining limitations in the pull request.
+
+Use the repository pull-request template. Record notable behavior,
+configuration, schema, security and operational changes under `Unreleased` in
+[CHANGELOG.md](CHANGELOG.md).
 
 Merging or pushing to `main` deploys the SPA to production through Cloudflare
 Pages within about a minute. Verify changes locally before they reach `main`.
@@ -116,4 +122,4 @@ migrations.
 Do not open a public issue or pull request containing vulnerability details.
 Follow the private reporting process in [SECURITY.md](SECURITY.md).
 
-Last updated: 2026-10-04.
+Last updated: 2026-10-05.

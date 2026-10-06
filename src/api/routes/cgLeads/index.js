@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { ok } from '../../utils/response.js'
+import { requirePermission } from '../../middleware/requireAuth.js'
 
 const cgLeads = new Hono()
 
@@ -19,7 +20,7 @@ const cgLeads = new Hono()
 // LIMIT 1000, most-recent-first: comfortably covers the WHATSAPP_CG_LEAD_DAILY_CAP
 // (200/day) for several days, and the frontend only needs the latest status
 // per phone.
-cgLeads.get('/whatsapp-status', async (c) => {
+cgLeads.get('/whatsapp-status', requirePermission('leads.view'), async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT phone, status, error_code, error_message, meta_message_id,
             sent_at, delivered_at, read_at, failed_at

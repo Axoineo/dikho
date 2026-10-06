@@ -1,6 +1,6 @@
 # Deployment and Operations Guide
 
-Last updated: 2026-10-04
+Last updated: 2026-10-05
 
 Dikho has four independently deployed parts:
 
@@ -163,10 +163,31 @@ Applying the permission lockdown before the new SPA/API path is live breaks
 submissions. Deploying the new SPA before required secrets exist also breaks
 submissions because verification intentionally fails closed.
 
-The vendor-document upload is not yet protected by this flow; it still uses an
-anonymous Storage INSERT policy. Do not describe the public forms as fully
-Turnstile-protected until the upload is moved server-side and anonymous object
-mutation is removed.
+The vendor document now travels with the same Turnstile-verified request, and
+`20261006160000_vendor_document_storage.sql` removes anonymous Storage access.
+Until both are deployed, production still accepts the old anonymous upload.
+
+## Staff membership, private inbox and document rollout (2026-10)
+
+The staff role gate, private inbox channel, Worker-side document upload and
+scoped Storage policies ship together. Follow the numbered sequence in
+[the hardening task](tasks/2026-10-05-security-hardening.md). The short form:
+disable sign-up, grant roles, apply the staff migration, deploy the API, push
+the SPA, verify the vendor form with a document, apply the storage migration,
+disable public Realtime channels. Granting roles first is what keeps operators
+from being locked out; the staff migration refuses to run without them.
+
+## Browser security headers
+
+`npm run build` writes `dist/_headers`, which Cloudflare Pages applies to every
+response. The CSP starts in report-only mode. To enforce it, set the Pages
+environment variable `CSP_MODE=enforce` and redeploy, after a pass through the
+signed-in screens shows no CSP reports in the browser console. Check what is
+live with:
+
+```bash
+curl -sI https://manage.dikho.in/ | grep -i -E "content-security|x-frame|strict-transport"
+```
 
 ## WhatsApp OTP rollout
 
@@ -265,9 +286,9 @@ sensitive URL/query data, then enforce.
 
 ## Known operational gaps
 
-- anonymous vendor-document upload is outside the Turnstile boundary;
-- historical Storage policies need least-privilege replacement;
-- API and database access do not yet implement role/organization separation;
-- uploads/imports need stronger resource limits;
-- browser security headers and automated security regression tests are missing;
+- until the 2026-10 rollout runs: open sign-up, anonymous vendor-document
+  upload, broad Storage policies, a public inbox channel, unbounded uploads and
+  no browser security headers (fixes are in the repository);
+- staff roles are recorded but not yet differentiated (no per-role permissions);
+- RLS/Storage allow-deny tests are manual, not in CI;
 - no complete backup/restore and retention runbook is stored in this repository.

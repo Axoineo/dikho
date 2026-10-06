@@ -1,11 +1,27 @@
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import BrandLoader, { AppReady } from '../components/BrandLoader'
 import RouteBoundary from '../components/RouteBoundary'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
 import { MAX_SESSION_MS, INACTIVITY_MS, WARN_BEFORE_MS } from '../app/constants'
 import Login from '../features/auth/Login'
+import AccessDenied from '../components/AccessDenied'
+import { AccessContext, canOpen, sectionFor } from '../lib/access'
+import { apiPost } from '../lib/api'
+
+// Why a session ended, shown on the sign-in screen afterwards.
+const SIGNOUT_NOTICE_KEY = 'dikho-signout-notice'
+const SIGNOUT_NOTICES = {
+  forced: 'An administrator signed you out of Dikho.',
+  suspended: 'Your access to Dikho has been suspended. Contact your administrator.',
+  archived: 'Your Dikho account has been closed. Contact your administrator.',
+  ended: 'Your session was ended. Please sign in again.',
+}
+const HEARTBEAT_MS = 60_000
+// A heartbeat is sent only if the person has used the page this recently, so
+// "Active now" means someone is at the screen, not just that a tab is open.
+const HEARTBEAT_ACTIVE_WINDOW_MS = 2 * 60_000
 
 export default function AuthenticatedLayout() {
   const [session, setSession] = useState(undefined)
@@ -43,10 +59,70 @@ export default function AuthenticatedLayout() {
     }
   }, [themeMode])
 
+  // The theme is saved to the person's profile too, so it follows them to
+  // any device; localStorage keeps the first paint right on this one.
   function handleThemeChange(mode) {
     localStorage.setItem('dikho-theme', mode)
     setThemeMode(mode)
+    supabase.rpc('set_my_theme', { p_theme: mode }).then(() => {}, () => {})
   }
+
+  // Access: who this is and what they may do, from public.my_access(). Not a
+  // security boundary (the API and RLS enforce the same permissions); this
+  // turns their answers into navigation, page guards and explanations.
+  //   accessState: 'checking' | 'granted' | 'not_staff' | 'suspended' | 'archived'
+  //                | 'unreachable' | 'not_ready'
+  const [access, setAccess] = useState(null)
+  const [accessState, setAccessState] = useState('checking')
+  const accessUserRef = useRef(null)
+
+  const signOutWithNotice = useCallback((reason) => {
+    try { sessionStorage.setItem(SIGNOUT_NOTICE_KEY, SIGNOUT_NOTICES[reason] ?? SIGNOUT_NOTICES.ended) } catch { /* private mode */ }
+    // The server session is already gone; only this browser's copy is left.
+    supabase.auth.signOut({ scope: 'local' })
+  }, [])
+
+  const loadAccess = useCallback(async () => {
+    const { data, error } = await supabase.rpc('my_access')
+    if (error) {
+      // An expired or revoked token comes back as an auth error.
+      if (error.code === 'PGRST301' || error.code === 'PGRST303' || /jwt/i.test(error.message ?? '')) {
+        signOutWithNotice('ended')
+        return
+      }
+      // my_access() does not exist: this dashboard is newer than the
+      // database (the update has not been applied yet). Not a network fault.
+      const state = error.code === 'PGRST202' ? 'not_ready' : 'unreachable'
+      // On first load offer a retry; on a background re-check keep what was
+      // already granted.
+      setAccessState((current) => (['checking', 'unreachable', 'not_ready'].includes(current) ? state : current))
+      return
+    }
+    const status = data?.status
+    if (status === 'session_ended' || status === 'signed_out') { signOutWithNotice('ended'); return }
+    if (status === 'active') {
+      setAccess(data)
+      setAccessState('granted')
+      if (data.theme && data.theme !== localStorage.getItem('dikho-theme')) {
+        localStorage.setItem('dikho-theme', data.theme)
+        setThemeMode(data.theme)
+      }
+      return
+    }
+    setAccess(null)
+    setAccessState(status === 'suspended' || status === 'archived' ? status : 'not_staff')
+  }, [signOutWithNotice])
+
+  useEffect(() => {
+    if (!session) { setAccess(null); setAccessState('checking'); accessUserRef.current = null; return }
+    // A token refresh delivers a new session object for the same person:
+    // re-read access quietly instead of flashing the loader.
+    if (accessUserRef.current !== session.user.id) {
+      accessUserRef.current = session.user.id
+      setAccessState('checking')
+    }
+    loadAccess()
+  }, [session, loadAccess])
 
   const lastActiveRef = useRef(Date.now())
   const sessionStartRef = useRef(null)
@@ -83,6 +159,64 @@ export default function AuthenticatedLayout() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Where this tab is, as a short section key for the activity heartbeat.
+  const { pathname } = useLocation()
+  const sectionRef = useRef(null)
+  const granted = accessState === 'granted'
+
+  const beat = useCallback(async () => {
+    if (document.visibilityState !== 'visible') return
+    if (Date.now() - lastActiveRef.current > HEARTBEAT_ACTIVE_WINDOW_MS) return
+    const { data, error } = await supabase.rpc('touch_session', { p_section: sectionRef.current })
+    if (error) return
+    if (data === 'session_ended' || data === 'signed_out') signOutWithNotice('ended')
+    else if (data === 'no_access') loadAccess()
+  }, [loadAccess, signOutWithNotice])
+
+  useEffect(() => {
+    if (!granted) return
+    beat()
+    const timer = setInterval(beat, HEARTBEAT_MS)
+    return () => clearInterval(timer)
+  }, [granted, beat])
+
+  // A page change reports the new section, a moment after it settles.
+  useEffect(() => {
+    const section = sectionFor(pathname)
+    if (!granted || section === sectionRef.current) { sectionRef.current = section; return }
+    sectionRef.current = section
+    const timer = setTimeout(beat, 1500)
+    return () => clearTimeout(timer)
+  }, [pathname, granted, beat])
+
+  // The person's private channel: the Worker announces here when an
+  // administrator ends this session, so the screen clears at once rather
+  // than on the next request (which the database already refuses).
+  const myId = access?.user_id
+  const mySession = access?.session_id
+  useEffect(() => {
+    if (!granted || !myId) return
+    const channel = supabase
+      .channel(`staff:${myId}`, { config: { private: true } })
+      .on('broadcast', { event: 'signed_out' }, ({ payload }) => {
+        if (payload?.session_id && payload.session_id !== mySession) return
+        signOutWithNotice(payload?.reason ?? 'forced')
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [granted, myId, mySession, signOutWithNotice])
+
+  // Where this session signed in from (Cloudflare's approximate location),
+  // recorded once per session for "last login" in User Management.
+  useEffect(() => {
+    if (!granted || !mySession) return
+    try {
+      if (localStorage.getItem('dikho-session-recorded') === mySession) return
+      localStorage.setItem('dikho-session-recorded', mySession)
+    } catch { /* storage blocked: record anyway, the server is idempotent */ }
+    apiPost('/me/session', {}).catch(() => {})
+  }, [granted, mySession])
 
   // Activity tracking + inactivity / max-session enforcement
   useEffect(() => {
@@ -155,11 +289,37 @@ export default function AuthenticatedLayout() {
     )
   }
 
+  if (accessState === 'checking') {
+    return <BrandLoader />
+  }
+  if (accessState !== 'granted') {
+    const copy = {
+      suspended: ['Access suspended', 'An administrator has suspended this account. Contact them if you think this is a mistake.'],
+      archived: ['Account closed', 'This account is no longer part of the workspace. Contact an administrator if you need access again.'],
+      not_staff: ['No access to this workspace', 'You are signed in, but this account has not been added as a user. Ask an administrator to add you, then sign in again.'],
+      unreachable: ['Can\'t reach Dikho', 'Your access could not be checked. Check your internet connection and try again.'],
+      not_ready: ['Dikho is being updated', 'This version of Dikho needs a database update that has not been applied yet. Try again in a few minutes, or tell your administrator.'],
+    }[accessState] ?? []
+    return (
+      <div className="session-warning-overlay" role="alertdialog" aria-modal="true" aria-labelledby="no-access-title">
+        <div className="session-warning-box">
+          <strong id="no-access-title">{copy[0]}</strong>
+          <p>{copy[1]}</p>
+          {accessState === 'unreachable' || accessState === 'not_ready'
+            ? <button className="primary-button" onClick={() => { setAccessState('checking'); loadAccess() }}>Try again</button>
+            : <button className="primary-button" onClick={logout}>Sign out</button>}
+        </div>
+        <AppReady />
+      </div>
+    )
+  }
+
   const collapsed = !sidebarOpen
   const warnMins = Math.floor(warnSecsLeft / 60)
   const warnSecs = String(warnSecsLeft % 60).padStart(2, '0')
 
   return (
+    <AccessContext.Provider value={access}>
     <div className={`app-shell${collapsed ? ' sidebar-is-closed' : ''}`}>
       <Sidebar
         collapsed={collapsed}
@@ -177,7 +337,9 @@ export default function AuthenticatedLayout() {
         <main className="workspace">
           <RouteBoundary>
             <Suspense fallback={<BrandLoader />}>
-              <Outlet context={{ session, themeMode, onThemeChange: handleThemeChange }} />
+              {canOpen(access, pathname)
+                ? <Outlet context={{ session, access, themeMode, onThemeChange: handleThemeChange, reloadAccess: loadAccess }} />
+                : <AccessDenied />}
               <AppReady />
             </Suspense>
           </RouteBoundary>
@@ -198,5 +360,6 @@ export default function AuthenticatedLayout() {
         </div>
       )}
     </div>
+    </AccessContext.Provider>
   )
 }

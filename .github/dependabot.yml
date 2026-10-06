@@ -1,0 +1,17 @@
+# Weekly dependency update pull requests. Every one still needs a human
+# review of the lockfile diff and a passing CI run before merge, and merging
+# to main deploys the SPA, so never enable auto-merge for these.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

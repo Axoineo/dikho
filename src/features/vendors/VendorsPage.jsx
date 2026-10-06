@@ -7,6 +7,7 @@ import { ContactHoverAction } from '../../components/ContactHoverAction'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import VendorDetails from './VendorDetails'
 import AddVendorModal from './AddVendorModal'
+import { useAccess } from '../../lib/access'
 import {
   EMPTY_VENDOR_FILTERS, VENDOR_COLUMN_COUNT, VENDORS_PAGE_SIZE,
   vendorSelect, applyVendorFilters, primaryAddress,
@@ -16,6 +17,7 @@ import {
 } from './vendorFilters'
 
 export default function VendorsPage() {
+  const { can } = useAccess()
   // ── Catalogs that both the dropdowns and the "/" chain resolve against ────
   const [mediaOptions, setMediaOptions] = useState([])
   const [subMediaOptions, setSubMediaOptions] = useState([])
@@ -510,9 +512,11 @@ export default function VendorsPage() {
               </svg>
               Share
             </button>
-            <button className="primary-button add-button" onClick={() => setShowForm(true)}>
-              <Icon name="plus" size={18} /> Add vendor
-            </button>
+            {can('vendors.create') && (
+              <button className="primary-button add-button" onClick={() => setShowForm(true)}>
+                <Icon name="plus" size={18} /> Add vendor
+              </button>
+            )}
           </div>
         </div>
 

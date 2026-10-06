@@ -36,7 +36,8 @@ Changing these values requires rebuilding and redeploying the SPA.
 | --- | --- | --- |
 | `VITE_SUPABASE_URL` | [Supabase client](../src/lib/supabase.js) | Required; use the adopting organization's project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | [Supabase client](../src/lib/supabase.js) | Required public publishable key; access is constrained by RLS, never replace with a service-role key |
-| `VITE_API_BASE` | [API client](../src/lib/api.js) | API origin without a trailing slash or `/api`; set explicitly because code currently falls back to the existing Dikho API origin when unset |
+| `VITE_API_BASE` | [API client](../src/lib/api.js) | API origin without a trailing slash or `/api`; set explicitly because code currently falls back to the existing Dikho API origin ([apiBase.js](../src/lib/apiBase.js)) when unset |
+| `CSP_MODE` | [Build config](../vite.config.js) (build-time only, never in the bundle) | Unset: the generated `dist/_headers` sends `Content-Security-Policy-Report-Only`. `enforce`: sends the enforcing header. The policy's Supabase and API origins come from `VITE_SUPABASE_URL` and `VITE_API_BASE` |
 
 The public Turnstile site key is currently a source constant in
 [vendor registration](../src/features/public/PublicVendorForm.jsx) and
@@ -53,8 +54,11 @@ environment. Supplying a `VITE_` value does not configure its server counterpart
 | Name | Class | Consumer / behavior |
 | --- | --- | --- |
 | `SUPABASE_URL` | Server setting; public URL | [Session verification](../src/api/middleware/requireAuth.js), public-write RPCs and realtime broadcasts; required for those features |
-| `SUPABASE_ANON_KEY` | Publishable/anonymous credential used server-side; not a service-role secret | Session verification and [realtime broadcast](../src/api/services/whatsapp/realtime.js); missing auth configuration rejects protected requests |
-| `SUPABASE_SERVICE_ROLE_KEY` | Secret, privileged | [Public-write RPC client](../src/api/services/supabaseRpc.js); required for verified public submissions; never browser-visible |
+| `SUPABASE_ANON_KEY` | Publishable/anonymous credential used server-side; not a service-role secret | [Session verification](../src/api/middleware/requireAuth.js) (sent with the caller's token to `my_access()`); missing auth configuration rejects protected requests |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret, privileged | [Public-write RPCs](../src/api/services/supabaseRpc.js), [public document storage](../src/api/services/supabaseStorage.js), [private inbox broadcasts](../src/api/services/whatsapp/realtime.js), and [User Management](../src/api/services/userAdmin.js) (the `um_*` functions, creating and banning sign-in accounts, sign-out notices); never browser-visible |
+| `APP_URL` | Server setting | Dashboard address written into the [staff welcome email](../src/api/services/staffWelcome.js); without it the email names no link |
+| `BREVO_API_KEY` | Optional secret | Staff welcome email from the API Worker. Separate from the Edge Function's copy; missing key means welcome messages go by WhatsApp or not at all |
+| `BREVO_SENDER_EMAIL` | Server setting | Verified sender for the staff welcome email; required with `BREVO_API_KEY` |
 | `ALLOWED_ORIGINS` | Server setting | [API CORS](../src/api/middleware/cors.js); comma-separated exact browser origins; empty means no allowed cross-origin browser origin |
 | `TURNSTILE_SECRET` | Secret | [Turnstile verifier](../src/api/services/turnstile.js); required for public form writes |
 | `TURNSTILE_HOSTNAMES` | Server setting | Comma-separated hostnames, without scheme/path; required, with expected action checks; missing allowlist or secret fails closed |
@@ -76,6 +80,8 @@ and [permissions](PERMISSIONS.md) remain separate requirements.
 | `SUPABASE_SEND_SMS_HOOK_SECRET` | Secret | [OTP hook](../src/api/routes/auth/index.js); required to verify Supabase's signed hook requests |
 | `WHATSAPP_AUTH_TEMPLATE_NAME` | Server setting | Approved authentication template; code has a Dikho-specific fallback that adopters must override |
 | `WHATSAPP_AUTH_TEMPLATE_LANG` | Server setting | Authentication template language; defaults to `en` |
+| `WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME` | Server setting | Approved UTILITY template for the staff welcome message to people added without an email. Unset: no WhatsApp welcome. Body has one variable, the first name |
+| `WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG` | Server setting | Staff welcome template language; defaults to `en` |
 | `WHATSAPP_STATIC_TEMPLATE_NAME` | Server setting | [Template-list fallback](../src/api/routes/templates/index.js) used when provider lookup fails/returns no templates; code has an installation-specific default |
 | `WHATSAPP_STATIC_TEMPLATE_LANG` | Server setting | Fallback template language; defaults to `en` |
 | `WHATSAPP_CG_LEAD_TEMPLATE_NAME` | Server setting | [Lead confirmation sender](../src/api/services/whatsapp/cgLeadConfirmation.js); defaults to an existing-installation template name; override for an adopter |
@@ -94,6 +100,19 @@ it or that sending works. Confirm template names, languages and components in
 the adopting organization's account. Missing WhatsApp credentials do not
 currently produce a complete, intentional module-disabled experience. See
 [WhatsApp authentication](whatsapp-auth.md).
+
+### Staff welcome template
+
+Submit in Meta's WhatsApp Manager as category **Utility**, then set
+`WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME` to its name. Suggested text (one body
+variable, no buttons, no links that carry tokens):
+
+> Hi {{1}}, you have been added to Dikho CRM. To sign in, open the Dikho
+> dashboard and choose WhatsApp: we will send a one-time code to this number.
+> There is no password.
+
+Sends are limited by the database to one per person per 10 minutes and 30 per
+day across the workspace, claimed before anything is sent.
 
 ## API Worker GST lookup
 

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { apiDelete, apiGet, apiUpload } from '../../lib/api'
+import { useAccess } from '../../lib/access'
 import {
   Alert, Avatar, Badge, EmptyState, PageHeader, Panel, PanelHead, Spinner, Table, Td, Th, inputClass,
 } from './ui'
 
 export default function WhatsAppContacts() {
+  const { can } = useAccess()
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -92,7 +94,7 @@ export default function WhatsAppContacts() {
 
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
-      <div
+      {can('wa_contacts.import') && <div
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -120,7 +122,7 @@ export default function WhatsAppContacts() {
           accept=".csv,.xlsx,.json,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
-      </div>
+      </div>}
 
       <Panel className="mt-[18px]">
         <PanelHead
@@ -140,7 +142,7 @@ export default function WhatsAppContacts() {
             bg-brand-soft px-3.5 py-2.5 text-[12.8px]">
             <span><strong>{selected.size}</strong> selected</span>
             <div className="flex items-center gap-2.5">
-              <button
+              {can('wa_contacts.delete') && <><button
                 type="button"
                 onClick={() => handleDelete('selected')}
                 disabled={deleting}
@@ -155,7 +157,7 @@ export default function WhatsAppContacts() {
                 className="font-semibold text-red-400 underline hover:text-red-300"
               >
                 Delete all
-              </button>
+              </button></>}
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}

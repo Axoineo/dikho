@@ -12,6 +12,12 @@ for trustworthy business records, controlled message sending, safe public
 intake and operator clarity. Prefer simple, auditable solutions over clever
 abstractions.
 
+The repository and product are currently proprietary property of Dikho Global
+Media LLP. No public license or distribution permission exists. Treat any
+public/self-hosted release language as future product direction only; do not
+publish, package or describe the software as publicly available without an
+explicit owner decision and license.
+
 ## Sources of truth
 
 - Product intent and non-goals: `docs/PRODUCT.md`
@@ -19,12 +25,16 @@ abstractions.
 - Cross-cutting invariants: `docs/INVARIANTS.md`
 - Technical boundaries: `docs/ARCHITECTURE.md`
 - Databases, RLS and Storage: `docs/DATABASE.md`
+- Current and target access model: `docs/PERMISSIONS.md`
+- Configuration and branding: `docs/CONFIGURATION.md` and `docs/BRANDING.md`
 - Verification expectations: `docs/TESTING.md`
-- Deployment and rollback: `docs/DEPLOYMENT.md`
+- Deployment, upgrades and rollback: `docs/DEPLOYMENT.md`,
+  `docs/UPGRADING.md` and `docs/runbooks/rollback.md`
 - Security policy and open findings: `SECURITY.md` and
   `docs/SECURITY-AUDIT.md`
 - Current priorities: `docs/ROADMAP.md`
 - Accepted architectural decisions: `docs/decisions/`
+- AI task and handoff conventions: `docs/AI-WORKFLOW.md`
 
 Read only the sources relevant to the task. Verify documentation against code
 before relying on details that may have changed.

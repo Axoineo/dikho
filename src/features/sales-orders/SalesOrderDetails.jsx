@@ -65,9 +65,9 @@ export default function SalesOrderDetails({ order, items, itemsLoading, itemsErr
           <h2>{formatValue(order.order_number)}</h2>
         </div>
         <div className="drawer-header-actions">
-          <button className="icon-button" onClick={onEdit} aria-label="Edit sales order" title="Edit">
+          {onEdit && <button className="icon-button" onClick={onEdit} aria-label="Edit sales order" title="Edit">
             <Icon name="edit" size={18} />
-          </button>
+          </button>}
           <button className="icon-button" onClick={onClose} aria-label="Close">
             <Icon name="close" size={19} />
           </button>

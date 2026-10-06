@@ -4,8 +4,10 @@ import { formatValue, getValue } from '../../lib/format'
 import { Icon } from '../../components/Icon'
 import ClientDetails from './ClientDetails'
 import AddClientModal from './AddClientModal'
+import { useAccess } from '../../lib/access'
 
 export default function ClientsPage() {
+  const { can } = useAccess()
   const [clients, setClients] = useState([])
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
@@ -182,10 +184,12 @@ export default function ClientsPage() {
             </svg>
             Share
           </button>
-          <button className="primary-button add-button" onClick={() => setShowForm(true)}>
-            <Icon name="plus" size={18} />
-            Add
-          </button>
+          {can('clients.create') && (
+            <button className="primary-button add-button" onClick={() => setShowForm(true)}>
+              <Icon name="plus" size={18} />
+              Add
+            </button>
+          )}
         </div>
       </div>
 

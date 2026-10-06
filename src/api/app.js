@@ -12,6 +12,8 @@ import contacts from './routes/contacts/index.js'
 import campaigns from './routes/campaigns/index.js'
 import templates from './routes/templates/index.js'
 import cgLeads from './routes/cgLeads/index.js'
+import users from './routes/users/index.js'
+import me from './routes/me/index.js'
 import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
 import { maybeReconcileOnRequest } from './services/whatsapp/reconcile.js'
 
@@ -22,6 +24,18 @@ export function createApiApp() {
 
   app.use('*', corsMiddleware())
   app.onError(errorHandler)
+
+  // Baseline headers on every API response. JSON is never sniffed into
+  // something executable, and no URL (media tickets ride in the query string)
+  // leaks to another site through Referer. The media route adds its own
+  // download/sandbox headers for content that is not safe to render inline.
+  app.use('*', async (c, next) => {
+    await next()
+    try {
+      c.res.headers.set('X-Content-Type-Options', 'nosniff')
+      c.res.headers.set('Referrer-Policy', 'no-referrer')
+    } catch { /* immutable upstream response: leave it as it is */ }
+  })
 
   // Drains the corporate-gifting confirmation queue off ordinary traffic,
   // because this account's Cron Triggers are not firing (verified 2026-10-01 —
@@ -66,9 +80,10 @@ export function createApiApp() {
   // itself. See routes/avatars/index.js for why the read side is safe.
   app.route('/avatars', avatars)
 
-  // Dashboard routes — require a valid Supabase session. Both the bare path
-  // and the wildcard are registered: Hono's `/x/*` does not match `/x`.
-  for (const base of ['/contacts', '/campaigns', '/templates', '/cg-leads']) {
+  // Dashboard routes: require a live session of an active staff member. Both
+  // the bare path and the wildcard are registered: Hono's `/x/*` does not
+  // match `/x`. Each route then checks its own permission (requirePermission).
+  for (const base of ['/contacts', '/campaigns', '/templates', '/cg-leads', '/users', '/me']) {
     app.use(base, requireAuth)
     app.use(`${base}/*`, requireAuth)
   }
@@ -76,6 +91,8 @@ export function createApiApp() {
   app.route('/campaigns', campaigns)
   app.route('/templates', templates)
   app.route('/cg-leads', cgLeads)
+  app.route('/users', users)
+  app.route('/me', me)
 
   return app
 }

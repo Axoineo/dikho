@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useOutletContext } from 'react-router-dom'
+import { landingPath } from '../lib/access'
 import AuthenticatedLayout from '../layouts/AuthenticatedLayout'
 import PublicLayout from '../layouts/PublicLayout'
 import { PlaceholderPage } from '../components/PlaceholderPage'
@@ -10,6 +11,8 @@ import {
   SalesOrdersPage,
   PurchaseOrdersPage,
   SettingsPage,
+  UsersPage,
+  UserProfilePage,
   PublicVendorForm,
   PublicClientWelcome,
   WhatsAppInbox,
@@ -36,6 +39,13 @@ function SettingsRoute() {
   return <SettingsPage themeMode={themeMode} onThemeChange={onThemeChange} />
 }
 
+// The first page this person may open, so nobody lands on a page they
+// cannot use (a finance user has no Clients page, for example).
+function Landing() {
+  const { access } = useOutletContext()
+  return <Navigate to={landingPath(access)} replace />
+}
+
 /* ── App ────────────────────────────────────────────────────────────────── */
 
 export default function App() {
@@ -51,7 +61,7 @@ export default function App() {
 
         {/* Authenticated routes — login required */}
         <Route element={<AuthenticatedLayout />}>
-          <Route index element={<Navigate to="/clients" replace />} />
+          <Route index element={<Landing />} />
           <Route path="/dashboard" element={<PlaceholderPage title="Dashboard" />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/leads" element={<LeadsPage />} />
@@ -68,8 +78,10 @@ export default function App() {
           <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
           <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
           <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/users/:userId" element={<UserProfilePage />} />
           <Route path="/settings" element={<SettingsRoute />} />
-          <Route path="*" element={<Navigate to="/clients" replace />} />
+          <Route path="*" element={<Landing />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -39,6 +39,19 @@ jobs:
       run: npm run scan:secrets
     - run: npm test --if-present
 
+  dependency-audit:
+    # Known advisories in the dependencies that ship (the SPA bundle and the
+    # API Worker). Dev-only tooling is excluded; high and critical fail the
+    # build. Accept a finding only by upgrading or with a recorded exception
+    # in docs/SECURITY-AUDIT.md, never by deleting this step.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+    - run: npm audit --omit=dev --audit-level=high
+
   secret-scan:
     # Full-tree secret scan with gitleaks. Runs without installing deps, so the
     # working tree is just the tracked source (no node_modules / no dist).

@@ -1,6 +1,6 @@
 # Security Audit and Hardening Plan
 
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-05
 
 This document records the repository-level security review. It contains no
 credential values, account identifiers, database identifiers, production user
@@ -19,7 +19,10 @@ The review covered:
 - dependency advisories, secret scanning, logging and deployment guidance.
 
 The review was static and non-destructive. It did not attempt exploitation,
-load testing, access to production data, or validation of live cloud policies.
+load testing or access to production data. On 2026-10-05 it was extended with
+read-only checks of the live configuration: Auth settings, effective RLS,
+Storage and Realtime policies, function grants, and aggregate counts (no row
+contents).
 
 ## Current strengths
 
@@ -35,82 +38,115 @@ load testing, access to production data, or validation of live cloud policies.
 - The repository secret scan found no committed credential values.
 - The production dependency audit reported no known advisories at review time.
 
-## Findings and required action
+## Findings and status
 
-### P0: before expanding public traffic
+Status words: **fixed in code** means implemented and verified locally in the
+repository, not deployed. A finding closes only when the rollout in
+[the hardening task](tasks/2026-10-05-security-hardening.md) has run and the
+effective production behavior is verified.
 
-#### Gate anonymous document uploads
+### Found live on 2026-10-05 (read-only checks)
 
-The public vendor form uploads directly to Supabase Storage under an anonymous
-INSERT policy. That upload occurs before the Worker verifies Turnstile, so an
-automated client can consume storage without submitting either public form.
+#### P0: open sign-up made every session untrusted (fixed in code; dashboard toggle pending)
 
-Required change:
+`/auth/v1/settings` reported `disable_signup: false` with email and phone
+enabled. Anyone with the publishable key could create and confirm an account
+and, with it, read and change every business table (`USING (true)` policies),
+use every dashboard API route, and make the Send-SMS hook deliver WhatsApp
+codes to any number. The login form's `shouldCreateUser: false` protects
+nothing server-side.
 
-1. Move the upload behind a Worker endpoint that verifies a purpose-bound,
-   single-use authorization issued after a successful Turnstile check.
-2. Enforce a small byte limit before buffering the body.
-3. Allow only required file types and verify file signatures, not only the
-   caller-provided `Content-Type` or filename.
-4. Generate the object key on the server.
-5. Remove anonymous INSERT access from `storage.objects` after rollout.
-6. Add retention and orphan cleanup for uploads not attached to a vendor.
+Fix: turn sign-up off in the Supabase dashboard (owner action), plus a staff
+membership gate in code: [ADR 0006](decisions/0006-staff-membership-in-app-metadata.md),
+`src/api/middleware/requireAuth.js`, `src/api/routes/auth/index.js`,
+`supabase/migrations/20261006143107_staff_membership.sql`.
 
-#### Restrict vendor-document access
+#### P0: WhatsApp inbox on a public Realtime channel (fixed in code)
 
-Historical storage policies grant authenticated users broad access to objects
-in a whole bucket. Replace bucket-wide read/write/delete policies with policies
-scoped to an organization, vendor and role. Ordinary users should not be able
-to overwrite or delete another vendor's evidence simply by knowing its path.
+The Worker broadcast inbox events (customer phone numbers, message text) to the
+public `wa-inbox` topic with the publishable key, so anyone could subscribe.
+Fix: private channel on both ends, a staff-only policy on `realtime.messages`,
+and service-role publishing. After rollout, disable public channel access in
+the Realtime settings.
 
-Before applying a migration, inspect the effective production policies. Do not
-assume a schema snapshot exactly matches the live project.
+#### P1: `issue_invoice` callable by any account (fixed in code)
 
-### P1: authorization and availability
+The SECURITY DEFINER function checked only `auth.uid() IS NOT NULL` and was
+executable by `anon`. It now requires staff and is no longer granted to `anon`.
 
-#### Add server-side roles and organization scope
+### From the repository review
 
-The API currently treats any valid Supabase session as a trusted dashboard
-operator. Several Postgres policies likewise grant every authenticated user
-team-wide access. This is acceptable only while every account is equally
-trusted and belongs to one organization.
+#### P0: anonymous document uploads (fixed in code)
 
-Introduce an explicit membership table and roles such as `admin`, `finance`,
-`sales` and `support`. Enforce permissions in API middleware and RLS. At a
-minimum, separately authorize bulk deletion, campaign sends, finance changes,
-exports, vendor-document mutation and WhatsApp access.
+The public vendor form now posts its document to `POST /api/public/vendor`.
+The Worker checks size (10 MB) and the file's real type (PDF/JPEG/PNG/WEBP by
+signature) before spending the Turnstile token, verifies Turnstile, stores the
+file with the service role under a key it generates
+(`vendors_documents/public/<uuid>.<ext>`), ignores any path the caller sends,
+and deletes the file if the registration is rejected.
+`20261006160000_vendor_document_storage.sql` removes the anonymous INSERT
+policy. Remaining: no scheduled cleanup for orphans left by earlier anonymous
+uploads (list them with the query in [Database](DATABASE.md)).
 
-#### Bound file and archive processing
+#### P0: broad vendor-document access (fixed in code)
 
-Contact imports and WhatsApp media uploads buffer complete files. The custom
-XLSX reader also inflates archive entries without compressed or expanded-size
-ceilings. Add request-size, file-size, row, column, cell-length, archive-entry
-and expansion-ratio limits. Reject oversized input before parsing or uploading.
+The effective policies (exported 2026-10-05) let any authenticated account
+read, overwrite and delete every object in the bucket, plus four dormant
+policies on a nonexistent `vendor-documents` bucket. Replaced with: staff read
+under `vendors_documents/`, staff upload only for an existing vendor id, no
+update, delete only one's own uploads, and bucket limits of 10 MB and four
+MIME types. Per-role scoping waits for the permission matrix.
+
+#### P1: roles and organization scope (partly fixed in code)
+
+Membership is enforced everywhere (see the open sign-up finding). Distinct
+permissions per role (finance vs sales, who may send campaigns, export or bulk
+delete) are not, because the matrix in [Permissions](PERMISSIONS.md) needs
+owner decisions. One organization per instance remains the boundary
+([ADR 0005](decisions/0005-one-organization-per-instance.md)).
+
+#### P1: unbounded file and archive processing (fixed in code)
+
+Every body-accepting route reads through `src/api/utils/body.js`, which refuses
+a declared or streamed body over its cap before buffering: contact import 5 MB,
+WhatsApp media 16 MB (with Meta's per-type limits and a MIME allowlist), contact
+photos and avatars 2 MB (raster images by signature, no SVG), public JSON
+64 KB, Meta webhook 2 MB and the OTP hook 64 KB, both before signature checks.
+The sheet parser caps rows (50,000), columns (200) and cell length (2,000), and
+for XLSX caps archive entries (1,000), inflates only the two parts it reads,
+and stops inflating past 16 MB per part and 24 MB in total. Media served from
+R2 carries `nosniff`, and anything not safe to render inline (HTML, SVG,
+unknown) is forced to download in a CSP sandbox.
 
 ### P2: defense in depth
 
-#### Add browser security headers
+#### Browser security headers (fixed in code; CSP report-only)
 
-Serve a tested Content Security Policy, `frame-ancestors`, HSTS,
-`X-Content-Type-Options`, `Referrer-Policy` and a restrictive
-`Permissions-Policy`. The current HTML has inline script, style and an inline
-event handler; refactor those before enforcing a CSP that excludes
-`unsafe-inline`.
+The build writes `dist/_headers` for Pages: a hash-based CSP without
+`unsafe-inline` (inline handlers were removed from `index.html`),
+`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`,
+HSTS and COOP. The CSP starts as `Content-Security-Policy-Report-Only`; set
+`CSP_MODE=enforce` after a clean pass through the signed-in screens. API
+responses carry `nosniff` and `Referrer-Policy: no-referrer`.
 
-#### Minimize personal data in logs
+#### Personal data in logs (fixed in code)
 
-The structured logger redacts common credential fields, but phone numbers,
-email addresses, message content and upstream response samples can still be
-logged. Default to field allowlists, hash identifiers used for correlation,
-and define retention and access controls in the hosting platforms.
+The logger masks identifiers (phone, wa_id, GSTIN, PAN, account numbers) to
+their last four characters, replaces names, emails, addresses and message text
+with their length, and scrubs emails, phone numbers, GSTINs and PANs from every
+string, including error stacks. The webhook logs a count summary instead of
+Meta's payload; RPC failures log PostgREST's code and message, not `details`;
+the GST "nameless record" log keeps field names only. Workers Logs retention is
+set by the Cloudflare plan; restrict dashboard access to people who need it.
 
-#### Build automated security checks
+#### Automated security checks (extended)
 
-Isolated tests now cover session verification, Turnstile failure, webhook
-signature rejection and media-ticket expiry (`tests/`), and CI runs lint,
-build, those tests and the secret scan. Still missing: tests for
-authorization boundaries, RLS/storage policies, upload limits and public
-budget exhaustion, and a dependency audit in CI.
+Tests now also cover body limits, file signatures, parser and archive limits,
+log redaction, the staff gate, the public upload route, the OTP hook's staff
+check and media serving headers/ranges. CI runs `npm audit --omit=dev
+--audit-level=high`, and Dependabot opens weekly update PRs. Still missing:
+automated RLS/Storage tests in CI (the matrix was run by hand on a local
+database) and public budget exhaustion tests.
 
 ## Removal and cleanup recommendations
 
@@ -125,14 +161,20 @@ budget exhaustion, and a dependency audit in CI.
 
 ## Verification checklist
 
-- [ ] Effective production RLS and Storage policies were exported and reviewed.
+- [x] Effective production RLS and Storage policies were exported and reviewed
+      (2026-10-05, read-only).
+- [ ] Supabase sign-up is disabled in production.
 - [ ] Anonymous storage upload is disabled or protected server-side.
 - [ ] Vendor-document access is scoped and destructive actions require a role.
+- [ ] Only staff accounts reach the API, tables, Storage and the inbox channel.
+- [ ] Realtime public channel access is disabled.
 - [ ] All upload and import paths enforce byte and type limits.
 - [ ] API endpoints have an authorization matrix and corresponding tests.
 - [ ] Browser security headers are present on production responses.
+- [ ] The CSP is enforced (not report-only).
 - [ ] Log samples contain no tokens, OTPs, message bodies or unnecessary PII.
-- [ ] `npm audit --omit=dev` reports no unaccepted production advisory.
+- [x] `npm audit --omit=dev` reports no unaccepted production advisory
+      (0 on 2026-10-05; now also a CI job).
 - [ ] `npm run check` passes in CI.
 - [ ] Incident contacts, credential rotation and rollback procedures are known.
 

@@ -4,6 +4,9 @@ import { ok, fail } from '../../utils/response.js'
 import { sendTextMessage, sendMediaMessage, markMessageRead } from '../../services/whatsapp/graph.js'
 import { uploadMediaToMeta, storeOutboundCopy } from '../../services/whatsapp/media.js'
 import { broadcast } from '../../services/whatsapp/realtime.js'
+import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
+import { safeDisplayName, sniffType } from '../../utils/fileType.js'
+import { requirePermission } from '../../middleware/requireAuth.js'
 
 // Most recent inbound message id — the one Meta read-receipts and typing
 // indicators must reference (they attach to a received message).
@@ -28,18 +31,41 @@ function withinSession(conv) {
     Date.now() - new Date(conv.last_inbound_at).getTime() < SESSION_MS
 }
 
-// Maps a MIME type to the WhatsApp media message type. Anything unrecognised is
-// sent as a document, which accepts any file.
-function mediaTypeFor(mime = '') {
-  if (mime.startsWith('image/')) return mime === 'image/webp' ? 'sticker' : 'image'
-  if (mime.startsWith('video/')) return 'video'
-  if (mime.startsWith('audio/')) return 'audio'
-  return 'document'
+// The media types WhatsApp Cloud API accepts, with its per-type size limits.
+// Documents may be up to 100 MB on Meta's side; they are capped lower here
+// because the Worker buffers the file (128 MB of memory) and keeps an R2 copy.
+// Anything else is refused before it is read into memory or sent anywhere,
+// which also keeps active content (HTML, SVG) out of the R2 bucket we serve.
+const MB = 1024 * 1024
+const MEDIA_RULES = {
+  'image/jpeg': { type: 'image', maxBytes: 5 * MB, sniff: true },
+  'image/png': { type: 'image', maxBytes: 5 * MB, sniff: true },
+  'image/webp': { type: 'sticker', maxBytes: 500 * 1024, sniff: true },
+  'video/mp4': { type: 'video', maxBytes: 16 * MB },
+  'video/3gpp': { type: 'video', maxBytes: 16 * MB },
+  'audio/aac': { type: 'audio', maxBytes: 16 * MB },
+  'audio/amr': { type: 'audio', maxBytes: 16 * MB },
+  'audio/mpeg': { type: 'audio', maxBytes: 16 * MB },
+  'audio/mp4': { type: 'audio', maxBytes: 16 * MB },
+  'audio/ogg': { type: 'audio', maxBytes: 16 * MB },
+  'text/plain': { type: 'document', maxBytes: 16 * MB },
+  'application/pdf': { type: 'document', maxBytes: 16 * MB, sniff: true },
+  'application/msword': { type: 'document', maxBytes: 16 * MB },
+  'application/vnd.ms-excel': { type: 'document', maxBytes: 16 * MB },
+  'application/vnd.ms-powerpoint': { type: 'document', maxBytes: 16 * MB },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { type: 'document', maxBytes: 16 * MB },
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { type: 'document', maxBytes: 16 * MB },
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': { type: 'document', maxBytes: 16 * MB },
 }
+const MAX_MEDIA_REQUEST_BYTES = 16 * MB + 64 * 1024
+
+// Contact photos: raster images only (no SVG, which can carry script).
+const AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+const MAX_AVATAR_BYTES = 2 * MB
 
 /* ── GET /api/whatsapp/conversations — chat list ───────────────────────────
    Newest activity first, matching the WhatsApp Web left pane. */
-conversations.get('/', async (c) => {
+conversations.get('/', requirePermission('inbox.view'), async (c) => {
   const { results } = await c.env.DB.prepare(
     // last_message_status is derived, not stored: the list row needs the
     // delivery state of the newest outbound message so it can show the same
@@ -66,7 +92,7 @@ conversations.get('/', async (c) => {
 })
 
 /* ── GET /api/whatsapp/conversations/:id/messages — full thread ──────────── */
-conversations.get('/:id/messages', async (c) => {
+conversations.get('/:id/messages', requirePermission('inbox.view'), async (c) => {
   const id = Number(c.req.param('id'))
   if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Bad conversation id' })
 
@@ -79,7 +105,7 @@ conversations.get('/:id/messages', async (c) => {
 /* ── POST /api/whatsapp/conversations/:id/read — clear the unread badge ────
    Also sends Meta a read receipt for the latest inbound message so the customer
    sees your blue double-ticks. Best-effort via waitUntil. */
-conversations.post('/:id/read', async (c) => {
+conversations.post('/:id/read', requirePermission('inbox.view'), async (c) => {
   const id = Number(c.req.param('id'))
   await c.env.DB.prepare('UPDATE conversations SET unread_count = 0 WHERE id = ?').bind(id).run()
 
@@ -93,7 +119,7 @@ conversations.post('/:id/read', async (c) => {
 /* ── POST /api/whatsapp/conversations/:id/typing — show "typing…" to customer ─
    Meta shows it for ~25s or until a message is sent. The frontend throttles this
    while the agent types. Returns immediately; the Meta call runs in the background. */
-conversations.post('/:id/typing', async (c) => {
+conversations.post('/:id/typing', requirePermission('inbox.reply'), async (c) => {
   const id = Number(c.req.param('id'))
   const wamid = await lastInboundWamid(c.env.DB, id)
   if (wamid) {
@@ -134,9 +160,9 @@ async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, me
 }
 
 /* ── POST /api/whatsapp/conversations/:id/messages — text reply ──────────── */
-conversations.post('/:id/messages', async (c) => {
+conversations.post('/:id/messages', requirePermission('inbox.reply'), async (c) => {
   const id = Number(c.req.param('id'))
-  const { body } = await c.req.json().catch(() => ({}))
+  const { body } = (await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, {})) ?? {}
   if (!body?.trim()) throw new HTTPException(400, { message: 'Message body is required' })
 
   const conv = await c.env.DB.prepare('SELECT * FROM conversations WHERE id = ?').bind(id).first()
@@ -153,7 +179,7 @@ conversations.post('/:id/messages', async (c) => {
 })
 
 /* ── POST /api/whatsapp/conversations/:id/media — media reply ────────────── */
-conversations.post('/:id/media', async (c) => {
+conversations.post('/:id/media', requirePermission('inbox.reply'), async (c) => {
   const id = Number(c.req.param('id'))
   const conv = await c.env.DB.prepare('SELECT * FROM conversations WHERE id = ?').bind(id).first()
   if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
@@ -161,17 +187,28 @@ conversations.post('/:id/media', async (c) => {
     return fail(c, 'OUTSIDE_24H', 'The 24-hour session has closed — send an approved template instead.', 409)
   }
 
-  const form = await c.req.formData().catch(() => null)
-  const file = form?.get('file')
-  const caption = (form?.get('caption') || '').toString().trim()
-  if (!file || typeof file.arrayBuffer !== 'function') {
+  const form = await readBoundedFormData(c, MAX_MEDIA_REQUEST_BYTES)
+  const file = formFile(form, 'file')
+  const caption = (form.get('caption') || '').toString().trim().slice(0, 1024)
+  if (!file) {
     throw new HTTPException(400, { message: 'No file uploaded under the "file" field' })
   }
 
+  const mime = (file.type || '').split(';')[0].trim().toLowerCase()
+  const rule = MEDIA_RULES[mime]
+  if (!rule) {
+    return fail(c, 'UNSUPPORTED_MEDIA', 'WhatsApp cannot send this file type. Use JPG, PNG, MP4, MP3, PDF or an Office document.', 415)
+  }
+  if (file.size > rule.maxBytes) {
+    return fail(c, 'TOO_LARGE', `This ${rule.type} must be ${Math.round(rule.maxBytes / 1024 / 1024 * 10) / 10} MB or smaller.`, 413)
+  }
   const bytes = await file.arrayBuffer()
-  const mime = file.type || 'application/octet-stream'
-  const filename = file.name || 'upload'
-  const type = mediaTypeFor(mime)
+  if (bytes.byteLength === 0) return fail(c, 'EMPTY_FILE', 'The file is empty.', 400)
+  if (rule.sniff && sniffType(bytes) !== mime) {
+    return fail(c, 'UNSUPPORTED_MEDIA', 'The file content does not match its type.', 415)
+  }
+  const filename = safeDisplayName(file.name, 'upload')
+  const type = rule.type
 
   // Upload to Meta (for sending) and keep our own copy (for display) in parallel.
   const [uploaded, mediaUrl] = await Promise.all([
@@ -195,23 +232,28 @@ conversations.post('/:id/media', async (c) => {
 /* ── POST /api/whatsapp/conversations/:id/avatar — set contact photo ───────
    The Cloud API does not expose WhatsApp profile pictures, so agents set one
    here. Stored in R2 and served through the same auth-gated media route. */
-conversations.post('/:id/avatar', async (c) => {
+conversations.post('/:id/avatar', requirePermission('inbox.reply'), async (c) => {
   const id = Number(c.req.param('id'))
   const conv = await c.env.DB.prepare('SELECT * FROM conversations WHERE id = ?').bind(id).first()
   if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
   if (!conv.contact_id) return fail(c, 'NO_CONTACT', 'Conversation has no linked contact', 409)
 
-  const form = await c.req.formData().catch(() => null)
-  const file = form?.get('file')
-  if (!file || typeof file.arrayBuffer !== 'function') {
+  const form = await readBoundedFormData(c, MAX_AVATAR_BYTES + 64 * 1024)
+  const file = formFile(form, 'file')
+  if (!file) {
     throw new HTTPException(400, { message: 'No file uploaded under the "file" field' })
   }
-  const mime = file.type || 'image/jpeg'
-  if (!mime.startsWith('image/')) {
-    throw new HTTPException(400, { message: 'Avatar must be an image' })
+  if (file.size > MAX_AVATAR_BYTES) {
+    return fail(c, 'TOO_LARGE', 'Photo must be 2 MB or smaller.', 413)
+  }
+  const bytes = await file.arrayBuffer()
+  // The stored type comes from the bytes, never from the browser's claim.
+  const mime = sniffType(bytes)
+  if (!AVATAR_TYPES.has(mime)) {
+    return fail(c, 'UNSUPPORTED_MEDIA', 'Photo must be a JPG, PNG, WEBP or GIF image.', 415)
   }
 
-  const url = await storeOutboundCopy(c.env, { bytes: await file.arrayBuffer(), mime })
+  const url = await storeOutboundCopy(c.env, { bytes, mime })
   await c.env.DB.prepare('UPDATE contacts SET avatar_url = ?1, updated_at = datetime(\'now\') WHERE id = ?2')
     .bind(url, conv.contact_id).run()
 

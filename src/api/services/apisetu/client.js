@@ -108,7 +108,7 @@ export async function apiSetuGet(env, path, label) {
     // Also what an unapproved or expired subscription looks like, which is the
     // likeliest cause the first time this runs against a new API.
     const detail = await res.text().catch(() => '')
-    logEvent('apisetu.unauthorized', { label, status: res.status, body: detail.slice(0, 200) })
+    logEvent('apisetu.unauthorized', { label, status: res.status, upstream_error: detail.slice(0, 200) })
     throw new ApiSetuError('auth', 'GSTIN lookup is not authorised on the server', res.status)
   }
 
@@ -119,7 +119,7 @@ export async function apiSetuGet(env, path, label) {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    logEvent('apisetu.upstream_error', { label, status: res.status, body: detail.slice(0, 200) })
+    logEvent('apisetu.upstream_error', { label, status: res.status, upstream_error: detail.slice(0, 200) })
     throw new ApiSetuError('upstream', 'GST directory could not answer right now', res.status)
   }
 

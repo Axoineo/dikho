@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { apiGet } from '../../lib/api'
 import { Alert, EmptyState, PageHeader, Panel, PanelHead } from './ui'
+import { useAccess } from '../../lib/access'
 
 const CARDS = [
   { key: 'contacts', label: 'Contacts', accent: 'var(--brand-blue)', hint: 'Subscribed audience' },
@@ -28,6 +29,7 @@ function StatCard({ label, value, hint, accent }) {
 }
 
 export default function WhatsAppDashboard() {
+  const { can } = useAccess()
   const [stats, setStats] = useState(null)
   const [error, setError] = useState(null)
 
@@ -45,9 +47,11 @@ export default function WhatsAppDashboard() {
   return (
     <>
       <PageHeader title="Overview" subtitle="Delivery performance across every campaign you have sent.">
-        <Link to="/whatsapp/campaigns" className="primary-button no-underline">
-          <Icon name="plus" size={16} /> New campaign
-        </Link>
+        {can('campaigns.send') && (
+          <Link to="/whatsapp/campaigns" className="primary-button no-underline">
+            <Icon name="plus" size={16} /> New campaign
+          </Link>
+        )}
       </PageHeader>
 
       {error && <Alert tone="error">{error}</Alert>}

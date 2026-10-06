@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { apiGet, apiPost } from '../../lib/api'
 import { Alert, Badge, Spinner } from './ui'
+import { useAccess } from '../../lib/access'
 
 // The outstanding-recipient list for one campaign: everyone who either failed
 // or was never attempted, with a retry that sends only to them.
@@ -17,6 +18,7 @@ const REASON = {
 }
 
 export function CampaignUnsent({ campaign, onChanged }) {
+  const { can } = useAccess()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -117,7 +119,7 @@ export function CampaignUnsent({ campaign, onChanged }) {
                 <Spinner />
                 {progress.remaining ? `Retrying (${progress.remaining} left)…` : 'Retrying…'}
               </span>
-            ) : (
+            ) : can('campaigns.send') && (
               <button
                 type="button"
                 onClick={retryAll}

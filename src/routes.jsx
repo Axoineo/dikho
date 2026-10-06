@@ -7,6 +7,8 @@ export const VendorsPage = lazyWithRetry(() => import('./features/vendors/Vendor
 export const SalesOrdersPage = lazyWithRetry(() => import('./features/sales-orders/SalesOrdersPage'))
 export const PurchaseOrdersPage = lazyWithRetry(() => import('./features/purchase-orders/PurchaseOrdersPage'))
 export const SettingsPage = lazyWithRetry(() => import('./features/settings/SettingsPage'))
+export const UsersPage = lazyWithRetry(() => import('./features/users/UsersPage'))
+export const UserProfilePage = lazyWithRetry(() => import('./features/users/UserProfilePage'))
 
 /* ── WhatsApp Marketing ────────────────────────────────────────────────── */
 export const WhatsAppInbox = lazyWithRetry(() => import('./features/whatsapp/inbox/WhatsAppInbox'))

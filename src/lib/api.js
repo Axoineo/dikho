@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { DEFAULT_API_BASE } from './apiBase'
 
 // Thin client for the Worker API. Every call carries the current Supabase
 // access token, which the Worker validates before touching D1 or Meta.
@@ -6,7 +7,7 @@ import { supabase } from './supabase'
 // The API is a separate Worker from this dashboard, so these are cross-origin
 // calls and the API's ALLOWED_ORIGINS must list this dashboard's origin.
 // Override per environment with VITE_API_BASE in .env.local.
-const BASE = `${import.meta.env.VITE_API_BASE ?? 'https://dikho-api.fineeurox.workers.dev'}/api`
+const BASE = `${import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE}/api`
 
 async function authHeader() {
   const { data } = await supabase.auth.getSession()
@@ -39,6 +40,22 @@ export async function apiPost(path, payload) {
   }))
 }
 
+export async function apiPatch(path, payload) {
+  return unwrap(await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+}
+
+export async function apiPut(path, payload) {
+  return unwrap(await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }))
+}
+
 export async function apiDelete(path, payload) {
   return unwrap(await fetch(`${BASE}${path}`, {
     method: 'DELETE',
@@ -60,6 +77,13 @@ export async function apiPublicPost(path, payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }))
+}
+
+// Same as apiPublicPost, for a public form that carries a file. The Worker
+// verifies Turnstile and then stores the file itself; the browser never writes
+// to Storage directly. No Content-Type header: the browser sets the boundary.
+export async function apiPublicPostForm(path, form) {
+  return unwrap(await fetch(`${BASE}/public${path}`, { method: 'POST', body: form }))
 }
 
 // Unauthenticated GET for read-only public lookups (currently the GSTIN →

@@ -1,4 +1,8 @@
+import { Link } from 'react-router-dom'
+import { useAccess } from '../../lib/access'
+
 export default function SettingsPage({ themeMode, onThemeChange }) {
+  const { access } = useAccess()
   return (
     <div className="settings-page">
       <div className="page-header">
@@ -19,6 +23,7 @@ export default function SettingsPage({ themeMode, onThemeChange }) {
         </h3>
         <p className="settings-card-desc">
           Choose how Dikho looks to you. Select a single theme, or sync with your system settings.
+          Your choice is saved to your account, so it follows you to any device.
         </p>
         <div className="theme-switcher">
           <button
@@ -62,14 +67,20 @@ export default function SettingsPage({ themeMode, onThemeChange }) {
       <div className="settings-card">
         <h3 className="settings-card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            <path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.1 7.5 9.5 4.4-1.4 7.5-5.1 7.5-9.5V6Z" />
           </svg>
-          General
+          Your account and privacy
         </h3>
         <p className="settings-card-desc">
-          More settings will be available here soon.
+          Administrators can see when you were last active, which section of Dikho you are using,
+          and the approximate location (city) and device of each sign-in. They can also sign you
+          out of a device.
         </p>
+        {access?.user_id && (
+          <p className="settings-card-desc">
+            <Link to={`/users/${access.user_id}?tab=sessions`}>See where you are signed in</Link>
+          </p>
+        )}
       </div>
     </div>
   )

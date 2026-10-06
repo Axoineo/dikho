@@ -96,8 +96,11 @@ RLS, signature verification or authorization.
 ### Authentication and authorization
 
 - Supabase validates identity; application and RLS rules decide permission.
-- `shouldCreateUser: false` keeps OTP sign-in invite-only but is not a role
-  system.
+- Supabase sign-up must stay disabled. `shouldCreateUser: false` in the login
+  form is a client setting and does not stop direct sign-up calls.
+- Operators are accounts with a staff role in server-controlled
+  `app_metadata.dikho_roles`, checked by the API, RLS, Storage, Realtime and
+  the OTP hook ([ADR 0006](docs/decisions/0006-staff-membership-in-app-metadata.md)).
 - Sensitive routes require server-side role checks in addition to a valid JWT.
 - Session limits in the UI are defense in depth; server tokens remain subject
   to their actual expiry and revocation behavior.
@@ -136,13 +139,16 @@ RLS, signature verification or authorization.
 ## Known risks and remediation
 
 The current repository audit is tracked in
-[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md). The highest priorities are:
+[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md). Fixes for the open findings
+are implemented in the repository and await rollout
+([hardening task](docs/tasks/2026-10-05-security-hardening.md)):
 
-1. move anonymous vendor-document upload behind server-side verification;
-2. replace broad vendor-document policies with scoped authorization;
-3. add role/organization authorization beyond a valid authenticated session;
-4. add strict resource limits to file import and media upload paths;
-5. add browser security headers and automated security tests.
+1. disable Supabase sign-up and require a staff role everywhere;
+2. make the WhatsApp inbox Realtime channel private;
+3. move the public vendor-document upload behind the Worker and scope Storage;
+4. enforce resource limits on file import and media upload paths;
+5. ship browser security headers, then enforce the CSP;
+6. define per-role permissions (needs owner decisions).
 
 Documentation updates do not close these findings. A finding is complete only
 after code/configuration changes are deployed and their effective behavior is
@@ -158,4 +164,4 @@ npm audit --omit=dev
 Also review effective production RLS and Storage policies. A repository schema
 snapshot may differ from live state.
 
-Last updated: 2026-10-04.
+Last updated: 2026-10-05.

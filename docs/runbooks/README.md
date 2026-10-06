@@ -7,6 +7,7 @@ production identifiers, personal data or copied provider output.
 - [Incident response](incident-response.md)
 - [Credential rotation](credential-rotation.md)
 - [Application and migration rollback](rollback.md)
+- [Staff access: grant, revoke and verify](staff-access.md)
 
 Before an event, assign owners for Cloudflare, Supabase, Meta/WhatsApp and any
 email or GST provider. Store the contact path and environment inventory in the

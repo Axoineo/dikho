@@ -14,13 +14,4 @@ export function errorHandler(err, c) {
   return fail(c, 'INTERNAL_ERROR', 'Something went wrong processing this request', 500)
 }
 
-// Used inside route handlers wrapping request.json() so a bad payload from
-// a client (or a Meta retry with an unexpected shape) returns a clean 400
-// instead of bubbling up as an unhandled rejection.
-export async function parseJson(c) {
-  try {
-    return await c.req.json()
-  } catch {
-    throw new HTTPException(400, { message: 'Invalid JSON body' })
-  }
-}
+// Request bodies are parsed by utils/body.js, which bounds their size first.

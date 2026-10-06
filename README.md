@@ -10,6 +10,11 @@ Dikho is currently the internal operations platform for Dikho Global Media LLP,
 covering clients, vendors, sales and purchase orders, invoicing, public lead
 capture, WhatsApp campaigns and a two-way WhatsApp inbox.
 
+**Current status:** this repository and software are proprietary property of
+Dikho Global Media LLP. They are not public, open source or licensed for
+redistribution. References to a configurable public release describe a future
+possibility, not current availability or permission.
+
 The longer-term goal is a configurable public release for small businesses:
 each organization can apply its identity, provision its own infrastructure,
 connect its own database and provider accounts, and operate an isolated
@@ -25,12 +30,18 @@ self-hosted instance. It is not yet ready for that distribution model.
 | [System invariants](docs/INVARIANTS.md) | Rules that changes must preserve |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, request flows and trust boundaries |
 | [Database](docs/DATABASE.md) | Supabase/Postgres, D1, RLS, Storage and migrations |
+| [Permissions](docs/PERMISSIONS.md) | Current access behavior and proposed role model |
+| [Configuration](docs/CONFIGURATION.md) | Public settings, server secrets and verified consumers |
+| [Branding](docs/BRANDING.md) | Current brand surfaces and proposed customization contract |
 | [Testing](docs/TESTING.md) | Current checks, gaps and required behavioral coverage |
 | [Roadmap](docs/ROADMAP.md) | Ordered engineering priorities |
 | [Decisions](docs/decisions/README.md) | Accepted architecture decision records |
 | [Task briefs](docs/tasks/README.md) | Durable handoff format for work spanning sessions |
 | [Runbooks](docs/runbooks/README.md) | Incident, credential-rotation and rollback procedures |
 | [Deployment](docs/DEPLOYMENT.md) | Safe configuration, rollout and production checks |
+| [Upgrading](docs/UPGRADING.md) | Cross-component compatibility and upgrade procedure |
+| [AI workflow](docs/AI-WORKFLOW.md) | Codex/Claude context, task and handoff conventions |
+| [Changelog](CHANGELOG.md) | Notable unreleased and future versioned changes |
 | [Security](SECURITY.md) | Reporting policy and secure engineering rules |
 | [Security audit](docs/SECURITY-AUDIT.md) | Current findings and remediation priorities |
 | [Development](DEVELOPMENT.md) | Local setup and implementation conventions |

@@ -3,6 +3,7 @@ import { MessageBubble } from './MessageBubble'
 import { Composer } from './Composer'
 import { Avatar } from './Avatar'
 import { displayName, formatDaySeparator, parseWaDate, sessionMsLeft, formatCountdown } from './inboxUtils'
+import { useAccess } from '../../../lib/access'
 
 // Day separators plus run detection: a bubble starts a new run (and so gets a
 // tail and a wider gap) when the direction changes or a day break intervenes.
@@ -28,6 +29,7 @@ function buildRows(messages) {
    the canvas down — bubbles, tails, day chips, system notices — stays on the
    --chat-* palette, because that is the part agents read all day. */
 export function Conversation({ conversation, messages, loading, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo }) {
+  const canReply = useAccess().can('inbox.reply')
   const endRef = useRef(null)
   const scrollRef = useRef(null)
   const avatarInput = useRef(null)
@@ -106,7 +108,7 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
               ? <span className="block h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
               : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" className="block"><path d="M12 5v14M5 12h14" /></svg>}
           </button>
-          <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={onAvatarFile} />
+          <input ref={avatarInput} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={onAvatarFile} />
         </div>
 
         {/* The name is the control — no separate ⓘ button competing with it. */}
@@ -228,7 +230,9 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
         </button>
       )}
 
-      <Composer conversation={conversation} onSendText={onSendText} onSendMedia={onSendMedia} />
+      {canReply
+        ? <Composer conversation={conversation} onSendText={onSendText} onSendMedia={onSendMedia} />
+        : <p className="inbox-readonly-note">You can read conversations, but your access does not include replying.</p>}
     </div>
   )
 }

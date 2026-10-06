@@ -1,3 +1,12 @@
+-- ============================================================================
+-- REFERENCE ONLY. DO NOT APPLY.
+--
+-- Historical dump of the production schema from 2026-09-18. It predates the
+-- public-write lockdowns, the staff membership gate and the scoped Storage
+-- policies, so it still grants broad authenticated and anonymous access.
+-- Running it against a database would re-open those findings. The ordered
+-- history lives in supabase/migrations/; see docs/DATABASE.md.
+-- ============================================================================
 
 
 

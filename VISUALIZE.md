@@ -1,11 +1,16 @@
 # Dikho Visual System Handbook
 
-Last verified against the repository: 2026-10-04
+Last verified against the repository: 2026-10-05
 
 This is the visual entry point for the entire project. It explains what Dikho
 does, who uses it, how requests and data move, where security boundaries sit,
 what is already implemented, and how the current internal product can evolve
 into a configurable public release.
+
+**Ownership boundary:** the current system and repository are proprietary
+property of Dikho Global Media LLP. Every public-release diagram in this
+handbook is target-state planning, not evidence of publication, licensing or
+permission to redistribute the current software.
 
 Use this file for orientation. Use the linked specialist documents for exact
 implementation and operational rules:
@@ -14,9 +19,14 @@ implementation and operational rules:
 - [System invariants](docs/INVARIANTS.md)
 - [Technical architecture](docs/ARCHITECTURE.md)
 - [Database and Storage](docs/DATABASE.md)
+- [Permissions and roles](docs/PERMISSIONS.md)
+- [Configuration reference](docs/CONFIGURATION.md)
+- [Branding and organization identity](docs/BRANDING.md)
 - [Security audit](docs/SECURITY-AUDIT.md)
 - [Engineering roadmap](docs/ROADMAP.md)
 - [Testing guide](docs/TESTING.md)
+- [Deployment guide](docs/DEPLOYMENT.md)
+- [Upgrade guide](docs/UPGRADING.md)
 
 ## Reading legend
 
@@ -1005,22 +1015,41 @@ health/security checklist.
 ### Configuration layers
 
 ```mermaid
-flowchart TB
+flowchart LR
     CORE[Versioned core application]
-    PUBLICCFG[Public instance configuration]
-    BRANDCFG[Brand package]
-    SERVERCFG[Server-only environment and bindings]
-    DATASETUP[Database migrations and seed/reference data]
-    FEATURECFG[Optional feature flags and provider adapters]
-    BUILD[Organization build and deployment]
 
-    CORE --> BUILD
-    PUBLICCFG --> BUILD
-    BRANDCFG --> BUILD
-    SERVERCFG --> BUILD
-    DATASETUP --> BUILD
-    FEATURECFG --> BUILD
+    subgraph PUBLIC[Browser-public inputs]
+        PUBLICCFG[Public instance configuration]
+        BRANDCFG[Validated brand package]
+    end
+
+    subgraph PRIVATE[Privileged inputs]
+        SERVERCFG[Server-only environment and secrets]
+        BINDINGS[Cloud resource bindings]
+    end
+
+    subgraph DATA[Durable data setup]
+        DATASETUP[Ordered database migrations]
+        REFERENCE[Reviewed seed/reference data]
+    end
+
+    CORE --> SPABUILD[SPA build]
+    PUBLICCFG --> SPABUILD
+    BRANDCFG --> SPABUILD
+    CORE --> SERVER[API and Edge runtimes]
+    SERVERCFG --> SERVER
+    BINDINGS --> SERVER
+    DATASETUP --> DATABASES[Organization databases and Storage]
+    REFERENCE --> DATABASES
+    SPABUILD --> INSTANCE[Organization instance]
+    SERVER --> INSTANCE
+    DATABASES --> INSTANCE
 ```
+
+The split is a security boundary: public identity and endpoints may enter the
+downloaded SPA, while service-role keys, provider tokens and signing material
+flow only to server runtimes. Database migrations run against data services;
+they are not browser build inputs.
 
 | Configuration area | Example values | Storage rule |
 | --- | --- | --- |
@@ -1077,6 +1106,33 @@ flowchart TD
 
     G1 --> G2 --> G3 --> G4 --> G5 --> G6 --> G7 --> G8 --> READY
 ```
+
+### Upgrade lifecycle
+
+```mermaid
+flowchart TD
+    BASE[Identify installed revision and deployed units]
+    NOTES[Review changelog, diff, migrations and configuration names]
+    COMPAT{Backward-compatible rollout?}
+    ADD[Add schema, policy and server support first]
+    CLIENT[Release compatible SPA]
+    REMOVE[Remove obsolete compatibility in a later change]
+    VERIFY[Run allowed, denied, failure and smoke checks]
+    OBSERVE[Observe sanitized health and business invariants]
+    DONE[Record component revisions and outcome]
+    HOLD[Stop and design an explicit maintenance window or forward migration]
+
+    BASE --> NOTES --> COMPAT
+    COMPAT -->|yes| ADD --> CLIENT --> VERIFY --> OBSERVE --> REMOVE --> DONE
+    COMPAT -->|no| HOLD
+    HOLD --> VERIFY
+```
+
+An application revision is not a single artifact. The SPA, API Worker, D1,
+Supabase migrations, Edge Functions and provider configuration can move at
+different times. [UPGRADING.md](docs/UPGRADING.md) defines compatibility,
+evidence and rollback expectations; [CHANGELOG.md](CHANGELOG.md) records
+notable repository changes but never proves that production was updated.
 
 ### Explicit non-goals for the first public version
 
@@ -1214,6 +1270,7 @@ flowchart TD
     WORK[Implement smallest complete change]
     VERIFY[Run proportional verification]
     UPDATE[Update durable docs or ADR]
+    HANDOFF[Record checks, gaps and rollout notes]
 
     START --> AGENT --> SCOPE
     SCOPE -->|API| APIA --> PRODUCT
@@ -1223,8 +1280,14 @@ flowchart TD
     PRODUCT --> BRIEF
     BRIEF -->|yes| TASK --> WORK
     BRIEF -->|no| WORK
-    WORK --> VERIFY --> UPDATE
+    WORK --> VERIFY --> UPDATE --> HANDOFF
 ```
+
+`AGENTS.md` is the canonical shared instruction entry point. Do not duplicate
+it into a root `MEMORY.md`, `CLAUDE.md` or tool-specific configuration file.
+`.claude/settings.json` and `.codex/config.toml` should exist only when a
+concrete, reviewed tool setting is required; local permission choices and
+credentials stay untracked. See [AI-WORKFLOW.md](docs/AI-WORKFLOW.md).
 
 Recommended reading order for understanding the whole repository:
 
@@ -1236,7 +1299,8 @@ Recommended reading order for understanding the whole repository:
    [Database](docs/DATABASE.md);
 5. [Security audit](docs/SECURITY-AUDIT.md) and
    [Roadmap](docs/ROADMAP.md);
-6. the relevant feature, API route and migration code.
+6. [AI workflow](docs/AI-WORKFLOW.md) for work that spans tools or sessions;
+7. the relevant feature, API route and migration code.
 
 ---
 

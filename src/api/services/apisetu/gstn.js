@@ -169,13 +169,12 @@ export async function fetchTaxpayer(env, gstin) {
   // this — by the time it has a normalized taxpayer the raw body is gone, so it
   // could only log its own field names back at itself.
   //
-  // Registry data, not user data: a GST record is public information from the
-  // GST portal, and the sample is truncated and only emitted on the failure path.
+  // Field names only. A proprietorship's GST record names a person, so the
+  // values (even a truncated sample) are personal data and stay out of logs.
   if (!taxpayer.legalName && !taxpayer.tradeName) {
     logEvent('gstn.nameless_record', {
       gstin,
       upstream_keys: raw && typeof raw === 'object' ? Object.keys(raw) : typeof raw,
-      sample: JSON.stringify(raw ?? null).slice(0, 400),
     })
   }
 

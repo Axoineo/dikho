@@ -5,6 +5,12 @@ import { supabase } from '../../../lib/supabase'
 // Worker broadcasts to after every D1 write. Pass stable callbacks (useCallback)
 // so the channel is not rebuilt on every render.
 //
+// The channel is PRIVATE: the events carry customer phone numbers and message
+// text, and a public channel can be joined by anyone holding the public key.
+// Joining requires the staff policy on realtime.messages (migration
+// 20261006143107_staff_membership.sql); the Worker broadcasts with
+// `private: true` (src/api/services/whatsapp/realtime.js).
+//
 // This is the whole "WebSocket engine" on the client — Supabase Realtime rides a
 // single multiplexed WS connection, so there is no server to run by hand.
 export function useInboxRealtime({
@@ -12,7 +18,7 @@ export function useInboxRealtime({
 }) {
   useEffect(() => {
     const channel = supabase
-      .channel('wa-inbox')
+      .channel('wa-inbox', { config: { private: true } })
       .on('broadcast', { event: 'message:new' }, ({ payload }) => onNewMessage?.(payload))
       .on('broadcast', { event: 'message:updated' }, ({ payload }) => onMessageUpdated?.(payload))
       .on('broadcast', { event: 'status:update' }, ({ payload }) => onStatus?.(payload))

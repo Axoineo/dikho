@@ -3,6 +3,7 @@ import { ok } from '../../utils/response.js'
 import { fetchApprovedTemplates } from '../../services/whatsapp/graph.js'
 import { logError } from '../../utils/logger.js'
 import { templateTokens } from '../../../lib/templateVars.js'
+import { requirePermission } from '../../middleware/requireAuth.js'
 
 const templates = new Hono()
 
@@ -24,7 +25,7 @@ function staticFallback(env) {
 // GET /api/templates — approved templates only. `variables` lists the distinct
 // {{...}} tokens (positional {{1}} or named {{name}}) the wizard maps to
 // contact columns; `hasVariables` is the convenience flag.
-templates.get('/', async (c) => {
+templates.get('/', requirePermission('wa_templates.view', 'campaigns.view', 'campaigns.send'), async (c) => {
   let list
   let source = 'meta'
 

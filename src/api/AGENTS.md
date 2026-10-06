@@ -5,7 +5,8 @@ These instructions extend the repository root `AGENTS.md` for `src/api/`.
 ## Route classification
 
 - Explicitly classify every endpoint as public, authenticated or provider-hook.
-- Apply `requireAuth` to protected routes and add a separate permission check
+- `requireAuth` admits staff only (a role in `app_metadata.dikho_roles`);
+  apply it to protected routes and add a separate permission check
   whenever not every authenticated operator should perform the action.
 - Public endpoints need documented abuse, rate, cost and failure controls.
 - CORS is browser policy, not authentication.
@@ -13,7 +14,11 @@ These instructions extend the repository root `AGENTS.md` for `src/api/`.
 ## Input and output
 
 - Parse request bodies defensively and return the standard response envelope.
-- Enforce byte and field limits before buffering or expensive parsing.
+- Enforce byte and field limits before buffering or expensive parsing: read
+  bodies with `utils/body.js`, never `c.req.json()`, `formData()`,
+  `arrayBuffer()` or `text()` directly.
+- Decide stored or served file types with `utils/fileType.js` (the bytes), not
+  the caller's filename or `Content-Type`.
 - Bind every untrusted SQL value.
 - Use fixed allowlists for dynamic SQL identifiers, sort keys and statuses.
 - Return generic external failures; log only sanitized event metadata.

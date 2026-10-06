@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { ok, fail } from '../../utils/response.js'
 import { requireAuth } from '../../middleware/requireAuth.js'
+import { readBoundedBytes } from '../../utils/body.js'
+import { sniffType } from '../../utils/fileType.js'
 
 const avatars = new Hono()
 
@@ -37,6 +39,7 @@ avatars.get('/:userId', async (c) => {
   // Short cache + ETag: the URL is permanent but its content changes whenever
   // someone re-uploads, so revalidation has to stay cheap.
   headers.set('Cache-Control', 'public, max-age=300')
+  headers.set('X-Content-Type-Options', 'nosniff')
   if (obj.httpEtag) headers.set('ETag', obj.httpEtag)
   return new Response(obj.body, { status: 200, headers })
 })
@@ -50,10 +53,13 @@ avatars.post('/', requireAuth, async (c) => {
     return fail(c, 'unsupported_type', `Content-Type must be one of ${[...ALLOWED].join(', ')}`, 415)
   }
 
-  const body = await c.req.arrayBuffer()
+  // Bounded read: an oversized body is refused before it is buffered.
+  const body = await readBoundedBytes(c, MAX_BYTES)
   if (body.byteLength === 0) return fail(c, 'empty_body', 'No image data received', 400)
-  if (body.byteLength > MAX_BYTES) {
-    return fail(c, 'too_large', `Image must be ${MAX_BYTES / 1024 / 1024} MB or smaller`, 413)
+  // The bytes must really be the declared image type. This route serves the
+  // object publicly with the stored type, so a mislabelled file is refused.
+  if (sniffType(body) !== type) {
+    return fail(c, 'unsupported_type', 'The image content does not match its Content-Type', 415)
   }
 
   await c.env.MEDIA.put(keyFor(user.id), body, { httpMetadata: { contentType: type } })

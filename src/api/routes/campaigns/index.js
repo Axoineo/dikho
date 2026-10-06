@@ -3,6 +3,8 @@ import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
 import { fetchApprovedTemplates, sendTemplateMessage } from '../../services/whatsapp/graph.js'
 import { buildComponents } from '../../../lib/templateVars.js'
+import { MAX_DASHBOARD_JSON_BYTES, readJsonOr } from '../../utils/body.js'
+import { requirePermission } from '../../middleware/requireAuth.js'
 
 const campaigns = new Hono()
 
@@ -328,7 +330,7 @@ async function resolveCampaignTemplate(env, name, language) {
 
 /* ── GET /api/campaigns ────────────────────────────────────────────────── */
 
-campaigns.get('/', async (c) => {
+campaigns.get('/', requirePermission('campaigns.view', 'campaigns.send'), async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT id, name, template_name, template_language, status,
             total_count, sent_count, failed_count, created_at, completed_at
@@ -342,7 +344,7 @@ campaigns.get('/', async (c) => {
 
 /* ── GET /api/campaigns/stats ──────────────────────────────────────────── */
 
-campaigns.get('/stats', async (c) => {
+campaigns.get('/stats', requirePermission('campaigns.view', 'campaigns.send'), async (c) => {
   const [contactCount, campaignCount, messageStats] = await c.env.DB.batch([
     c.env.DB.prepare('SELECT COUNT(*) AS total FROM contacts WHERE opted_out = 0'),
     c.env.DB.prepare('SELECT COUNT(*) AS total FROM campaigns'),
@@ -385,8 +387,8 @@ campaigns.get('/stats', async (c) => {
 // Creates the campaign row AND sends the first batch (up to BATCH_LIMIT).
 // For audiences > BATCH_LIMIT, the frontend follows up with /send-batch.
 
-campaigns.post('/send', async (c) => {
-  const body = await c.req.json().catch(() => null)
+campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
+  const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
   const {
@@ -467,8 +469,8 @@ campaigns.post('/send', async (c) => {
 // Continues an in-progress campaign: sends the next chunk and returns any
 // remaining IDs. The frontend loops until `remaining` is empty or absent.
 
-campaigns.post('/send-batch', async (c) => {
-  const body = await c.req.json().catch(() => null)
+campaigns.post('/send-batch', requirePermission('campaigns.send'), async (c) => {
+  const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
   const {
@@ -518,7 +520,7 @@ campaigns.post('/send-batch', async (c) => {
 // for a campaign that targeted a subset, that comparison would report every
 // contact it deliberately skipped as a missed recipient.
 
-campaigns.get('/:id/unsent', async (c) => {
+campaigns.get('/:id/unsent', requirePermission('campaigns.view', 'campaigns.send'), async (c) => {
   const campaignId = Number(c.req.param('id'))
   if (!Number.isInteger(campaignId)) throw new HTTPException(400, { message: 'Invalid campaign id' })
 
@@ -556,7 +558,7 @@ campaigns.get('/:id/unsent', async (c) => {
 // + /send-batch. Safe to call again after a round still leaves failures — the
 // outstanding set is recomputed each time, so it only ever shrinks.
 
-campaigns.post('/:id/retry', async (c) => {
+campaigns.post('/:id/retry', requirePermission('campaigns.send'), async (c) => {
   const campaignId = Number(c.req.param('id'))
   if (!Number.isInteger(campaignId)) throw new HTTPException(400, { message: 'Invalid campaign id' })
 
@@ -565,7 +567,7 @@ campaigns.post('/:id/retry', async (c) => {
   ).bind(campaignId).first()
   if (!campaign) throw new HTTPException(404, { message: 'Campaign not found' })
 
-  const body = await c.req.json().catch(() => ({}))
+  const body = (await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, {})) ?? {}
   const explicitIds = Array.isArray(body?.contactIds)
     ? body.contactIds.map(Number).filter(Number.isInteger)
     : null

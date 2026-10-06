@@ -1,6 +1,6 @@
 # Product Direction
 
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-05
 
 This document explains what Dikho is trying to achieve. It describes product
 intent rather than implementation. Architecture and operational details belong
@@ -11,6 +11,12 @@ in the other documents under `docs/`.
 Dikho currently gives Dikho Global Media LLP one dependable workspace for
 clients, vendors, sales and purchase orders, invoicing, public lead intake and
 WhatsApp communication.
+
+The current product and repository are proprietary property of Dikho Global
+Media LLP. They are not a public product and carry no public distribution or
+open-source license. Public-release work is a future horizon that requires an
+explicit owner decision, security-readiness review and selected license before
+any publication.
 
 The system should replace fragmented spreadsheets and repeated manual work
 without sacrificing financial accuracy, customer privacy or operator control.

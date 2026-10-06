@@ -4,6 +4,7 @@ import { apiGet } from '../../lib/api'
 import { CampaignWizard } from './CampaignWizard'
 import { CampaignUnsent } from './CampaignUnsent'
 import { Alert, Badge, EmptyState, PageHeader, Panel, Table, Td, Th } from './ui'
+import { useAccess } from '../../lib/access'
 
 const STATUS_TONE = {
   completed: 'success',
@@ -21,6 +22,7 @@ function formatDate(value) {
 }
 
 export default function WhatsAppCampaigns() {
+  const { can } = useAccess()
   const [creating, setCreating] = useState(false)
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -55,9 +57,11 @@ export default function WhatsAppCampaigns() {
   return (
     <>
       <PageHeader title="Campaigns" subtitle="Every bulk send, with live delivery and read counts.">
-        <button type="button" className="primary-button" onClick={() => setCreating(true)}>
-          <Icon name="plus" size={16} /> New campaign
-        </button>
+        {can('campaigns.send') && (
+          <button type="button" className="primary-button" onClick={() => setCreating(true)}>
+            <Icon name="plus" size={16} /> New campaign
+          </button>
+        )}
       </PageHeader>
 
       {error && <Alert tone="error">{error}</Alert>}

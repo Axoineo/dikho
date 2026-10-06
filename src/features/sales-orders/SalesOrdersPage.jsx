@@ -14,6 +14,7 @@ import { writeRows } from '../../lib/writeRows'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
 import SalesOrderDetails from './SalesOrderDetails'
+import { useAccess } from '../../lib/access'
 import {
   SO_COLOR_OPTIONS, blankSalesOrderForm, salesOrderToForm,
   blankSalesOrderItem, salesOrderItemToForm,
@@ -728,6 +729,11 @@ function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
 }
 
 export default function SalesOrdersPage({ session }) {
+  // 'own' edit scope covers only orders this person created; the database
+  // enforces the same rule (RLS on public.salesorder).
+  const { can, scope } = useAccess()
+  const canEditOrder = (order) => scope('sales_orders.edit') === 'all'
+    || (scope('sales_orders.edit') === 'own' && order?.created_by_id === session?.user?.id)
   // ── Search: `searchInput` drives the UI, `query` drives the request ──────
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
@@ -962,9 +968,11 @@ export default function SalesOrdersPage({ session }) {
             <h1>Sales Orders</h1>
             <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'order' : 'orders'} in view · {pageSize} per page</p>
           </div>
-          <button className="primary-button add-button" onClick={openAddForm}>
-            <Icon name="plus" size={18} /> Add sales order
-          </button>
+          {can('sales_orders.create') && (
+            <button className="primary-button add-button" onClick={openAddForm}>
+              <Icon name="plus" size={18} /> Add sales order
+            </button>
+          )}
         </div>
 
         {/* ── Search ───────────────────────────────────────────────────── */}
@@ -1136,7 +1144,7 @@ export default function SalesOrdersPage({ session }) {
             itemsLoading={itemsLoading}
             itemsError={itemsError}
             onClose={() => setSelectedOrder(null)}
-            onEdit={() => openEditForm(selectedOrder)}
+            onEdit={canEditOrder(selectedOrder) ? () => openEditForm(selectedOrder) : null}
           />
         </aside>
       )}

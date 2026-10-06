@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { requireAuth } from '../../middleware/requireAuth.js'
+import { requireAuth, requirePermission } from '../../middleware/requireAuth.js'
 import { ok } from '../../utils/response.js'
 import { signMediaTicket } from '../../services/whatsapp/mediaTicket.js'
 import { reconcileInbound, reconcileStatuses } from '../../services/whatsapp/reconcile.js'
@@ -18,7 +18,7 @@ whatsapp.route('/webhook', webhook)
 whatsapp.route('/media', media)
 
 // Issues a media ticket to a logged-in agent. Requires a valid session.
-whatsapp.get('/media-ticket', requireAuth, async (c) => {
+whatsapp.get('/media-ticket', requireAuth, requirePermission('inbox.view'), async (c) => {
   const ticket = await signMediaTicket(c.env.WHATSAPP_APP_SECRET)
   return ok(c, { ticket })
 })
@@ -27,7 +27,7 @@ whatsapp.get('/media-ticket', requireAuth, async (c) => {
 // (see services/whatsapp/reconcile.js). A cron in wrangler.api.jsonc runs the
 // same sweep; this route is the manual handle, and `?includeProcessed=1`
 // widens it to receipts ACKed before the backlog flag existed.
-whatsapp.post('/reconcile', requireAuth, async (c) => {
+whatsapp.post('/reconcile', requireAuth, requirePermission('whatsapp.maintain'), async (c) => {
   const includeProcessed = c.req.query('includeProcessed') === '1'
   const sinceIso = c.req.query('since') ?? null
   const result = await reconcileStatuses(c.env.DB, { includeProcessed, sinceIso })

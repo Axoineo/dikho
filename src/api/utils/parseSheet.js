@@ -4,6 +4,26 @@
 // needs "read a flat header + rows" rather than the full OOXML feature set.
 // XLSX entries are inflated with the runtime's DecompressionStream, which
 // Workers provides natively.
+//
+// Every input here is untrusted, and a Worker has 128 MB of memory. The caller
+// caps the upload's bytes; the limits below cap what those bytes can expand
+// into: rows, columns, cell length, and (for XLSX, which is a ZIP) the number
+// of archive entries and how far each one may inflate. A small file that
+// unpacks to gigabytes of XML is refused part-way through decompression.
+export const LIMITS = {
+  maxRows: 50_000,
+  maxColumns: 200,
+  maxCellChars: 2_000,
+  maxZipEntries: 1_000,
+  maxInflatedEntryBytes: 16 * 1024 * 1024,
+  maxInflatedTotalBytes: 24 * 1024 * 1024,
+}
+
+class SheetLimitError extends Error {}
+
+function limitError(message) {
+  return new SheetLimitError(message)
+}
 
 const XML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
 
@@ -26,6 +46,17 @@ export function parseCsv(text) {
   let field = ''
   let quoted = false
 
+  const pushField = () => {
+    if (row.length >= LIMITS.maxColumns) throw limitError(`A row has more than ${LIMITS.maxColumns} columns`)
+    row.push(field)
+    field = ''
+  }
+  const pushRow = () => {
+    if (rows.length >= LIMITS.maxRows) throw limitError(`The file has more than ${LIMITS.maxRows} rows`)
+    rows.push(row)
+    row = []
+  }
+
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i]
 
@@ -39,17 +70,15 @@ export function parseCsv(text) {
     }
 
     if (char === '"') { quoted = true }
-    else if (char === ',') { row.push(field); field = '' }
+    else if (char === ',') { pushField() }
     else if (char === '\n' || char === '\r') {
       if (char === '\r' && text[i + 1] === '\n') i += 1
-      row.push(field)
-      rows.push(row)
-      row = []
-      field = ''
+      pushField()
+      pushRow()
     } else { field += char }
   }
 
-  if (field !== '' || row.length > 0) { row.push(field); rows.push(row) }
+  if (field !== '' || row.length > 0) { pushField(); pushRow() }
   return rows.filter((r) => r.some((cell) => cell.trim() !== ''))
 }
 
@@ -60,43 +89,92 @@ function readU32(bytes, offset) {
   return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0
 }
 
-async function inflateRaw(bytes) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
+// Inflates one deflate-raw entry, giving up as soon as the output passes
+// `maxBytes` rather than after the whole bomb has been expanded in memory.
+async function inflateRaw(bytes, maxBytes) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader()
+  const chunks = []
+  let total = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > maxBytes) throw limitError('The workbook expands to more data than an import allows')
+      chunks.push(value)
+    }
+  } catch (err) {
+    await reader.cancel().catch(() => {})
+    if (err instanceof SheetLimitError) throw err
+    throw new Error('Not a valid .xlsx file')
+  }
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) { out.set(chunk, offset); offset += chunk.byteLength }
+  return out
 }
 
-// Walks the ZIP central directory and returns { [entryName]: Uint8Array }.
-async function unzip(bytes) {
+// Walks the ZIP central directory and inflates only the entries `wanted`
+// selects, returning { [entryName]: Uint8Array }. Offsets and sizes come from
+// the file itself, so each one is bounds-checked before use.
+async function unzip(bytes, wanted) {
+  const invalid = () => new Error('Not a valid .xlsx file')
+  const inBounds = (start, length) => start >= 0 && length >= 0 && start + length <= bytes.length
+
   let eocd = -1
   for (let i = bytes.length - 22; i >= 0 && i > bytes.length - 66000; i -= 1) {
     if (readU32(bytes, i) === 0x06054b50) { eocd = i; break }
   }
-  if (eocd < 0) throw new Error('Not a valid .xlsx file')
+  if (eocd < 0) throw invalid()
 
   const entryCount = readU16(bytes, eocd + 10)
+  if (entryCount > LIMITS.maxZipEntries) throw limitError('The workbook has too many internal files')
   let pointer = readU32(bytes, eocd + 16)
-  const files = {}
+
+  const entries = []
   const decoder = new TextDecoder()
-
   for (let i = 0; i < entryCount; i += 1) {
-    if (readU32(bytes, pointer) !== 0x02014b50) break
+    if (!inBounds(pointer, 46) || readU32(bytes, pointer) !== 0x02014b50) break
 
+    const flags = readU16(bytes, pointer + 8)
     const method = readU16(bytes, pointer + 10)
     const compressedSize = readU32(bytes, pointer + 20)
     const nameLength = readU16(bytes, pointer + 28)
     const extraLength = readU16(bytes, pointer + 30)
     const commentLength = readU16(bytes, pointer + 32)
     const localOffset = readU32(bytes, pointer + 42)
+    if (!inBounds(pointer + 46, nameLength)) throw invalid()
     const name = decoder.decode(bytes.subarray(pointer + 46, pointer + 46 + nameLength))
-
-    // Local header repeats the name/extra lengths; the payload follows them.
-    const localNameLength = readU16(bytes, localOffset + 26)
-    const localExtraLength = readU16(bytes, localOffset + 28)
-    const dataStart = localOffset + 30 + localNameLength + localExtraLength
-    const raw = bytes.subarray(dataStart, dataStart + compressedSize)
-
-    files[name] = method === 0 ? raw : await inflateRaw(raw)
+    entries.push({ name, flags, method, compressedSize, localOffset })
     pointer += 46 + nameLength + extraLength + commentLength
+  }
+
+  const files = {}
+  let inflatedTotal = 0
+  for (const entry of entries.filter((e) => wanted(e.name, entries))) {
+    // Encrypted entries and ZIP64 sizes are never produced by a normal
+    // spreadsheet export; refusing them keeps the size arithmetic honest.
+    if (entry.flags & 0x1) throw limitError('Encrypted workbooks cannot be imported')
+    if (entry.compressedSize === 0xffffffff || entry.localOffset === 0xffffffff) throw invalid()
+    if (entry.method !== 0 && entry.method !== 8) throw invalid()
+
+    if (!inBounds(entry.localOffset, 30) || readU32(bytes, entry.localOffset) !== 0x04034b50) throw invalid()
+    const localNameLength = readU16(bytes, entry.localOffset + 26)
+    const localExtraLength = readU16(bytes, entry.localOffset + 28)
+    const dataStart = entry.localOffset + 30 + localNameLength + localExtraLength
+    if (!inBounds(dataStart, entry.compressedSize)) throw invalid()
+    const raw = bytes.subarray(dataStart, dataStart + entry.compressedSize)
+
+    const budget = Math.min(LIMITS.maxInflatedEntryBytes, LIMITS.maxInflatedTotalBytes - inflatedTotal)
+    let data
+    if (entry.method === 0) {
+      if (raw.byteLength > budget) throw limitError('The workbook expands to more data than an import allows')
+      data = raw
+    } else {
+      data = await inflateRaw(raw, budget)
+    }
+    inflatedTotal += data.byteLength
+    files[entry.name] = data
   }
 
   return files
@@ -109,8 +187,14 @@ function columnIndex(cellRef) {
   return index - 1
 }
 
+const SHEET_ENTRY = /^xl\/worksheets\/sheet\d+\.xml$/
+const SHARED_STRINGS = 'xl/sharedStrings.xml'
+
 export async function parseXlsx(bytes) {
-  const files = await unzip(bytes)
+  // Only the shared-string table and the first worksheet are ever read, so
+  // nothing else in the archive is inflated at all.
+  const files = await unzip(bytes, (name, entries) =>
+    name === SHARED_STRINGS || name === entries.find((e) => SHEET_ENTRY.test(e.name))?.name)
   const decoder = new TextDecoder()
 
   const sharedStrings = []
@@ -123,12 +207,13 @@ export async function parseXlsx(bytes) {
     }
   }
 
-  const sheetName = Object.keys(files).find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+  const sheetName = Object.keys(files).find((name) => SHEET_ENTRY.test(name))
   if (!sheetName) throw new Error('No worksheet found in workbook')
   const sheetXml = decoder.decode(files[sheetName])
 
   const rows = []
   for (const [, rowXml] of sheetXml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+    if (rows.length >= LIMITS.maxRows) throw limitError(`The file has more than ${LIMITS.maxRows} rows`)
     const row = []
     for (const cell of rowXml.matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)) {
       const attrs = cell[1]
@@ -146,7 +231,10 @@ export async function parseXlsx(bytes) {
         }
       }
 
-      row[ref ? columnIndex(ref) : row.length] = value
+      // A cell reference like XFD1 would otherwise allocate a 16k-wide row.
+      const index = ref ? columnIndex(ref) : row.length
+      if (index >= LIMITS.maxColumns) throw limitError(`A row has more than ${LIMITS.maxColumns} columns`)
+      row[index] = value
     }
     rows.push([...row].map((cell) => cell ?? ''))
   }
@@ -170,6 +258,12 @@ export function parseJson(text) {
 
 /* ── Shared entry point ───────────────────────────────────────────────── */
 
+function checkCell(value) {
+  if (String(value).length > LIMITS.maxCellChars) {
+    throw limitError(`A cell is longer than ${LIMITS.maxCellChars} characters`)
+  }
+}
+
 function nonEmpty(rows) {
   return rows.filter((record) => Object.values(record).some((value) => String(value).trim() !== ''))
 }
@@ -177,10 +271,17 @@ function nonEmpty(rows) {
 // Array-of-arrays (CSV/XLSX) -> { columns, rows }, first row treated as headers.
 function matrixToTable(matrix) {
   if (matrix.length === 0) return { columns: [], rows: [] }
+  if (matrix.length > LIMITS.maxRows) throw limitError(`The file has more than ${LIMITS.maxRows} rows`)
   const headers = matrix[0].map((header) => String(header).trim())
+  if (headers.length > LIMITS.maxColumns) throw limitError(`A row has more than ${LIMITS.maxColumns} columns`)
   const rows = matrix.slice(1).map((row) => {
     const record = {}
-    headers.forEach((header, index) => { if (header) record[header] = String(row[index] ?? '').trim() })
+    headers.forEach((header, index) => {
+      if (!header) return
+      const value = row[index] ?? ''
+      checkCell(value)
+      record[header] = String(value).trim()
+    })
     return record
   })
   return { columns: headers.filter(Boolean), rows: nonEmpty(rows) }
@@ -189,6 +290,7 @@ function matrixToTable(matrix) {
 // A JSON list (objects or arrays) -> { columns, rows }.
 function listToTable(list) {
   if (list.length === 0) return { columns: [], rows: [] }
+  if (list.length > LIMITS.maxRows) throw limitError(`The file has more than ${LIMITS.maxRows} rows`)
   if (Array.isArray(list[0])) return matrixToTable(list)
 
   const columns = []
@@ -199,7 +301,12 @@ function listToTable(list) {
       for (const [key, value] of Object.entries(item)) {
         const header = String(key).trim()
         if (!header) continue
-        if (!seen.has(header)) { seen.add(header); columns.push(header) }
+        if (!seen.has(header)) {
+          if (columns.length >= LIMITS.maxColumns) throw limitError(`A row has more than ${LIMITS.maxColumns} columns`)
+          seen.add(header)
+          columns.push(header)
+        }
+        if (value != null) checkCell(value)
         record[header] = value == null ? '' : String(value).trim()
       }
     }
@@ -211,6 +318,7 @@ function listToTable(list) {
 // Returns { columns: [original headers], rows: [{ header: value }] }. Headers
 // keep their original case so they read well as variable keys later. Detects
 // XLSX by the ZIP magic, JSON by extension or a leading { / [, else CSV.
+// The caller must already have bounded the file's size.
 export async function parseContactFile(file) {
   const buffer = new Uint8Array(await file.arrayBuffer())
   const name = String(file.name || '').toLowerCase()

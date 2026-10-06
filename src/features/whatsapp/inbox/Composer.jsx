@@ -113,7 +113,10 @@ export function Composer({ conversation, onSendText, onSendMedia }) {
         onSubmit={submitText}
         className="flex items-end gap-1 rounded-[24px] border border-inbox-divider bg-surface px-1.5 py-1.5 shadow-[0_2px_10px_rgba(16,26,44,0.08)]"
       >
-        <input ref={fileRef} type="file" className="hidden" onChange={onFile} />
+        {/* The types WhatsApp accepts; the API enforces the same list and the
+            per-type size limits (src/api/routes/whatsapp/conversations.js). */}
+        <input ref={fileRef} type="file" className="hidden" onChange={onFile}
+          accept="image/jpeg,image/png,image/webp,video/mp4,video/3gpp,audio/aac,audio/amr,audio/mpeg,audio/mp4,audio/ogg,text/plain,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
 
         <button type="button" title="Emoji" aria-label="Insert emoji" aria-expanded={menu === 'emoji'}
           onClick={() => setMenu(menu === 'emoji' ? null : 'emoji')}

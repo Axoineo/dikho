@@ -14,6 +14,7 @@ import {
 import { statusTone, missingColumnFrom, notNullColumnFrom } from '../../lib/status'
 import { uniqueOptions } from '../vendors/vendorFilters'
 import { sessionActor } from '../sales-orders/salesOrderHelpers'
+import { useAccess } from '../../lib/access'
 
 /* ─── Constants ────────────────────────────────────────────────────────── */
 
@@ -488,9 +489,9 @@ function PurchaseOrderDetails({ order, items, itemsLoading, itemsError, onClose,
           <h2>{formatValue(order.order_number)}</h2>
         </div>
         <div className="drawer-header-actions">
-          <button className="icon-button" onClick={onEdit} aria-label="Edit purchase order" title="Edit">
+          {onEdit && <button className="icon-button" onClick={onEdit} aria-label="Edit purchase order" title="Edit">
             <Icon name="edit" size={18} />
-          </button>
+          </button>}
           <button className="icon-button" onClick={onClose} aria-label="Close">
             <Icon name="close" size={19} />
           </button>
@@ -1098,6 +1099,7 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
    ═══════════════════════════════════════════════════════════════════════ */
 
 export default function PurchaseOrdersPage({ session }) {
+  const { can } = useAccess()
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
 
@@ -1263,9 +1265,11 @@ export default function PurchaseOrdersPage({ session }) {
             <h1>Purchase Orders</h1>
             <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'order' : 'orders'} in view · {pageSize} per page</p>
           </div>
-          <button className="primary-button add-button" onClick={openAddForm}>
-            <Icon name="plus" size={18} /> Add purchase order
-          </button>
+          {can('purchase_orders.create') && (
+            <button className="primary-button add-button" onClick={openAddForm}>
+              <Icon name="plus" size={18} /> Add purchase order
+            </button>
+          )}
         </div>
 
         {/* Search */}
@@ -1425,7 +1429,7 @@ export default function PurchaseOrdersPage({ session }) {
             itemsLoading={itemsLoading}
             itemsError={itemsError}
             onClose={() => setSelectedOrder(null)}
-            onEdit={() => openEditForm(selectedOrder)}
+            onEdit={can('purchase_orders.edit') ? () => openEditForm(selectedOrder) : null}
           />
         </aside>
       )}

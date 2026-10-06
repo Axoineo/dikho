@@ -48,3 +48,5 @@ Create a superseding ADR so the decision history remains understandable.
 - [0003: D1 and R2 for WhatsApp operations](0003-whatsapp-d1-r2.md)
 - [0004: Hard global budgets for public paid operations](0004-global-budgets.md)
 - [0005: One organization per public-release instance](0005-one-organization-per-instance.md)
+- [0006: Staff membership in Supabase app_metadata](0006-staff-membership-in-app-metadata.md) (role list superseded by 0007)
+- [0007: User Management with per-action permissions](0007-user-management-and-permissions.md)

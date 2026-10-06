@@ -22,12 +22,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Loaded async: as a normal stylesheet this blocks the first paint on a
          round trip to a third-party origin. The faces already carry
-         display=swap, so nothing changes visually. Text just stops waiting. -->
+         display=swap, so nothing changes visually. Text just stops waiting.
+         The switch to media="all" happens in the script below rather than an
+         onload attribute, because inline event handlers cannot be allowed by
+         the Content-Security-Policy (see dikho-security-headers in
+         vite.config.js). -->
     <link
+      id="dk-fonts"
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;600;700&display=swap"
       media="print"
-      onload="this.media='all'"
     />
     <noscript>
       <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -43,6 +47,14 @@
          lets the page chunk download alongside the bundle instead of after it.
          Keyed by path so CRM visitors never fetch it. In dev the object stays
          empty and this is a no-op. */
+      (function () {
+        var fonts = document.getElementById('dk-fonts')
+        if (!fonts) return
+        var show = function () { fonts.media = 'all' }
+        if (fonts.sheet) show()
+        else fonts.addEventListener('load', show)
+      })();
+
       (function () {
         var CHUNKS = {/*DIKHO_PUBLIC_CHUNKS*/}
         var path = location.pathname.replace(/\/+$/, '').toLowerCase() || '/'
@@ -127,6 +139,7 @@
       .dk-hint button:hover { background: #123f72; }
       .dk-hint button:active { transform: scale(0.98); }
       .dk-stage.dk-out { opacity: 0; pointer-events: none; }
+      #dk-defs { position: absolute; }
       .dk-mark {
         width: var(--dk-mark-w, min(168px, 42vw));
         height: auto;
@@ -267,7 +280,7 @@
     <!-- Glyph paths from public/dikho-logo.svg, inlined once. The splash is
          removed after the app paints; this definition block is not, because
          BrandLoader references the same paths by id for route transitions. -->
-    <svg id="dk-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position: absolute">
+    <svg id="dk-defs" width="0" height="0" aria-hidden="true" focusable="false">
       <defs>
         <path id="dk-d" d="M247.551 173.183C235.018 151.825 217.413 136.693 194.737 127.788C172.279 118.883 145.98 114.394 115.987 114.394H51.727C37.3101 114.394 26.3706 116.204 18.8362 119.824C11.4466 123.299 6.37532 129.163 3.76724 137.417C1.2316 145.526 0 156.531 0 170.505V358.458C0 372.141 1.2316 383.074 3.76724 391.328C6.44777 399.581 11.4466 405.518 18.8362 409.138C26.3706 412.758 37.3101 414.569 51.727 414.569H116.06C146.053 414.569 172.351 409.5 194.81 399.292C217.413 389.083 235.018 372.793 247.623 350.276C260.157 327.687 266.459 297.786 266.459 260.716C266.459 223.647 260.157 194.397 247.623 173.183H247.551ZM144.097 364.322C112.655 364.322 87.1535 338.837 87.1535 307.415C87.1535 275.993 112.655 250.508 144.097 250.508C175.539 250.508 201.04 275.993 201.04 307.415C201.04 338.837 175.539 364.322 144.097 364.322Z" />
         <path id="dk-i" d="M379.766 403.419C379.766 407.618 378.824 410.514 377.013 412.179C375.347 413.7 372.377 414.496 368.247 414.496H325.069C320.867 414.496 317.897 413.7 316.085 412.179C314.419 410.514 313.55 407.546 313.55 403.419V124.819C313.55 120.62 314.419 117.797 316.085 116.204C317.897 114.539 320.939 113.67 325.069 113.67H368.247C372.449 113.67 375.347 114.539 377.013 116.204C378.824 117.724 379.766 120.62 379.766 124.819V403.419Z" />
@@ -320,14 +333,14 @@
       </svg>
       <div class="dk-hint">
         <span>This is taking longer than usual.</span>
-        <button type="button" onclick="location.reload()">Reload</button>
+        <button type="button" id="dk-reload">Reload</button>
       </div>
     </div>
 
     <script>
       (function () {
         var splash = document.getElementById('dk-splash')
-
+        document.getElementById('dk-reload').addEventListener('click', function () { location.reload() })
 
         /* The opening (D, the word sliding out, the dot seating itself)
            finishes at 1623ms. The splash is never pulled before then, even if
