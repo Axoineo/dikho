@@ -72,7 +72,7 @@ emergency. Every change is checked server-side and recorded.
 1. **Supabase → Authentication:** turn off "Allow new users to sign up".
 2. **Mark the starting people** with the SQL in the
    [runbook](../runbooks/staff-access.md#the-first-owner): the two Owners
-   `admin`, the developer `developer` (super user, level System Owner). The
+   `admin`, the developer `developer` (super user, level System Administrator). The
    owner has the names; they are not recorded in this public repository.
    Everyone else is added from the dashboard afterwards.
 3. **Apply `20261006143107_staff_membership.sql`, then straight away

@@ -94,5 +94,5 @@ export const SECTION_LABELS = {
 
 export const ROLE_LABELS = { staff: 'Staff', manager: 'Manager', admin: 'Admin', owner: 'Owner' }
 export const DEVELOPER_LABELS = {
-  developer: 'Developer', senior_developer: 'Senior Developer', lead_developer: 'Lead Developer', system_owner: 'System Owner',
+  developer: 'Developer', senior_developer: 'Senior Developer', lead_developer: 'Lead Developer', system_owner: 'System Administrator',
 }
