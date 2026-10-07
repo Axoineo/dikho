@@ -87,7 +87,7 @@ function securityHeaders(env) {
       const source = String(html.source)
       const scriptHashes = [...source.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => cspHash(m[1]))
       const styleHashes = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => cspHash(m[1]))
-      if (/\son[a-z]+\s*=/i.test(source.replace(/<script[\s\S]*?<\/script>/g, ''))) {
+      if (/\son[a-z]+\s*=/i.test(source.replace(/<script[\s\S]*?<\/script>/gi, ''))) {
         this.error('index.html has an inline event handler attribute; the CSP cannot allow it. Use addEventListener in a script.')
       }
 
