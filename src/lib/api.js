@@ -153,4 +153,8 @@ export const waApi = {
   },
   mediaTicket: () => apiGet('/whatsapp/media-ticket'),
   typing: (id) => apiPost(`/whatsapp/conversations/${id}/typing`),
+  clearChat: (id) => apiPost(`/whatsapp/conversations/${id}/clear`),
+  deleteChat: (id) => apiDelete(`/whatsapp/conversations/${id}`),
+  block: (id) => apiPost(`/whatsapp/conversations/${id}/block`),
+  unblock: (id) => apiDelete(`/whatsapp/conversations/${id}/block`),
 }

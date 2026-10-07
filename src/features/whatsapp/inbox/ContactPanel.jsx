@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Avatar } from './Avatar'
+import { ActionIcon } from './ChatActions'
 import { useMediaSrc } from './MediaTicketContext'
-import { displayName, sessionMsLeft, formatCountdown, formatLastActive } from './inboxUtils'
+import { canBlockNow, displayName, sessionMsLeft, formatCountdown, formatLastActive } from './inboxUtils'
+import { useAccess } from '../../../lib/access'
 
 function Block({ label, value, onCopy }) {
   const [copied, setCopied] = useState(false)
@@ -37,14 +39,26 @@ function Block({ label, value, onCopy }) {
 
 /* Third pane. CHROME, so it follows the dashboard: a surface panel with
    rounded blocks, matching the rail's radii and tints. */
-export function ContactPanel({ conversation, messages, onOpenMedia }) {
+export function ContactPanel({ conversation, messages, onOpenMedia, onChatAction }) {
   const { srcFor } = useMediaSrc()
+  const { can } = useAccess()
   if (!conversation) return null
 
   const msLeft = sessionMsLeft(conversation.last_inbound_at)
   const media = messages.filter(
     (m) => m.media_status === 'ready' && m.media_url && (m.media_mime || '').startsWith('image/'),
   )
+  const name = displayName(conversation)
+  const blocked = Boolean(conversation.blocked_at)
+  const blockable = canBlockNow(conversation)
+  // The same actions as the header menu, where WhatsApp also puts them: at
+  // the foot of Contact info, in red.
+  const actions = [
+    can('inbox.block') && (blocked
+      ? { key: 'unblock', label: `Unblock ${name}` }
+      : { key: 'block', label: `Block ${name}`, danger: true, disabled: !blockable, hint: blockable ? null : 'Only within 24 hours of their last message' }),
+    can('inbox.delete') && { key: 'delete', label: 'Delete chat', danger: true },
+  ].filter(Boolean)
 
   return (
     <aside className="hidden w-[320px] shrink-0 flex-col border-l border-inbox-divider bg-inbox-list xl:flex">
@@ -57,7 +71,11 @@ export function ContactPanel({ conversation, messages, onOpenMedia }) {
           <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={88} />
           <div className="mt-3 text-[16px] font-semibold text-ink">{displayName(conversation)}</div>
           <div className="mt-0.5 text-[13px] text-muted">+{conversation.phone}</div>
-          {msLeft > 0 ? (
+          {blocked ? (
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-danger px-3 py-1 text-[12px] font-semibold text-danger">
+              <ActionIcon action="block" className="h-3.5 w-3.5" /> Blocked
+            </span>
+          ) : msLeft > 0 ? (
             <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-semibold text-brand">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Replies open · {formatCountdown(msLeft)} left
             </span>
@@ -89,6 +107,28 @@ export function ContactPanel({ conversation, messages, onOpenMedia }) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {actions.length > 0 && (
+          <div className="rounded-2xl bg-inbox-panel p-1.5">
+            {actions.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                aria-disabled={item.disabled || undefined}
+                onClick={() => { if (!item.disabled) onChatAction?.(item.key) }}
+                className={`flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors
+                  ${item.disabled ? 'cursor-default opacity-60' : 'hover:bg-inbox-row-hover'}
+                  ${item.danger ? 'text-danger' : 'text-ink'}`}
+              >
+                <ActionIcon action={item.key} className="mt-px" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[13.5px] font-medium leading-5">{item.label}</span>
+                  {item.hint && <span className="block text-[12px] leading-snug text-muted">{item.hint}</span>}
+                </span>
+              </button>
+            ))}
           </div>
         )}
       </div>

@@ -14,6 +14,14 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- WhatsApp inbox: Clear chat, Delete chat, Block and Unblock, from the chat
+  header and Contact info, each confirmed first and recorded with who did it.
+  Clearing and deleting hide the thread for the team (the customer keeps
+  their copy); blocking uses Meta's block list. New permissions
+  `inbox.delete` and `inbox.block`. The API also accepts replies that quote a
+  message, reactions, forwarding, pins, personal stars and deleting one
+  message; their controls in the thread are still to come.
+
 - Live Assist: with an employee's OK, a colleague who may help them sees their
   Dikho tab live, points at and highlights things, and suggests pages. No
   remote control and nothing recorded. Plus "Ask for help", which tells the
@@ -44,6 +52,9 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Changed
 
+- WhatsApp inbox bubbles are WhatsApp-sized: one line of text is 29px tall
+  instead of 54px, the time sits on the last line, and the thread uses a
+  doodle wallpaper drawn for Dikho instead of a dot grid.
 - The safe `npm run check` command now runs lint, isolated tests, the production
   build and the high-signal secret scan.
 - Documentation now distinguishes the production Cloudflare Pages SPA from the

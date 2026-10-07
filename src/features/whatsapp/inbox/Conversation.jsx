@@ -2,8 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { Composer } from './Composer'
 import { Avatar } from './Avatar'
+import { ChatMenu } from './ChatActions'
 import { displayName, formatDaySeparator, parseWaDate, sessionMsLeft, formatCountdown } from './inboxUtils'
 import { useAccess } from '../../../lib/access'
+
+// Day chips and system notices on the wallpaper.
+const CANVAS_CHIP = 'rounded-bubble bg-chat-raised px-3 py-[5px] text-[12.5px] text-chat-sub shadow-bubble'
 
 // Day separators plus run detection: a bubble starts a new run (and so gets a
 // tail and a wider gap) when the direction changes or a day break intervenes.
@@ -28,8 +32,10 @@ function buildRows(messages) {
 /* Header and empty state are CHROME and follow the dashboard. Everything from
    the canvas down — bubbles, tails, day chips, system notices — stays on the
    --chat-* palette, because that is the part agents read all day. */
-export function Conversation({ conversation, messages, loading, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo }) {
-  const canReply = useAccess().can('inbox.reply')
+export function Conversation({ conversation, messages, loading, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo, onChatAction }) {
+  const { can } = useAccess()
+  const canReply = can('inbox.reply')
+  const canBlock = can('inbox.block')
   const endRef = useRef(null)
   const scrollRef = useRef(null)
   const avatarInput = useRef(null)
@@ -88,6 +94,7 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
   }
 
   const msLeft = sessionMsLeft(conversation.last_inbound_at)
+  const blocked = Boolean(conversation.blocked_at)
 
   return (
     <div className="chat-canvas relative flex h-full flex-1 flex-col">
@@ -138,6 +145,13 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
         </button>
 
+        <ChatMenu
+          conversation={conversation}
+          canDelete={can('inbox.delete')}
+          canBlock={canBlock}
+          onAction={onChatAction}
+        />
+
       </div>
 
       {search !== null && (
@@ -177,18 +191,26 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
           const el = e.currentTarget
           setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
         }}
-        className="inbox-scroll relative min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-[6.5%]"
+        className="inbox-scroll relative min-h-0 flex-1 overflow-y-auto pb-3 pt-1 sm:px-[4.5%]"
       >
+        {/* Loose text on the wallpaper sits on a chip, as WhatsApp's system
+            notices do: --chat-sub is under 4.5:1 on the bare canvas. */}
         {loading && messages.length === 0 && (
-          <p className="p-4 text-center text-[13px] text-chat-sub">Loading messages…</p>
+          <div className="flex justify-center pt-3">
+            <span className={CANVAS_CHIP}>Loading messages…</span>
+          </div>
         )}
         {matches && matches.length === 0 && (
-          <p className="p-6 text-center text-[13px] text-chat-sub">No messages match that search.</p>
+          <div className="flex justify-center pt-3">
+            <span className={CANVAS_CHIP}>No messages match that search.</span>
+          </div>
         )}
         {rows.map((row) =>
           row.separator ? (
-            <div key={row.id} className="flex justify-center py-3">
-              <span className="rounded-bubble bg-chat-raised px-3 py-[5px] text-[12.5px] uppercase tracking-[.2px] text-chat-sub shadow-bubble">
+            /* No bottom padding: the first bubble after a day chip starts a
+               run, and its own 12px top margin is the gap. */
+            <div key={row.id} className="flex justify-center pt-3">
+              <span className={`${CANVAS_CHIP} uppercase tracking-[.2px]`}>
                 {formatDaySeparator(row.at)}
               </span>
             </div>
@@ -207,9 +229,9 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
             client puts its own system notices — centred on the canvas — rather
             than as dashboard chrome bolted to the header. Sits last so it
             stays in view: the thread auto-scrolls to the end. */}
-        {msLeft > 0 && !matches && (
-          <div className="flex justify-center py-3">
-            <span className="max-w-[78%] rounded-bubble bg-chat-raised px-3 py-[5px] text-center text-[12.5px] leading-relaxed text-chat-sub shadow-bubble">
+        {msLeft > 0 && !matches && !blocked && (
+          <div className="flex justify-center pt-3">
+            <span className={`${CANVAS_CHIP} max-w-[78%] text-center leading-relaxed`}>
               Replies are open for <b className="font-semibold text-chat-text">{formatCountdown(msLeft)}</b>. After that, only approved templates can be sent.
             </span>
           </div>
@@ -230,7 +252,26 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
         </button>
       )}
 
-      {canReply
+      {/* Blocked replaces the composer outright, as WhatsApp does: nothing
+          can be sent to a blocked number, so there is nothing to type into. */}
+      {blocked ? (
+        <div className="m-3 flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-2xl border border-inbox-divider bg-surface px-4 py-3 text-center text-[13px] leading-relaxed text-muted shadow-[0_2px_10px_rgba(16,26,44,0.08)]">
+          <span>
+            {canBlock
+              ? 'You blocked this contact. They cannot message this number, and you cannot message them.'
+              : 'This contact is blocked. Someone with permission to block contacts can unblock them.'}
+          </span>
+          {canBlock && (
+            <button
+              type="button"
+              onClick={() => onChatAction?.('unblock')}
+              className="shrink-0 rounded-full bg-brand px-4 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Unblock
+            </button>
+          )}
+        </div>
+      ) : canReply
         ? <Composer conversation={conversation} onSendText={onSendText} onSendMedia={onSendMedia} />
         : <p className="inbox-readonly-note">You can read conversations, but your access does not include replying.</p>}
     </div>

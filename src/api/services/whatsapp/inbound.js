@@ -87,16 +87,20 @@ export async function processInboundMessage(c, event) {
 
   // 3. Message row. The wamid UNIQUE index is the final backstop against a
   //    double-insert even if two deliveries race past the idempotency ledger.
+  //    context_wamid is the message this one refers to: the one a reply
+  //    quotes, or the one a reaction is on (migration 0011).
   const mediaStatus = media ? 'pending' : null
+  const contextWamid = (m.type === 'reaction' ? m.reaction?.message_id : m.context?.id) ?? null
   const res = await db.prepare(
     `INSERT INTO messages
        (conversation_id, contact_id, phone, meta_message_id, direction, type,
-        body, media_id, media_mime, media_filename, media_status, status, wa_timestamp, created_at)
-     VALUES (?1, ?2, ?3, ?4, 'inbound', ?5, ?6, ?7, ?8, ?9, ?10, 'received', ?11, ?11)
+        body, media_id, media_mime, media_filename, media_status, status, wa_timestamp, created_at, context_wamid)
+     VALUES (?1, ?2, ?3, ?4, 'inbound', ?5, ?6, ?7, ?8, ?9, ?10, 'received', ?11, ?11, ?12)
      ON CONFLICT(meta_message_id) DO NOTHING`,
   ).bind(
     conv.id, contact?.id ?? null, phone, m.id, type, body,
     media?.id ?? null, media?.mime_type ?? null, media?.filename ?? null, mediaStatus, at,
+    typeof contextWamid === 'string' ? contextWamid.slice(0, 200) : null,
   ).run()
   if ((res.meta?.changes ?? 0) === 0) return // duplicate; already delivered to the UI
 

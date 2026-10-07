@@ -6,6 +6,7 @@ import { Conversation } from './Conversation'
 import { ContactPanel } from './ContactPanel'
 import { MediaLightbox } from './MediaLightbox'
 import { MediaTicketProvider } from './MediaTicketContext'
+import { ChatActionDialog } from './ChatActions'
 
 function sortConvs(list) {
   return [...list].sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''))
@@ -112,6 +113,32 @@ export default function WhatsAppInbox() {
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, avatar_url } : c)))
   }, [])
 
+  // Clear chat, Delete chat and Block, applied the same way whether this tab
+  // did it or another agent's did (the API broadcasts each one).
+  const onConversationCleared = useCallback(({ conversation }) => {
+    if (!conversation?.id) return
+    setConversations((prev) => prev.map((c) => (c.id === conversation.id
+      ? { ...c, ...conversation, last_message_status: null, unread_count: 0 }
+      : c)))
+    if (conversation.id === activeIdRef.current) {
+      // Anything newer than the clear (a message that landed meanwhile) stays.
+      setMessages((prev) => prev.filter((m) => m.id > (conversation.cleared_through_id ?? Infinity)))
+    }
+  }, [])
+
+  const onConversationDeleted = useCallback(({ id }) => {
+    setConversations((prev) => prev.filter((c) => c.id !== id))
+    if (id === activeIdRef.current) {
+      activeIdRef.current = null
+      setActiveId(null)
+      setMessages([])
+    }
+  }, [])
+
+  const onConversationBlocked = useCallback(({ id, blocked_at }) => {
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, blocked_at: blocked_at ?? null } : c)))
+  }, [])
+
   // Re-read the inbox from D1, which is the source of truth. The realtime
   // broadcast is best-effort and is never replayed, so every event sent while
   // the socket was down — a sleeping laptop, a network hop, a Supabase
@@ -136,7 +163,11 @@ export default function WhatsAppInbox() {
     if (thread && activeIdRef.current === openId) setMessages(thread.messages || [])
   }, [])
 
-  useInboxRealtime({ onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync: refresh })
+  useInboxRealtime({
+    onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
+    onConversationCleared, onConversationDeleted, onConversationBlocked,
+    onResync: refresh,
+  })
 
   // Reconcile whenever we might have missed something: coming back to the tab,
   // and on a slow timer as a backstop for a socket that is nominally up but
@@ -173,6 +204,25 @@ export default function WhatsAppInbox() {
     const { avatar_url } = await waApi.uploadAvatar(conv.id, file)
     setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, avatar_url } : c)))
   }, [])
+
+  // The confirmation is pinned to the chat it was opened for, so it can never
+  // act on a different one. A rejected promise keeps the dialog open with the
+  // API's message (ChatActionDialog shows it).
+  const [chatAction, setChatAction] = useState(null) // { action, id }
+  const requestChatAction = useCallback((action) => {
+    if (activeIdRef.current) setChatAction({ action, id: activeIdRef.current })
+  }, [])
+  const runChatAction = useCallback(async () => {
+    const { action, id } = chatAction
+    if (action === 'clear') onConversationCleared(await waApi.clearChat(id))
+    else if (action === 'delete') onConversationDeleted(await waApi.deleteChat(id))
+    else if (action === 'block' || action === 'unblock') {
+      const { conversation } = await (action === 'block' ? waApi.block(id) : waApi.unblock(id))
+      onConversationBlocked({ id, blocked_at: conversation?.blocked_at })
+    }
+    setChatAction(null)
+  }, [chatAction, onConversationCleared, onConversationDeleted, onConversationBlocked])
+  const chatActionConv = chatAction ? conversations.find((c) => c.id === chatAction.id) : null
 
   const mediaItems = useMemo(() => messages.filter(isViewable), [messages])
   const lightboxIndex = mediaItems.findIndex((m) => m.id === lightboxId)
@@ -212,12 +262,22 @@ export default function WhatsAppInbox() {
           onUploadAvatar={handleUploadAvatar}
           infoOpen={infoOpen}
           onToggleInfo={() => setInfoOpen((v) => !v)}
+          onChatAction={requestChatAction}
         />
       </main>
 
       {/* Right — contact details (third pane) */}
       {infoOpen && activeConv && (
-        <ContactPanel conversation={activeConv} messages={messages} onOpenMedia={openMedia} />
+        <ContactPanel conversation={activeConv} messages={messages} onOpenMedia={openMedia} onChatAction={requestChatAction} />
+      )}
+
+      {chatActionConv && (
+        <ChatActionDialog
+          action={chatAction.action}
+          conversation={chatActionConv}
+          onConfirm={runChatAction}
+          onClose={() => setChatAction(null)}
+        />
       )}
 
       {lightboxIndex >= 0 && (

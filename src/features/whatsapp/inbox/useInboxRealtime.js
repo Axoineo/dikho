@@ -14,7 +14,8 @@ import { supabase } from '../../../lib/supabase'
 // This is the whole "WebSocket engine" on the client — Supabase Realtime rides a
 // single multiplexed WS connection, so there is no server to run by hand.
 export function useInboxRealtime({
-  onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync,
+  onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
+  onConversationCleared, onConversationDeleted, onConversationBlocked, onResync,
 }) {
   useEffect(() => {
     const channel = supabase
@@ -23,6 +24,9 @@ export function useInboxRealtime({
       .on('broadcast', { event: 'message:updated' }, ({ payload }) => onMessageUpdated?.(payload))
       .on('broadcast', { event: 'status:update' }, ({ payload }) => onStatus?.(payload))
       .on('broadcast', { event: 'conversation:updated' }, ({ payload }) => onConversationUpdated?.(payload))
+      .on('broadcast', { event: 'conversation:cleared' }, ({ payload }) => onConversationCleared?.(payload))
+      .on('broadcast', { event: 'conversation:deleted' }, ({ payload }) => onConversationDeleted?.(payload))
+      .on('broadcast', { event: 'conversation:blocked' }, ({ payload }) => onConversationBlocked?.(payload))
       // Broadcasts are fire-and-forget: anything sent while the socket was
       // down is simply gone, never replayed. SUBSCRIBED fires on the initial
       // connect *and* on every reconnect, which is exactly when the client
@@ -30,5 +34,6 @@ export function useInboxRealtime({
       .subscribe((status) => { if (status === 'SUBSCRIBED') onResync?.() })
 
     return () => { supabase.removeChannel(channel) }
-  }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated, onResync])
+  }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
+    onConversationCleared, onConversationDeleted, onConversationBlocked, onResync])
 }

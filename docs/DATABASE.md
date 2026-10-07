@@ -145,12 +145,19 @@ the API Worker's configured database.
 | `contacts` | Campaign/import contacts and template attributes | Phone, name, email, company |
 | `campaigns` | Template campaign metadata and stored audience | Sender identity, audience IDs |
 | `messages` | Campaign and conversational messages/status | Phones, message bodies, media metadata |
-| `conversations` | One WhatsApp thread per phone | Phone, profile name, activity summary |
+| `conversations` | One WhatsApp thread per phone; also the clear boundary and block state | Phone, profile name, activity summary |
+| `conversation_events` | Who cleared, deleted or blocked a chat, or deleted a message | Staff user id |
+| `message_stars` | Each agent's own starred messages | Staff user id |
 | `webhook_events` | Idempotency/reconciliation ledger | Provider payload fragments |
 | `gstn_lookup_budget` | Global daily GST lookup count | Aggregate only |
 | `template_send_cooldowns` | Per-number/template send suppression | Phone and template |
 | `cg_lead_whatsapp_budget` | Global daily confirmation-send count | Aggregate only |
 | `cg_lead_outbox` | Delayed confirmation queue | Phone and lead name |
+
+Clear chat, Delete chat and deleting one message hide rows rather than remove
+them (`conversations.cleared_through_id`, `status = 'deleted'`,
+`messages.hidden_at`), so the record stays and the D1 write cost is one row;
+migration 0011 explains the choice and how to restore.
 
 D1 has no browser-facing SQL endpoint. All access passes through the API Worker,
 so route authentication and authorization are its row-access boundary.

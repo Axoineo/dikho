@@ -126,19 +126,34 @@ async function postMessage(env, message) {
   return { ok: true, messageId: body?.messages?.[0]?.id ?? null }
 }
 
+// `contextWamid` makes the message a reply that quotes an earlier one (Meta's
+// contextual replies). WhatsApp shows the quote only while the original is
+// under about 30 days old; the reply itself is delivered either way.
+function withContext(message, contextWamid) {
+  return contextWamid ? { ...message, context: { message_id: contextWamid } } : message
+}
+
 // Sends a plain text reply. preview_url lets Meta render link previews.
-export async function sendTextMessage(env, { to, body }) {
-  return postMessage(env, { to, type: 'text', text: { preview_url: true, body } })
+export async function sendTextMessage(env, { to, body, contextWamid }) {
+  return postMessage(env, withContext({ to, type: 'text', text: { preview_url: true, body } }, contextWamid))
 }
 
 // Sends a media reply by Meta media id (obtained from uploadMediaToMeta). A
 // caption is allowed on image/document/video but not audio; documents may carry
 // a filename shown to the recipient.
-export async function sendMediaMessage(env, { to, type, mediaId, caption, filename }) {
+export async function sendMediaMessage(env, { to, type, mediaId, caption, filename, contextWamid }) {
   const media = { id: mediaId }
   if (caption && type !== 'audio') media.caption = caption
   if (type === 'document' && filename) media.filename = filename
-  return postMessage(env, { to, type, [type]: media })
+  return postMessage(env, withContext({ to, type, [type]: media }, contextWamid))
+}
+
+// Reacts to a message with one emoji; an empty emoji takes the reaction off.
+// Meta refuses reactions to messages over 30 days old and to other reactions
+// (error 131009), and reports only a `sent` status for them, never delivered
+// or read.
+export async function sendReaction(env, { to, messageWamid, emoji }) {
+  return postMessage(env, { to, type: 'reaction', reaction: { message_id: messageWamid, emoji } })
 }
 
 // Marks an inbound message as read (blue ticks on the customer's side) and,
@@ -162,6 +177,56 @@ export async function markMessageRead(env, { messageId, typing = false }) {
     return { ok: false, errorCode: String(b?.error?.code ?? res.status), errorMessage: b?.error?.message ?? 'read receipt failed' }
   }
   return { ok: true }
+}
+
+const BLOCK_TIMEOUT_MS = 10_000
+
+// Adds one number to, or removes it from, the business's WhatsApp block list
+// (Cloud API Block Users: POST / DELETE /{phone-number-id}/block_users). A
+// blocked user cannot message the business and the business cannot message
+// them. Meta only lets a business block someone who messaged it in the last
+// 24 hours (error 131047); unblocking has no such window.
+//
+// Meta answers per user, and a refusal arrives as BOTH a `failed_users` entry
+// and a top-level 139100 "failed to block/unblock users" error. The user's own
+// entry is the useful one, so it wins over the generic error. Anything short
+// of Meta confirming the user is a failure: the caller only records a block
+// that Meta actually applied. Same error contract as postMessage.
+async function updateBlockList(env, method, phone) {
+  let res
+  try {
+    res = await fetch(graphUrl(`${env.WHATSAPP_PHONE_NUMBER_ID}/block_users`), {
+      method,
+      headers: {
+        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messaging_product: 'whatsapp', block_users: [{ user: `+${phone}` }] }),
+      signal: AbortSignal.timeout(BLOCK_TIMEOUT_MS),
+    })
+  } catch {
+    return { ok: false, errorCode: 'UNREACHABLE', errorMessage: 'Could not reach WhatsApp.' }
+  }
+
+  const body = await res.json().catch(() => ({}))
+  const result = body?.block_users ?? {}
+  const done = method === 'POST' ? result.added_users : result.removed_users
+  if (res.ok && !body?.error && Array.isArray(done) && done.length > 0) return { ok: true }
+
+  const error = result.failed_users?.[0]?.errors?.[0] ?? body?.error ?? {}
+  return {
+    ok: false,
+    errorCode: String(error.code ?? res.status),
+    errorMessage: error.error_data?.details ?? error.message ?? 'Meta API request failed',
+  }
+}
+
+export function blockUser(env, { phone }) {
+  return updateBlockList(env, 'POST', phone)
+}
+
+export function unblockUser(env, { phone }) {
+  return updateBlockList(env, 'DELETE', phone)
 }
 
 // Approved templates for the WABA. Callers fall back to a static definition

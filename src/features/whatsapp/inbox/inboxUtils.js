@@ -67,6 +67,12 @@ export function sessionMsLeft(lastInboundAt) {
   return Math.max(0, 24 * 3600 * 1000 - (Date.now() - d.getTime()))
 }
 
+// Meta only lets a business block someone who messaged it in the last 24
+// hours: the same window that allows free-form replies.
+export function canBlockNow(conversation) {
+  return sessionMsLeft(conversation?.last_inbound_at) > 0
+}
+
 export function formatCountdown(ms) {
   const h = Math.floor(ms / 3600000)
   const m = Math.floor((ms % 3600000) / 60000)

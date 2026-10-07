@@ -56,9 +56,15 @@ where listed.
 | Purchase Orders | `purchase_orders.view/create/edit/delete` | RLS `salesorder` rows with `vendor_address_id`, and items with `purchase_order_id` |
 | Invoices | `invoices.view/create/issue` | RLS `invoices`, `invoice_lines`, `invoice_sequences`; `issue_invoice()` |
 | Payments | `payments.view/record` | RLS `payments`, `payment_allocations` |
-| WhatsApp | `inbox.view/reply`, `wa_contacts.view/import/delete`, `campaigns.view/send`, `wa_templates.view`, `whatsapp.maintain` | API routes; inbox Realtime channel needs `inbox.view` |
+| WhatsApp | `inbox.view/reply/delete/block`, `wa_contacts.view/import/delete`, `campaigns.view/send`, `wa_templates.view`, `whatsapp.maintain` | API routes; inbox Realtime channel needs `inbox.view` |
 | User Management | `users.view/create/edit/roles/permissions/suspend/sessions`, `templates.manage`, `departments.manage`, `audit_logs.view`, `live_assist.use` | `um_*` functions behind `/api/users` |
 | Developer | `developer_tools.access`, `feature_flags.view/manage` | developer access only |
+
+`inbox.delete` (Clear chat, Delete chat, delete one message) and `inbox.block`
+(Block and Unblock on Meta's block list) come with no built-in template except
+Administrator; Owners and developers hold them as they hold everything.
+Reacting, forwarding and pinning need `inbox.reply`; starring needs only
+`inbox.view`, because a star is the person's own.
 
 `document_events` follows invoices or payments. `media`/`sub_media` stay
 readable by every staff member (and by the public vendor form).

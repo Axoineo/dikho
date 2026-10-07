@@ -76,6 +76,13 @@ function CallRow({ message, label }) {
   )
 }
 
+/* Compact, WhatsApp-sized bubbles: 14.2px text on a 19px line, 5px above and
+   below it, so a one-line message is 29px tall; 2px between bubbles in a run
+   and 12px where the sender changes. The clock sits ON the last line of text,
+   sharing its baseline, rather than hanging below it.
+   Preflight is off here, so every <p> must say m-0: the UA's 1em margins are
+   what used to make a one-word message 54px tall, with its clock alone on a
+   second line. */
 export function MessageBubble({ message, onOpenMedia, grouped = true, searchTerm = '' }) {
   const outbound = message.direction === 'outbound'
   const hasMedia = message.type !== 'text' && (message.media_url || message.media_status)
@@ -84,16 +91,39 @@ export function MessageBubble({ message, onOpenMedia, grouped = true, searchTerm
   const placeholder = placeholderLabel(message.body)
   const bodyText = placeholder ? null : message.body
   const mediaOnly = (hasMedia || isCall) && !bodyText && !placeholder
+  // Pictures and files sit in a 3px frame, the way WhatsApp draws them; text
+  // gets the full padding. A captionless file keeps a strip under its card
+  // for the clock. Over a captionless picture the clock rides the image.
+  const framed = !isCall && hasMedia
+  const overImage = mediaOnly && isImageOrVideo
+  const fileOnly = framed && mediaOnly && !isImageOrVideo
+  const padding = !framed ? 'py-[5px] pl-[9px] pr-[7px]' : fileOnly ? 'p-[3px] pb-[20px]' : 'p-[3px]'
+
+  const meta = (
+    <>
+      <span>{formatTime(message.wa_timestamp || message.created_at)}</span>
+      {outbound && <Ticks status={message.status} mediaOnly={overImage} />}
+    </>
+  )
+  // The clock is drawn in the corner, absolutely. The last line of text makes
+  // room for it with an invisible copy of the same clock, so the reserved gap
+  // is exactly as wide as the time and ticks really are: a short message keeps
+  // its clock on the same line, and a full line pushes it onto a new one.
+  const spacer = (
+    <span aria-hidden="true" className="invisible ml-[6px] inline-flex h-0 select-none items-center gap-[3px] overflow-hidden align-baseline text-[11px]">
+      {meta}
+    </span>
+  )
+  const textPadding = framed ? 'pl-[6px] pr-[4px] pt-[4px] pb-[2px]' : ''
 
   return (
-    <div className={`flex px-2 sm:px-4 ${grouped ? 'mt-2' : 'mt-[3px]'} ${outbound ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex px-[9px] ${grouped ? 'mt-3' : 'mt-[2px]'} ${outbound ? 'justify-end' : 'justify-start'}`}>
       <div
-        /* w-fit so the bubble is only as wide as its content — a six-digit OTP
-           gets a six-digit bubble. The cap is a reading measure (32rem) rather
-           than a share of the pane, so a long paragraph stays legible instead
-           of stretching across a wide monitor. */
-        className={`relative w-fit max-w-[min(72%,23rem)] rounded-bubble shadow-bubble pb-[5px] pl-[7px] pr-[6px] pt-[4px] text-[13.4px] leading-[18px]
-          ${mediaOnly ? 'pb-[19px]' : ''}
+        /* w-fit so the bubble is only as wide as its content: a six-digit OTP
+           gets a six-digit bubble. Pictures are capped at their own width so a
+           long caption wraps under the image instead of widening past it. */
+        className={`relative w-fit rounded-bubble shadow-bubble text-[14.2px] leading-[19px] ${padding}
+          ${framed && isImageOrVideo ? 'max-w-[min(85%,286px)]' : 'max-w-[85%] md:max-w-[75%] xl:max-w-[65%]'}
           ${outbound
             ? `bg-chat-bubble-out text-chat-bubble-out-text ${grouped ? 'rounded-tr-none' : ''}`
             : `bg-chat-bubble-in text-chat-text ${grouped ? 'rounded-tl-none' : ''}`}`}
@@ -109,45 +139,43 @@ export function MessageBubble({ message, onOpenMedia, grouped = true, searchTerm
 
         {isCall && <CallRow message={message} label={message.body || 'Missed voice call'} />}
 
-        {!isCall && hasMedia && (
-          <div className={`overflow-hidden ${bodyText ? 'mb-1' : ''} ${isImageOrVideo ? '-mx-0.5 -mt-0.5 rounded-lg' : ''}
-            ${mediaOnly && !isImageOrVideo ? 'mb-3' : ''}`}>
+        {framed && (
+          <div className="overflow-hidden rounded-[6px]">
             <AuthedMedia message={message} onOpen={() => onOpenMedia?.(message)} />
           </div>
         )}
 
-        {/* The timestamp is absolutely placed, and the last text line reserves
-            room for it with an inline spacer rather than the whole paragraph
-            carrying right padding. Padding indents EVERY line, which on a
-            multi-line message left a ragged empty column down the right side;
-            the spacer only affects the line the clock actually sits on. */}
         {placeholder && (
-          <p className="italic text-chat-sub">
+          <p className={`m-0 italic text-chat-sub ${textPadding}`}>
             {placeholder}
-            <span aria-hidden="true" className={`inline-block h-0 ${outbound ? 'w-[54px]' : 'w-[38px]'}`} />
+            {spacer}
           </p>
         )}
         {bodyText && (
-          <p className="whitespace-pre-wrap break-words">
+          <p className={`m-0 whitespace-pre-wrap break-words ${textPadding}`}>
             {highlight(bodyText, searchTerm)}
-            <span aria-hidden="true" className={`inline-block h-0 ${outbound ? 'w-[54px]' : 'w-[38px]'}`} />
+            {spacer}
           </p>
         )}
 
-        {/* Over a picture the clock needs its own ground — on a white sky it
+        {/* Over a picture the clock needs its own ground: on a white sky it
             vanished, and the ticks with it. A scrim only under the corner it
             occupies, so the image is otherwise untouched. */}
-        {mediaOnly && isImageOrVideo && (
-          <span aria-hidden="true" className="media-scrim pointer-events-none absolute inset-x-0 bottom-0 h-11 rounded-b-bubble" />
+        {overImage && (
+          <span aria-hidden="true" className="media-scrim pointer-events-none absolute inset-x-[3px] bottom-[3px] h-11 rounded-b-[6px]" />
         )}
 
+        {/* With text, a 19px line box at bottom-[4px] puts the clock's
+            baseline exactly on the last line's (measured: the 11px clock
+            centred in the same 19px box as the 14.2px text sits 1px high, and
+            the bottom padding is 5px, or a caption's 3px frame plus 2px).
+            Under a file card and over a picture it has a strip of its own. */}
         {!isCall && (
-          <span className={`absolute bottom-[4px] right-[7px] z-[1] flex select-none items-center gap-[5px] text-[10.5px] leading-[10px]
-            ${mediaOnly && isImageOrVideo
-              ? 'text-white/95'
-              : outbound ? 'text-chat-meta' : 'text-chat-sub'}`}>
-            {formatTime(message.wa_timestamp || message.created_at)}
-            {outbound && <Ticks status={message.status} mediaOnly={mediaOnly && isImageOrVideo} />}
+          <span className={`absolute z-[1] flex select-none items-center gap-[3px] text-[11px]
+            ${overImage
+              ? 'bottom-[6px] right-[9px] leading-[15px] text-white/95'
+              : `right-[7px] ${fileOnly ? 'bottom-[3px] leading-[15px]' : 'bottom-[4px] leading-[19px]'} ${outbound ? 'text-chat-meta' : 'text-chat-sub'}`}`}>
+            {meta}
           </span>
         )}
 
