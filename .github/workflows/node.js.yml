@@ -26,7 +26,7 @@ jobs:
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
@@ -46,7 +46,7 @@ jobs:
     # in docs/SECURITY-AUDIT.md, never by deleting this step.
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: actions/setup-node@v4
       with:
         node-version: 22.x
@@ -57,7 +57,7 @@ jobs:
     # working tree is just the tracked source (no node_modules / no dist).
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Install gitleaks
       run: |
         GITLEAKS_VERSION=8.21.2
