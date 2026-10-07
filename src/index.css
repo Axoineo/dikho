@@ -4233,3 +4233,6 @@ select.pvf-input.has-error:focus,
 .login-notice { margin: 0 0 16px; padding: 10px 12px; border-radius: 8px; background: rgba(249, 175, 27, 0.16); color: inherit; font-size: 13px; line-height: 1.5; }
 [data-theme="dark"] .settings-card-desc a { color: #8fbfec; }
 .inbox-readonly-note { margin: 0; padding: 14px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; background: var(--surface); }
+
+/* "Ask for help" row at the top of the sidebar footer (Live Assist). */
+.sidebar-help { margin-bottom: 6px; }

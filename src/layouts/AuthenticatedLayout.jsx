@@ -9,6 +9,8 @@ import Login from '../features/auth/Login'
 import AccessDenied from '../components/AccessDenied'
 import { AccessContext, canOpen, sectionFor } from '../lib/access'
 import { apiPost } from '../lib/api'
+import { STAFF_EVENTS, emitStaffEvent } from '../lib/staffBus'
+import LiveAssistProvider from '../features/live-assist/LiveAssistProvider'
 
 // Why a session ended, shown on the sign-in screen afterwards.
 const SIGNOUT_NOTICE_KEY = 'dikho-signout-notice'
@@ -203,7 +205,11 @@ export default function AuthenticatedLayout() {
         if (payload?.session_id && payload.session_id !== mySession) return
         signOutWithNotice(payload?.reason ?? 'forced')
       })
-      .subscribe()
+    // Live Assist notices ride the same channel; the provider listens on the bus.
+    for (const event of STAFF_EVENTS) {
+      channel.on('broadcast', { event }, ({ payload }) => emitStaffEvent(event, payload))
+    }
+    channel.subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [granted, myId, mySession, signOutWithNotice])
 
@@ -320,6 +326,7 @@ export default function AuthenticatedLayout() {
 
   return (
     <AccessContext.Provider value={access}>
+    <LiveAssistProvider>
     <div className={`app-shell${collapsed ? ' sidebar-is-closed' : ''}`}>
       <Sidebar
         collapsed={collapsed}
@@ -360,6 +367,7 @@ export default function AuthenticatedLayout() {
         </div>
       )}
     </div>
+    </LiveAssistProvider>
     </AccessContext.Provider>
   )
 }

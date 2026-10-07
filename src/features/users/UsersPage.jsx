@@ -9,6 +9,7 @@ import DepartmentsTab from './DepartmentsTab'
 import AuditTimeline from './AuditTimeline'
 import { UserAvatar, RoleBadges, StatusPill } from './UserBits'
 import { activityLabel, STATUS_LABELS } from './userFormat'
+import { useLiveAssist } from '../live-assist/liveAssistContext'
 import './users.css'
 
 // While this page is open, the list refreshes on this interval so "Online"
@@ -81,6 +82,7 @@ const FILTERS = {
 
 function PeopleTab({ catalog }) {
   const { can } = useAccess()
+  const liveAssist = useLiveAssist()
   const navigate = useNavigate()
   const [members, setMembers] = useState(null)
   const [error, setError] = useState('')
@@ -239,6 +241,16 @@ function PeopleTab({ catalog }) {
                       {m.online && <i className="um-dot" aria-hidden="true" />}
                       {activityLabel(m)}
                     </span>
+                    {liveAssist?.helpRequestFor(m.user_id) && (
+                      <button
+                        type="button"
+                        className="um-help-chip is-button"
+                        onClick={(e) => { e.stopPropagation(); liveAssist.startAssist(m, liveAssist.helpRequestFor(m.user_id).id) }}
+                        disabled={liveAssist.busy}
+                      >
+                        Needs help · Help now
+                      </button>
+                    )}
                   </td>
                   <td className="actions-column">
                     <span className="row-action" aria-hidden="true"><Icon name="chevron" size={17} /></span>

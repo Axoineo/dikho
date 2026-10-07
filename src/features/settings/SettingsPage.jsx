@@ -74,7 +74,9 @@ export default function SettingsPage({ themeMode, onThemeChange }) {
         <p className="settings-card-desc">
           Administrators can see when you were last active, which section of Dikho you are using,
           and the approximate location (city) and device of each sign-in. They can also sign you
-          out of a device.
+          out of a device. With Live Assist, and only after you accept, someone helping you can see
+          this Dikho tab and point at things. You always see a banner while it is on and can stop it
+          at any time; they cannot click or type for you, and nothing is recorded.
         </p>
         {access?.user_id && (
           <p className="settings-card-desc">

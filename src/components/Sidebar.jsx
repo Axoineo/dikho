@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { AccessContext, canOpen } from '../lib/access'
+import { useLiveAssist } from '../features/live-assist/liveAssistContext'
 
 /* Outlined 24px glyphs on a shared 1.7 stroke, so the rail reads as one set.
    Each one names the thing rather than the money: a cart for what we sell, a
@@ -177,6 +178,14 @@ function SidebarIcon({ name, size = 20 }) {
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    ),
+    /* A lifebuoy: help that comes to you. */
+    help: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="8.6" />
+        <circle cx="12" cy="12" r="3.6" />
+        <path d="m5.9 5.9 3.5 3.5M14.6 14.6l3.5 3.5M18.1 5.9l-3.5 3.5M9.4 14.6l-3.5 3.5" />
       </svg>
     ),
     /* A person beside a small shield: people, and what they may do. */
@@ -370,6 +379,7 @@ function readAccount(session, staffName) {
    settings already has a permanent control right here. */
 function SidebarAccount({ collapsed, session, onLogout, onShowTip, onHideTip }) {
   const access = useContext(AccessContext)
+  const liveAssist = useLiveAssist()
   const { name, initials, avatarUrl } = readAccount(session, access?.full_name)
   /* null when closed; { leaving } while mounted, so the panel can animate out
      instead of being pulled from the DOM the moment it is dismissed. */
@@ -428,6 +438,21 @@ function SidebarAccount({ collapsed, session, onLogout, onShowTip, onHideTip }) 
 
   return (
     <div className="sidebar-footer" ref={footerRef}>
+      {/* Live Assist: tells the people who can help, who can then ask to see
+          this tab. Shown to everyone; the server decides who is told. */}
+      {liveAssist && (
+        <button
+          type="button"
+          className={`nav-item sidebar-help${liveAssist.hasOpenHelpRequest ? ' is-open' : ''}`}
+          onClick={() => { onHideTip(); liveAssist.openAskHelp() }}
+          data-tip={liveAssist.hasOpenHelpRequest ? 'Help requested' : 'Ask for help'}
+          onMouseEnter={onShowTip}
+          onMouseLeave={onHideTip}
+        >
+          <span className="nav-icon"><SidebarIcon name="help" size={20} /></span>
+          <span className="nav-label">{liveAssist.hasOpenHelpRequest ? 'Help requested' : 'Ask for help'}</span>
+        </button>
+      )}
       <div className="sidebar-footer-divider" />
 
       {menu && (

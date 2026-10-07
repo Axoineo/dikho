@@ -103,6 +103,10 @@ escalation rules and write `audit_log` in the same transaction.
   role.
 - Built-in templates are reset to the migration's contents if it is
   re-applied; custom templates are untouched.
+- `live_assist_sessions` and `help_requests` (Live Assist, ADR 0008) follow
+  the same pattern: no browser privileges, written by the `la_*` functions
+  through the Worker. `public.la_can_use_topic()` backs the Realtime policies
+  that limit `assist:<session id>` channels to the two participants.
 
 Avoid new sensitive policies using unconditional `USING (true)` or
 `WITH CHECK (true)`.

@@ -148,17 +148,30 @@ export async function setSignInBlocked(env, userId, blocked) {
 // their session was ended, so it signs out at once instead of on its next
 // request. Best effort: the database already refuses the session.
 export async function notifySignedOut(env, userId, { reason, sessionId = null }) {
+  await notifyStaff(env, [{ userId, event: 'signed_out', payload: { reason, session_id: sessionId } }], 'users.notify_signed_out')
+}
+
+// Sends events to people's private `staff:<user id>` channels in ONE request
+// (the Free plan allows 50 outbound requests per call). Only that person may
+// listen on their channel and only the service role may publish to it
+// (Realtime policies in the user-management and live-assist migrations).
+// Best effort: a notice that does not arrive never changes what the database
+// already decided.
+export async function notifyStaff(env, notices, label = 'staff.notify') {
+  const messages = notices
+    .filter((n) => typeof n.userId === 'string' && n.userId)
+    .slice(0, 30)
+    .map((n) => ({ topic: `staff:${n.userId}`, event: n.event, payload: n.payload ?? {}, private: true }))
+  if (messages.length === 0) return
   try {
     const res = await fetch(`${env.SUPABASE_URL}/realtime/v1/api/broadcast`, {
       method: 'POST',
       headers: serviceHeaders(env),
-      body: JSON.stringify({
-        messages: [{ topic: `staff:${userId}`, event: 'signed_out', payload: { reason, session_id: sessionId }, private: true }],
-      }),
+      body: JSON.stringify({ messages }),
       signal: AbortSignal.timeout(5_000),
     })
-    if (!res.ok) logError('users.notify_signed_out.failed', `HTTP ${res.status}`)
+    if (!res.ok) logError(`${label}.failed`, `HTTP ${res.status}`)
   } catch (err) {
-    logError('users.notify_signed_out.failed', err)
+    logError(`${label}.failed`, err)
   }
 }

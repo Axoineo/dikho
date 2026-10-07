@@ -14,6 +14,7 @@ import templates from './routes/templates/index.js'
 import cgLeads from './routes/cgLeads/index.js'
 import users from './routes/users/index.js'
 import me from './routes/me/index.js'
+import assist from './routes/assist/index.js'
 import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
 import { maybeReconcileOnRequest } from './services/whatsapp/reconcile.js'
 
@@ -83,7 +84,7 @@ export function createApiApp() {
   // Dashboard routes: require a live session of an active staff member. Both
   // the bare path and the wildcard are registered: Hono's `/x/*` does not
   // match `/x`. Each route then checks its own permission (requirePermission).
-  for (const base of ['/contacts', '/campaigns', '/templates', '/cg-leads', '/users', '/me']) {
+  for (const base of ['/contacts', '/campaigns', '/templates', '/cg-leads', '/users', '/me', '/assist']) {
     app.use(base, requireAuth)
     app.use(`${base}/*`, requireAuth)
   }
@@ -93,6 +94,7 @@ export function createApiApp() {
   app.route('/cg-leads', cgLeads)
   app.route('/users', users)
   app.route('/me', me)
+  app.route('/assist', assist)
 
   return app
 }

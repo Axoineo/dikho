@@ -12,6 +12,7 @@ import { RoleBadges, StatusPill, UserAvatar } from './UserBits'
 import {
   activityLabel, countryName, dateOnly, dateTime, deviceLabel, locationLabel, relativeTime, sectionLabel,
 } from './userFormat'
+import { useLiveAssist } from '../live-assist/liveAssistContext'
 import './users.css'
 
 const SCOPE_RANK = { own: 1, team: 2, department: 3, all: 4 }
@@ -28,6 +29,7 @@ export default function UserProfilePage() {
   const [editing, setEditing] = useState(false)
   const [notice, setNotice] = useState('')
   const isSelf = access?.user_id === userId
+  const liveAssist = useLiveAssist()
 
   const load = useCallback(() => {
     usersApi.get(userId).then((m) => { setMember(m); setError('') }, (err) => setError(err.message))
@@ -39,6 +41,16 @@ export default function UserProfilePage() {
     load()
     if (canViewUsers) usersApi.catalog().then(setCatalog, () => {})
   }, [load, canViewUsers])
+
+  // Keep presence current while the page is open, so "Online" and the Live
+  // Assist button follow the person coming and going. The Access tab only
+  // resets when their access itself changes, so edits in progress survive.
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') usersApi.get(userId).then(setMember, () => {})
+    }, 30_000)
+    return () => clearInterval(t)
+  }, [userId])
 
   if (error && !member) {
     return (
@@ -135,10 +147,22 @@ export default function UserProfilePage() {
             <span className={`um-activity${member.online ? ' is-online' : ''}`}>
               {member.online && <i className="um-dot" aria-hidden="true" />}{activityLabel(member)}
             </span>
+            {liveAssist?.helpRequestFor(member.user_id) && <span className="um-help-chip">Asking for help</span>}
           </div>
         </div>
         {manage && (
           <div className="um-profile-actions">
+            {liveAssist?.canHelp && member.status === 'active' && (
+              <button
+                type="button"
+                className="primary-button um-assist-button"
+                onClick={() => liveAssist.startAssist(member, liveAssist.helpRequestFor(member.user_id)?.id ?? null)}
+                disabled={!member.online || liveAssist.busy}
+                title={member.online ? `See ${member.full_name}'s Dikho tab, with their OK, and point at things` : `${member.full_name} is not online right now`}
+              >
+                Live Assist
+              </button>
+            )}
             {member.status === 'invited' && can('users.create') && (
               <button type="button" className="secondary-button" onClick={actions.welcome}>Resend welcome</button>
             )}
@@ -302,12 +326,16 @@ function AccessTab({ member, catalog, readOnly, onSaved }) {
   const [error, setError] = useState('')
   const [confirm, setConfirm] = useState(null)
 
+  // Reset the form only when the saved access changes, not on every refresh
+  // of the profile (presence updates every 30 seconds).
+  const savedAccess = JSON.stringify([member.system_role, member.developer_level, member.template_id, sortKeys(member.overrides)])
   useEffect(() => {
-    setRole(member.system_role)
-    setDev(member.developer_level ?? '')
-    setTemplateId(member.template_id ?? '')
-    setOverrides(member.overrides ?? {})
-  }, [member])
+    const [role0, dev0, template0, overrides0] = JSON.parse(savedAccess)
+    setRole(role0)
+    setDev(dev0 ?? '')
+    setTemplateId(template0 ?? '')
+    setOverrides(overrides0 ?? {})
+  }, [savedAccess])
 
   const inherited = useMemo(() => inheritedFor(catalog, templateId, role), [catalog, templateId, role])
   const superuser = role === 'owner' || Boolean(dev)

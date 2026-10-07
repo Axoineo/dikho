@@ -29,10 +29,13 @@ emergency. Every change is checked server-side and recorded.
   the not-yet-updated production database.
 - Each person's theme choice is saved to their profile.
 - "Active now" shows the section of Dikho a person is in.
-- **Live Assist** (phase 2): an admin can view and control an employee's Dikho
-  tab without asking first; the employee always sees a banner and cannot end
-  it. Owners and Admins downward, plus developers. Built on rrweb (MIT).
-  Every session and every admin action is logged.
+- **Live Assist** (phase 2, built 2026-10-07, [ADR 0008](../decisions/0008-live-assist.md)). Changed on 2026-10-07 from the
+  first answer (control without asking): the employee accepts each request,
+  the browser shares their Dikho tab, and the admin watches live, points at and
+  highlights things, and can suggest a page. The employee keeps control and can
+  stop at any time. Nothing is recorded; the audit log keeps who helped whom,
+  when and for how long. Owners and Admins downward, plus developers. No
+  remote control and no rrweb dependency.
 
 ## Non-goals (phase 1)
 
@@ -119,7 +122,9 @@ the inbox), and Cloudflare locations outside this machine's own.
 
 ## Next
 
-- Phase 2: Live Assist (decisions above).
+- Phase 2, Live Assist: built and verified locally on 2026-10-07 (ADR 0008);
+  rollout is migration `20261007114458_live_assist.sql`, then the API, then
+  the dashboard. Add a TURN relay if a network cannot connect directly.
 - Phase 3: developer area and feature flags.
 - Team/department scopes per module, starting with sales orders.
 - Bind media tickets to a user so revocation also ends them.

@@ -14,6 +14,11 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- Live Assist: with an employee's OK, a colleague who may help them sees their
+  Dikho tab live, points at and highlights things, and suggests pages. No
+  remote control and nothing recorded. Plus "Ask for help", which tells the
+  people who can help. See ADR 0008.
+
 - User Management: staff profiles, departments and teams, permission
   templates, per-person permission overrides, system roles and developer
   levels, per-action permissions enforced by RLS and the API, an append-only

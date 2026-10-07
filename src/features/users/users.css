@@ -377,3 +377,15 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
   .um-people td, .um-people th { padding-left: 10px; padding-right: 10px; }
   .um-people .um-sub { overflow-wrap: anywhere; }
 }
+
+/* Live Assist on the user screens. */
+.um-help-chip {
+  display: inline-block; margin-top: 4px; padding: 2px 9px; border-radius: 999px; border: 0;
+  background: rgba(249, 175, 27, 0.18); color: #8a5a00; font: inherit; font-size: 11.5px; font-weight: 700; white-space: nowrap;
+}
+[data-theme="dark"] .um-help-chip { color: #f5c35b; }
+.um-help-chip.is-button { cursor: pointer; }
+.um-help-chip.is-button:hover:not(:disabled) { background: rgba(249, 175, 27, 0.3); }
+.um-people .um-help-chip { display: block; width: fit-content; }
+.um-assist-button { min-height: 42px; padding: 0 18px; font-size: 14px; border-radius: 8px; }
+.um-assist-button:disabled { opacity: 0.55; cursor: not-allowed; }

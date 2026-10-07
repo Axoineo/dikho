@@ -50,3 +50,4 @@ Create a superseding ADR so the decision history remains understandable.
 - [0005: One organization per public-release instance](0005-one-organization-per-instance.md)
 - [0006: Staff membership in Supabase app_metadata](0006-staff-membership-in-app-metadata.md) (role list superseded by 0007)
 - [0007: User Management with per-action permissions](0007-user-management-and-permissions.md)
+- [0008: Live Assist by consented tab sharing](0008-live-assist.md)
