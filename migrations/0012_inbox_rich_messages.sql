@@ -1,0 +1,13 @@
+-- Structured content for WhatsApp messages that are more than text or a file:
+-- locations, contact cards, reply buttons and lists the business sends, the
+-- option a customer picked, an address or form a customer submitted, the ad a
+-- customer came from, orders, system notices, voice notes and templates.
+-- Apply BEFORE deploying the API that writes it:
+--   npx wrangler d1 migrations apply dikho-whatsapp --remote -c wrangler.api.jsonc
+--
+-- JSON text, written only by the API (services/whatsapp/richContent.js), which
+-- keeps to a fixed shape per kind and caps the size. `body` still carries a
+-- plain-text summary of the same message, so the chat list, search and any
+-- older dashboard keep working without reading this column. NULL for plain
+-- text and ordinary files, and for every row written before this migration.
+ALTER TABLE messages ADD COLUMN payload TEXT;

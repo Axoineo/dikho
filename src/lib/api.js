@@ -131,11 +131,13 @@ export const waApi = {
   conversations: () => apiGet('/whatsapp/conversations'),
   messages: (id) => apiGet(`/whatsapp/conversations/${id}/messages`),
   markRead: (id) => apiPost(`/whatsapp/conversations/${id}/read`),
-  sendText: (id, body) => apiPost(`/whatsapp/conversations/${id}/messages`, { body }),
-  sendMedia: async (id, file, caption = '') => {
+  sendText: (id, body, replyTo) => apiPost(`/whatsapp/conversations/${id}/messages`, { body, replyTo }),
+  sendMedia: async (id, file, caption = '', { replyTo, voice = false } = {}) => {
     const form = new FormData()
     form.append('file', file)
     if (caption) form.append('caption', caption)
+    if (replyTo) form.append('replyTo', String(replyTo))
+    if (voice) form.append('voice', '1')
     return unwrap(await fetch(`${BASE}/whatsapp/conversations/${id}/media`, {
       method: 'POST',
       headers: await authHeader(),
@@ -153,6 +155,18 @@ export const waApi = {
   },
   mediaTicket: () => apiGet('/whatsapp/media-ticket'),
   typing: (id) => apiPost(`/whatsapp/conversations/${id}/typing`),
+  sendLocation: (id, input) => apiPost(`/whatsapp/conversations/${id}/location`, input),
+  sendContact: (id, input) => apiPost(`/whatsapp/conversations/${id}/contact`, input),
+  sendInteractive: (id, input) => apiPost(`/whatsapp/conversations/${id}/interactive`, input),
+  sendTemplate: (id, input) => apiPost(`/whatsapp/conversations/${id}/template`, input),
+  templates: () => apiGet('/templates'),
+  react: (id, messageId, emoji) => apiPost(`/whatsapp/conversations/${id}/messages/${messageId}/reaction`, { emoji }),
+  pin: (id, messageId) => apiPost(`/whatsapp/conversations/${id}/messages/${messageId}/pin`),
+  unpin: (id, messageId) => apiDelete(`/whatsapp/conversations/${id}/messages/${messageId}/pin`),
+  star: (id, messageId) => apiPost(`/whatsapp/conversations/${id}/messages/${messageId}/star`),
+  unstar: (id, messageId) => apiDelete(`/whatsapp/conversations/${id}/messages/${messageId}/star`),
+  deleteMessage: (id, messageId) => apiDelete(`/whatsapp/conversations/${id}/messages/${messageId}`),
+  forward: (id, messageId) => apiPost(`/whatsapp/conversations/${id}/forward`, { messageId }),
   clearChat: (id) => apiPost(`/whatsapp/conversations/${id}/clear`),
   deleteChat: (id) => apiDelete(`/whatsapp/conversations/${id}`),
   block: (id) => apiPost(`/whatsapp/conversations/${id}/block`),

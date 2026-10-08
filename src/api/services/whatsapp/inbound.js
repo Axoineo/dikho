@@ -6,32 +6,14 @@
 import { broadcast } from './realtime.js'
 import { ingestMedia, markMediaFailed } from './media.js'
 import { logError } from '../../utils/logger.js'
+import { parseInbound, serializePayload } from './richContent.js'
 
-// Normalises each supported message type to { type, body, media }. Unsupported
-// types (location, contacts, reactions, ...) still create a row with a readable
-// placeholder so the thread never silently drops a customer message.
-function parseContent(m) {
-  switch (m.type) {
-    case 'text':     return { type: 'text', body: m.text?.body ?? '', media: null }
-    case 'image':    return { type: 'image', body: m.image?.caption ?? '', media: m.image }
-    case 'document': return { type: 'document', body: m.document?.caption ?? '', media: m.document }
-    case 'audio':    return { type: 'audio', body: '', media: m.audio }
-    case 'video':    return { type: 'video', body: m.video?.caption ?? '', media: m.video }
-    case 'sticker':  return { type: 'sticker', body: '', media: m.sticker }
-    // A customer tapping a button or a list item arrives as its own type with
-    // the chosen label nested inside. Left unparsed it fell through to the
-    // placeholder below and the agent saw a literal "[interactive]" in the
-    // thread instead of what the customer actually chose.
-    case 'interactive': {
-      const i = m.interactive ?? {}
-      const reply = i.button_reply ?? i.list_reply ?? {}
-      return { type: 'interactive', body: reply.title ?? '[interactive]', media: null }
-    }
-    case 'button':   return { type: 'button', body: m.button?.text ?? '[button]', media: null }
-    case 'reaction': return { type: 'reaction', body: m.reaction?.emoji ?? '', media: null }
-    default:         return { type: m.type ?? 'unknown', body: `[${m.type ?? 'unsupported message'}]`, media: null }
-  }
-}
+// Each message kind becomes { type, body, media, payload } in
+// richContent.parseInbound: `body` is the plain-text summary, `payload` the
+// structured version (locations, contact cards, chosen options, submitted
+// addresses, ad referrals, orders, system notices). Unknown kinds still create
+// a row with a readable placeholder, so the thread never silently drops a
+// customer message.
 
 export async function processInboundMessage(c, event) {
   const db = c.env.DB
@@ -41,7 +23,7 @@ export async function processInboundMessage(c, event) {
     ? new Date(Number(event.timestamp) * 1000).toISOString()
     : new Date().toISOString()
 
-  const { type, body, media } = parseContent(m)
+  const { type, body, media, payload } = parseInbound(m)
   const preview = (body || `📎 ${type}`).slice(0, 120)
 
   // 1. Contact upsert. Keep an existing name; only fill it from the WhatsApp
@@ -94,13 +76,14 @@ export async function processInboundMessage(c, event) {
   const res = await db.prepare(
     `INSERT INTO messages
        (conversation_id, contact_id, phone, meta_message_id, direction, type,
-        body, media_id, media_mime, media_filename, media_status, status, wa_timestamp, created_at, context_wamid)
-     VALUES (?1, ?2, ?3, ?4, 'inbound', ?5, ?6, ?7, ?8, ?9, ?10, 'received', ?11, ?11, ?12)
+        body, media_id, media_mime, media_filename, media_status, status, wa_timestamp, created_at, context_wamid, payload)
+     VALUES (?1, ?2, ?3, ?4, 'inbound', ?5, ?6, ?7, ?8, ?9, ?10, 'received', ?11, ?11, ?12, ?13)
      ON CONFLICT(meta_message_id) DO NOTHING`,
   ).bind(
     conv.id, contact?.id ?? null, phone, m.id, type, body,
     media?.id ?? null, media?.mime_type ?? null, media?.filename ?? null, mediaStatus, at,
     typeof contextWamid === 'string' ? contextWamid.slice(0, 200) : null,
+    serializePayload(payload),
   ).run()
   if ((res.meta?.changes ?? 0) === 0) return // duplicate; already delivered to the UI
 

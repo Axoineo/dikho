@@ -1,7 +1,12 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok, fail } from '../../utils/response.js'
-import { sendTextMessage, sendMediaMessage, sendReaction, markMessageRead, blockUser, unblockUser } from '../../services/whatsapp/graph.js'
+import {
+  sendTextMessage, sendMediaMessage, sendReaction, sendStructuredMessage, sendTemplateMessage,
+  fetchApprovedTemplates, markMessageRead, blockUser, unblockUser,
+} from '../../services/whatsapp/graph.js'
+import { InputError, buildContact, buildInteractive, buildLocation, serializePayload } from '../../services/whatsapp/richContent.js'
+import { buildComponents, renderTemplateText, sanitizeParam, templateTokens } from '../../../lib/templateVars.js'
 import { uploadMediaToMeta, storeOutboundCopy } from '../../services/whatsapp/media.js'
 import { broadcast } from '../../services/whatsapp/realtime.js'
 import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
@@ -86,6 +91,17 @@ const MEDIA_RULES = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': { type: 'document', maxBytes: 16 * MB },
 }
 const MAX_MEDIA_REQUEST_BYTES = 16 * MB + 64 * 1024
+
+// An Ogg stream whose first packet is an Opus header: "OggS" at byte 0 and
+// "OpusHead" where the first page's payload starts, after the 27-byte page
+// header and its segment table (Ogg Opus puts that header alone on page one).
+function isOggOpus(mime, bytes) {
+  if (mime !== 'audio/ogg' || bytes.byteLength < 64) return false
+  const b = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 320))
+  const ascii = (from, len) => String.fromCharCode(...b.subarray(from, from + len))
+  const start = 27 + b[26]
+  return ascii(0, 4) === 'OggS' && ascii(start, 8) === 'OpusHead'
+}
 
 // Contact photos: raster images only (no SVG, which can carry script).
 const AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
@@ -174,7 +190,7 @@ conversations.post('/:id/typing', requirePermission('inbox.reply'), async (c) =>
 // same row. Returns the stored row. A reaction leaves the summary alone: it is
 // not a message in the list's sense, and Meta never reports it delivered or
 // read, so it would park a lone grey tick on the row.
-async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, mediaMime, filename, mediaSize, contextWamid }) {
+async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, mediaMime, filename, mediaSize, contextWamid, payload }) {
   const user = c.get('user')
   const now = new Date().toISOString()
 
@@ -182,12 +198,12 @@ async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, me
     `INSERT INTO messages
        (conversation_id, contact_id, phone, meta_message_id, direction, type,
         body, media_url, media_mime, media_filename, media_size, media_status, status, sender, sent_at, wa_timestamp, created_at,
-        context_wamid)
-     VALUES (?1, ?2, ?3, ?4, 'outbound', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'sent', ?12, ?13, ?13, ?13, ?14)`,
+        context_wamid, payload)
+     VALUES (?1, ?2, ?3, ?4, 'outbound', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'sent', ?12, ?13, ?13, ?13, ?14, ?15)`,
   ).bind(
     conv.id, conv.contact_id, conv.phone, metaMessageId, type, body ?? null,
     mediaUrl ?? null, mediaMime ?? null, filename ?? null, mediaSize ?? null, mediaUrl ? 'ready' : null,
-    user?.id ?? null, now, contextWamid ?? null,
+    user?.id ?? null, now, contextWamid ?? null, serializePayload(payload),
   ).run()
 
   if (type !== 'reaction') {
@@ -246,6 +262,9 @@ conversations.post('/:id/media', requirePermission('inbox.reply'), async (c) => 
   }
   const contextWamid = await replyContext(c.env.DB, conv, form.get('replyTo'))
   if (contextWamid === null) return fail(c, 'REPLY_TARGET_GONE', GONE_MESSAGE, 409)
+  // A voice note must be OGG with Opus inside, or WhatsApp shows it as a plain
+  // audio file; the dashboard's recorder produces exactly that.
+  const voice = form.get('voice') === '1'
 
   const mime = (file.type || '').split(';')[0].trim().toLowerCase()
   const rule = MEDIA_RULES[mime]
@@ -260,6 +279,9 @@ conversations.post('/:id/media', requirePermission('inbox.reply'), async (c) => 
   if (rule.sniff && sniffType(bytes) !== mime) {
     return fail(c, 'UNSUPPORTED_MEDIA', 'The file content does not match its type.', 415)
   }
+  if (voice && !isOggOpus(mime, bytes)) {
+    return fail(c, 'UNSUPPORTED_MEDIA', 'A voice note must be an OGG/Opus recording.', 415)
+  }
   const filename = safeDisplayName(file.name, 'upload')
   const type = rule.type
 
@@ -271,13 +293,14 @@ conversations.post('/:id/media', requirePermission('inbox.reply'), async (c) => 
   if (!uploaded.ok) return fail(c, 'MEDIA_UPLOAD_FAILED', uploaded.errorMessage, 502)
 
   const sent = await sendMediaMessage(c.env, {
-    to: conv.phone, type, mediaId: uploaded.mediaId, caption, filename, contextWamid,
+    to: conv.phone, type, mediaId: uploaded.mediaId, caption: voice ? '' : caption, filename, contextWamid, voice,
   })
   if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
 
   const row = await recordOutbound(c, conv, {
-    metaMessageId: sent.messageId, type, body: caption || null,
+    metaMessageId: sent.messageId, type, body: voice ? null : caption || null,
     mediaUrl, mediaMime: mime, filename, mediaSize: file.size ?? bytes.byteLength, contextWamid,
+    payload: voice ? { kind: 'voice' } : null,
   })
   return ok(c, { message: row })
 })
@@ -444,6 +467,115 @@ conversations.delete('/:id/block', requirePermission('inbox.block'), async (c) =
   return ok(c, { conversation: fresh })
 })
 
+/* ── Locations, contact cards, buttons, lists, links, requests ───────────
+   Free-form messages like a text reply: open 24-hour window, not blocked,
+   `replyTo` quotes a message. richContent.js checks Meta's limits first, so
+   a refusal names the field to fix instead of passing on Meta's error. */
+
+async function sendableConversation(c) {
+  const conv = await findConversation(c)
+  if (!conv) return { error: fail(c, 'NOT_FOUND', 'Conversation not found', 404) }
+  if (conv.blocked_at) return { error: fail(c, 'BLOCKED', BLOCKED_MESSAGE, 409) }
+  if (!withinSession(conv)) {
+    return { error: fail(c, 'OUTSIDE_24H', 'The 24-hour reply window has closed. Send an approved template instead.', 409) }
+  }
+  return { conv }
+}
+
+function structuredRoute(build, type) {
+  return async (c) => {
+    const input = (await readJsonOr(c, 32 * 1024, {})) ?? {}
+    let built
+    try { built = build(input) } catch (err) {
+      if (err instanceof InputError) return fail(c, 'INVALID', err.message, 400)
+      throw err
+    }
+    const { conv, error } = await sendableConversation(c)
+    if (error) return error
+    const contextWamid = await replyContext(c.env.DB, conv, input.replyTo)
+    if (contextWamid === null) return fail(c, 'REPLY_TARGET_GONE', GONE_MESSAGE, 409)
+
+    const sent = await sendStructuredMessage(c.env, { to: conv.phone, message: built.message, contextWamid })
+    if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
+    const row = await recordOutbound(c, conv, {
+      metaMessageId: sent.messageId, type, body: built.body, contextWamid, payload: built.payload,
+    })
+    return ok(c, { message: row })
+  }
+}
+
+/* POST /:id/location  { latitude, longitude, name?, address? } */
+conversations.post('/:id/location', requirePermission('inbox.reply'), structuredRoute(buildLocation, 'location'))
+/* POST /:id/contact   { name, phone, email?, company? } */
+conversations.post('/:id/contact', requirePermission('inbox.reply'), structuredRoute(buildContact, 'contacts'))
+/* POST /:id/interactive { kind: buttons | list | cta_url | location_request | address, ... } */
+conversations.post('/:id/interactive', requirePermission('inbox.reply'), structuredRoute(buildInteractive, 'interactive'))
+
+/* ── POST /api/whatsapp/conversations/:id/template: approved template ─────
+   The one thing that may go out after the 24-hour window, which is why it is
+   here: it re-opens a conversation. It spends message credit, so it needs
+   campaigns.send ("Send and retry campaigns: spends WhatsApp message credit"),
+   not inbox.reply. The template is re-read from Meta and must be approved;
+   every {{variable}} needs a value; a media header or a link button with a
+   variable is refused because the inbox does not collect those. The same
+   template to the same chat within two minutes is refused as a double send. */
+const TEMPLATE_REPEAT_MS = 2 * 60 * 1000
+
+conversations.post('/:id/template', requirePermission('campaigns.send'), async (c) => {
+  const { name, language, values } = (await readJsonOr(c, 16 * 1024, {})) ?? {}
+  if (typeof name !== 'string' || !/^[a-z0-9_]{1,512}$/.test(name) || typeof language !== 'string' || !/^[A-Za-z_-]{2,15}$/.test(language)) {
+    throw new HTTPException(400, { message: 'Pick a template.' })
+  }
+  const conv = await findConversation(c)
+  if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
+  if (conv.blocked_at) return fail(c, 'BLOCKED', BLOCKED_MESSAGE, 409)
+
+  let templates
+  try { templates = await fetchApprovedTemplates(c.env) } catch {
+    return fail(c, 'TEMPLATES_UNAVAILABLE', 'Could not load the approved templates from WhatsApp. Please try again.', 502)
+  }
+  const template = templates.find((t) => t.name === name && t.language === language && t.status === 'APPROVED')
+  if (!template) return fail(c, 'TEMPLATE_NOT_FOUND', 'That template is not approved.', 404)
+  if (template.headerFormat && template.headerFormat !== 'TEXT') {
+    return fail(c, 'TEMPLATE_UNSUPPORTED', 'This template has a photo, video or document header, which the inbox cannot fill in yet.', 409)
+  }
+  if ((template.buttons ?? []).some((b) => /\{\{/.test(b?.url ?? ''))) {
+    return fail(c, 'TEMPLATE_UNSUPPORTED', 'This template has a link button with a variable, which the inbox cannot fill in yet.', 409)
+  }
+
+  const map = {}
+  for (const token of templateTokens(template)) {
+    const value = sanitizeParam(values?.[token]).slice(0, 1024)
+    if (!value) return fail(c, 'INVALID', `Fill in {{${token}}}.`, 400)
+    map[token] = { source: 'literal', value }
+  }
+
+  const recent = await c.env.DB.prepare(
+    `SELECT 1 FROM messages
+     WHERE conversation_id = ?1 AND direction = 'outbound' AND type = 'template'
+       AND json_extract(payload, '$.name') = ?2 AND created_at > ?3 LIMIT 1`,
+  ).bind(conv.id, name, new Date(Date.now() - TEMPLATE_REPEAT_MS).toISOString()).first()
+  if (recent) return fail(c, 'DUPLICATE', 'This template was just sent to this chat.', 409)
+
+  const sent = await sendTemplateMessage(c.env, {
+    to: conv.phone, templateName: name, languageCode: language, components: buildComponents(template, map, {}),
+  })
+  if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
+
+  const body = renderTemplateText(template.bodyText, map, {})
+  const row = await recordOutbound(c, conv, {
+    metaMessageId: sent.messageId, type: 'template', body,
+    payload: {
+      kind: 'template', name, language,
+      header: renderTemplateText(template.headerText, map, {}) || null,
+      body,
+      footer: template.footerText || null,
+      buttons: (template.buttons ?? []).map((b) => String(b?.text ?? '').slice(0, 40)).filter(Boolean).slice(0, 10),
+    },
+  })
+  return ok(c, { message: row })
+})
+
 /* ── Per-message actions: react, pin, star, delete, forward ───────────────
    React and forward send real WhatsApp messages, so they follow the same
    rules as a reply: open 24-hour window, not blocked. Pin, star and delete
@@ -552,7 +684,11 @@ conversations.delete('/:id/messages/:messageId', requirePermission('inbox.delete
   return ok(c, { id: message.id })
 })
 
-const FORWARDABLE_TYPES = new Set(['text', 'image', 'video', 'audio', 'document', 'sticker'])
+function parsePayload(json) {
+  try { return json ? JSON.parse(json) : null } catch { return null }
+}
+
+const FORWARDABLE_TYPES = new Set(['text', 'image', 'video', 'audio', 'document', 'sticker', 'location'])
 const MEDIA_PREFIX = '/whatsapp/media/'
 
 /* ── POST /api/whatsapp/conversations/:id/forward — forward into this chat ─
@@ -577,6 +713,16 @@ conversations.post('/:id/forward', requirePermission('inbox.reply'), async (c) =
   ).bind(sourceId).first()
   if (!source) return fail(c, 'GONE', 'That message is no longer available.', 404)
   if (!FORWARDABLE_TYPES.has(source.type)) return fail(c, 'NOT_FORWARDABLE', 'This kind of message cannot be forwarded.', 409)
+
+  const sourcePayload = parsePayload(source.payload)
+  if (source.type === 'location') {
+    let built
+    try { built = buildLocation(sourcePayload ?? {}) } catch { return fail(c, 'NOT_FORWARDABLE', 'This location cannot be forwarded.', 409) }
+    const sent = await sendStructuredMessage(c.env, { to: conv.phone, message: built.message })
+    if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
+    const row = await recordOutbound(c, conv, { metaMessageId: sent.messageId, type: 'location', body: built.body, payload: built.payload })
+    return ok(c, { message: row })
+  }
 
   if (source.type === 'text') {
     if (!source.body?.trim()) return fail(c, 'NOT_FORWARDABLE', 'This kind of message cannot be forwarded.', 409)
@@ -603,12 +749,14 @@ conversations.post('/:id/forward', requirePermission('inbox.reply'), async (c) =
   const uploaded = await uploadMediaToMeta(c.env, { bytes, mime, filename })
   if (!uploaded.ok) return fail(c, 'MEDIA_UPLOAD_FAILED', uploaded.errorMessage, 502)
   const caption = (source.body || '').slice(0, 1024)
-  const sent = await sendMediaMessage(c.env, { to: conv.phone, type: rule.type, mediaId: uploaded.mediaId, caption, filename })
+  const voice = sourcePayload?.kind === 'voice' && mime === 'audio/ogg'
+  const sent = await sendMediaMessage(c.env, { to: conv.phone, type: rule.type, mediaId: uploaded.mediaId, caption, filename, voice })
   if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
 
   const row = await recordOutbound(c, conv, {
     metaMessageId: sent.messageId, type: rule.type, body: caption || null,
     mediaUrl: source.media_url, mediaMime: mime, filename, mediaSize: object.size,
+    payload: voice ? { kind: 'voice' } : null,
   })
   return ok(c, { message: row })
 })

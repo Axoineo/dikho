@@ -14,13 +14,21 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
-- WhatsApp inbox: Clear chat, Delete chat, Block and Unblock, from the chat
-  header and Contact info, each confirmed first and recorded with who did it.
-  Clearing and deleting hide the thread for the team (the customer keeps
-  their copy); blocking uses Meta's block list. New permissions
-  `inbox.delete` and `inbox.block`. The API also accepts replies that quote a
-  message, reactions, forwarding, pins, personal stars and deleting one
-  message; their controls in the thread are still to come.
+- WhatsApp inbox, close to WhatsApp itself, using what Meta's Cloud API
+  offers businesses:
+  - a menu on every message: quick reactions, Reply (quotes the message),
+    Copy, Forward (up to five chats), Pin (team-wide, three per chat), Star
+    (personal) and Delete (hides it for the team; WhatsApp cannot unsend);
+  - send locations, contact cards, reply buttons, lists, link buttons, a
+    location request, an Indian delivery-address request, approved templates
+    (also after the 24-hour window, for people who can send campaigns) and
+    recorded voice notes;
+  - customers' locations, contact cards, chosen options, addresses, orders,
+    the ad they came from, forwarded labels and WhatsApp's system notices
+    show as such instead of placeholders;
+  - Clear chat, Delete chat, Block and Unblock, confirmed first and recorded
+    with who did it; new permissions `inbox.delete` and `inbox.block`;
+  - a jump-to-latest button that counts new messages, and a pinned bar.
 
 - Live Assist: with an employee's OK, a colleague who may help them sees their
   Dikho tab live, points at and highlights things, and suggests pages. No

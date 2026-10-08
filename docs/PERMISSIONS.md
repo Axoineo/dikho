@@ -63,8 +63,11 @@ where listed.
 `inbox.delete` (Clear chat, Delete chat, delete one message) and `inbox.block`
 (Block and Unblock on Meta's block list) come with no built-in template except
 Administrator; Owners and developers hold them as they hold everything.
-Reacting, forwarding and pinning need `inbox.reply`; starring needs only
-`inbox.view`, because a star is the person's own.
+Reacting, forwarding, pinning and sending locations, contacts, buttons, lists
+and requests need `inbox.reply`; starring needs only `inbox.view`, because a
+star is the person's own. Sending an approved template from a chat needs
+`campaigns.send`, because templates are charged and can go out after the
+24-hour window.
 
 `document_events` follows invoices or payments. `media`/`sub_media` stay
 readable by every staff member (and by the public vendor form).

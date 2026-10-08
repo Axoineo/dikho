@@ -7,6 +7,7 @@ import { ContactPanel } from './ContactPanel'
 import { MediaLightbox } from './MediaLightbox'
 import { MediaTicketProvider } from './MediaTicketContext'
 import { ChatActionDialog } from './ChatActions'
+import { ForwardDialog } from './ForwardDialog'
 
 function sortConvs(list) {
   return [...list].sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''))
@@ -139,6 +140,10 @@ export default function WhatsAppInbox() {
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, blocked_at: blocked_at ?? null } : c)))
   }, [])
 
+  const onMessageHidden = useCallback(({ id }) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id))
+  }, [])
+
   // Re-read the inbox from D1, which is the source of truth. The realtime
   // broadcast is best-effort and is never replayed, so every event sent while
   // the socket was down — a sleeping laptop, a network hop, a Supabase
@@ -165,7 +170,7 @@ export default function WhatsAppInbox() {
 
   useInboxRealtime({
     onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
-    onConversationCleared, onConversationDeleted, onConversationBlocked,
+    onConversationCleared, onConversationDeleted, onConversationBlocked, onMessageHidden,
     onResync: refresh,
   })
 
@@ -188,17 +193,45 @@ export default function WhatsAppInbox() {
 
   const activeConv = conversations.find((c) => c.id === activeId) || null
 
-  const handleSendText = useCallback(async (body) => {
+  const handleSendText = useCallback(async (body, replyTo) => {
     if (!activeIdRef.current) return
-    const { message } = await waApi.sendText(activeIdRef.current, body)
+    const { message } = await waApi.sendText(activeIdRef.current, body, replyTo)
     appendMessage(message)
   }, [appendMessage])
 
-  const handleSendMedia = useCallback(async (file, caption) => {
+  const handleSendMedia = useCallback(async (file, caption, opts) => {
     if (!activeIdRef.current) return
-    const { message } = await waApi.sendMedia(activeIdRef.current, file, caption)
+    const { message } = await waApi.sendMedia(activeIdRef.current, file, caption, opts)
     appendMessage(message)
   }, [appendMessage])
+
+  // Locations, contact cards, buttons, lists, links, requests and templates.
+  const handleCompose = useCallback(async (kind, input) => {
+    const id = activeIdRef.current
+    if (!id) return
+    const call = kind === 'location' ? waApi.sendLocation(id, input)
+      : kind === 'contact' ? waApi.sendContact(id, input)
+      : kind === 'template' ? waApi.sendTemplate(id, input)
+      : waApi.sendInteractive(id, { ...input, kind })
+    appendMessage((await call).message)
+  }, [appendMessage])
+
+  // A short line over the thread for an action that has no other visible
+  // result, or that failed.
+  const [notice, setNotice] = useState(null)
+  const noticeTimer = useRef(null)
+  const showNotice = useCallback((text) => {
+    clearTimeout(noticeTimer.current)
+    setNotice(text)
+    noticeTimer.current = setTimeout(() => setNotice(null), 4000)
+  }, [])
+  useEffect(() => () => clearTimeout(noticeTimer.current), [])
+
+  const mergeMessage = useCallback((row) => {
+    setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)))
+  }, [])
+
+  const [forwarding, setForwarding] = useState(null) // the message being forwarded
 
   const handleUploadAvatar = useCallback(async (conv, file) => {
     const { avatar_url } = await waApi.uploadAvatar(conv.id, file)
@@ -208,20 +241,41 @@ export default function WhatsAppInbox() {
   // The confirmation is pinned to the chat it was opened for, so it can never
   // act on a different one. A rejected promise keeps the dialog open with the
   // API's message (ChatActionDialog shows it).
-  const [chatAction, setChatAction] = useState(null) // { action, id }
+  const [chatAction, setChatAction] = useState(null) // { action, id, messageId? }
   const requestChatAction = useCallback((action) => {
     if (activeIdRef.current) setChatAction({ action, id: activeIdRef.current })
   }, [])
+
+  // One message's menu. React, pin and star apply at once; delete asks
+  // first; forward opens the chat picker.
+  const handleMessageAction = useCallback(async (action, message, emoji) => {
+    const id = activeIdRef.current
+    if (!id) return
+    try {
+      if (action === 'react') appendMessage((await waApi.react(id, message.id, emoji)).message)
+      else if (action === 'pin') { mergeMessage((await waApi.pin(id, message.id)).message); showNotice('Pinned for your team') }
+      else if (action === 'unpin') mergeMessage((await waApi.unpin(id, message.id)).message)
+      else if (action === 'star' || action === 'unstar') {
+        await (action === 'star' ? waApi.star(id, message.id) : waApi.unstar(id, message.id))
+        mergeMessage({ id: message.id, starred: action === 'star' ? 1 : 0 })
+      } else if (action === 'delete') setChatAction({ action: 'deleteMessage', id, messageId: message.id })
+      else if (action === 'forward') setForwarding(message)
+    } catch (err) {
+      showNotice(err?.message || 'That did not work. Please try again.')
+    }
+  }, [appendMessage, mergeMessage, showNotice])
+
   const runChatAction = useCallback(async () => {
-    const { action, id } = chatAction
-    if (action === 'clear') onConversationCleared(await waApi.clearChat(id))
+    const { action, id, messageId } = chatAction
+    if (action === 'deleteMessage') { await waApi.deleteMessage(id, messageId); onMessageHidden({ id: messageId }) }
+    else if (action === 'clear') onConversationCleared(await waApi.clearChat(id))
     else if (action === 'delete') onConversationDeleted(await waApi.deleteChat(id))
     else if (action === 'block' || action === 'unblock') {
       const { conversation } = await (action === 'block' ? waApi.block(id) : waApi.unblock(id))
       onConversationBlocked({ id, blocked_at: conversation?.blocked_at })
     }
     setChatAction(null)
-  }, [chatAction, onConversationCleared, onConversationDeleted, onConversationBlocked])
+  }, [chatAction, onConversationCleared, onConversationDeleted, onConversationBlocked, onMessageHidden])
   const chatActionConv = chatAction ? conversations.find((c) => c.id === chatAction.id) : null
 
   const mediaItems = useMemo(() => messages.filter(isViewable), [messages])
@@ -263,12 +317,31 @@ export default function WhatsAppInbox() {
           infoOpen={infoOpen}
           onToggleInfo={() => setInfoOpen((v) => !v)}
           onChatAction={requestChatAction}
+          onCompose={handleCompose}
+          onMessageAction={handleMessageAction}
+          notice={notice}
         />
       </main>
 
       {/* Right — contact details (third pane) */}
       {infoOpen && activeConv && (
         <ContactPanel conversation={activeConv} messages={messages} onOpenMedia={openMedia} onChatAction={requestChatAction} />
+      )}
+
+      {forwarding && (
+        <ForwardDialog
+          message={forwarding}
+          conversations={conversations}
+          currentId={activeId}
+          onForward={async (targetId) => {
+            const { message } = await waApi.forward(targetId, forwarding.id)
+            setConversations((prev) => upsertConv(prev, {
+              id: targetId, last_message_at: message.created_at,
+              last_message_preview: message.body || `📎 ${message.type}`, last_message_direction: 'outbound',
+            }))
+          }}
+          onClose={() => setForwarding(null)}
+        />
       )}
 
       {chatActionConv && (

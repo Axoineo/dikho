@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { Composer } from './Composer'
 import { Avatar } from './Avatar'
 import { ChatMenu } from './ChatActions'
+import { ComposeDialog } from './SendDialogs'
+import { canForward, canReactTo, foldReactions, indexByWamid, snippet } from './messageModel'
 import { displayName, formatDaySeparator, parseWaDate, sessionMsLeft, formatCountdown } from './inboxUtils'
 import { useAccess } from '../../../lib/access'
 
@@ -32,42 +34,93 @@ function buildRows(messages) {
 /* Header and empty state are CHROME and follow the dashboard. Everything from
    the canvas down — bubbles, tails, day chips, system notices — stays on the
    --chat-* palette, because that is the part agents read all day. */
-export function Conversation({ conversation, messages, loading, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo, onChatAction }) {
+export function Conversation({
+  conversation, messages, loading, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo,
+  onChatAction, onCompose, onMessageAction, notice,
+}) {
   const { can } = useAccess()
   const canReply = can('inbox.reply')
   const canBlock = can('inbox.block')
+  const canDelete = can('inbox.delete')
+  const canTemplate = can('campaigns.send')
   const endRef = useRef(null)
   const scrollRef = useRef(null)
   const avatarInput = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [search, setSearch] = useState(null)   // null = closed, '' = open+empty
+  const [starredOnly, setStarredOnly] = useState(false)
   const [atBottom, setAtBottom] = useState(true)
+  const [replyTo, setReplyTo] = useState(null)
+  const [composeKind, setComposeKind] = useState(null)
+  const [highlightId, setHighlightId] = useState(null)
+  const [pinIndex, setPinIndex] = useState(0)
+  const [unseen, setUnseen] = useState(0)
+  const seenIdsRef = useRef(new Set())
 
   // Auto-scroll only when already parked at the end. Yanking an agent back
   // down mid-scroll while a new message lands is how you lose your place in a
-  // thread you were reading.
+  // thread you were reading; instead the jump button counts what arrived.
   useEffect(() => {
+    const fresh = messages.filter((m) => !seenIdsRef.current.has(m.id))
+    messages.forEach((m) => seenIdsRef.current.add(m.id))
     if (atBottom) endRef.current?.scrollIntoView({ block: 'end' })
+    else setUnseen((n) => n + fresh.filter((m) => m.direction === 'inbound' && m.type !== 'reaction').length)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, conversation?.id])
 
-  // Switching threads always starts at the end, and closes any open search.
+  // Switching threads always starts at the end, and drops any open search,
+  // filter, reply or form.
   useEffect(() => {
     setSearch(null)
+    setStarredOnly(false)
+    setReplyTo(null)
+    setComposeKind(null)
+    setPinIndex(0)
+    setUnseen(0)
     setAtBottom(true)
+    seenIdsRef.current = new Set(messages.map((m) => m.id))
     endRef.current?.scrollIntoView({ block: 'end' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation?.id])
 
+  const { shown, reactionsFor } = useMemo(() => foldReactions(messages), [messages])
+  const byWamid = useMemo(() => indexByWamid(messages), [messages])
+  const pinned = useMemo(
+    () => shown.filter((m) => m.pinned_at).sort((a, b) => String(b.pinned_at).localeCompare(String(a.pinned_at))),
+    [shown],
+  )
+
   const matches = useMemo(() => {
+    if (starredOnly) return shown.filter((m) => m.starred)
     const q = (search || '').trim().toLowerCase()
     if (!q) return null
-    return messages.filter((m) => (m.body || '').toLowerCase().includes(q))
-  }, [messages, search])
+    return shown.filter((m) => (m.body || '').toLowerCase().includes(q))
+  }, [shown, search, starredOnly])
 
   const rows = useMemo(
-    () => (conversation ? buildRows(matches ?? messages) : []),
-    [messages, matches, conversation],
+    () => (conversation ? buildRows(matches ?? shown) : []),
+    [shown, matches, conversation],
   )
+
+  // Scrolls to a message and rings it for a moment. A search or filter that
+  // hides it is closed first; the jump then runs once the full thread renders.
+  const [pendingJump, setPendingJump] = useState(null)
+  const jumpTo = useCallback((id) => {
+    if (matches && !matches.some((m) => m.id === id)) {
+      setSearch(null)
+      setStarredOnly(false)
+    }
+    setPendingJump({ id, at: Date.now() })
+  }, [matches])
+  useEffect(() => {
+    if (!pendingJump) return undefined
+    const el = scrollRef.current?.querySelector(`[data-message-id="${pendingJump.id}"]`)
+    if (!el) return undefined
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    setHighlightId(pendingJump.id)
+    const t = setTimeout(() => setHighlightId(null), 1600)
+    return () => clearTimeout(t)
+  }, [pendingJump, rows])
 
   if (!conversation) {
     return (
@@ -95,6 +148,42 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
 
   const msLeft = sessionMsLeft(conversation.last_inbound_at)
   const blocked = Boolean(conversation.blocked_at)
+  const windowOpen = msLeft > 0 && !blocked
+  const contactName = displayName(conversation)
+  const authorOf = (m) => (m.direction === 'outbound' ? 'You' : contactName)
+
+  // The menu on one message. Sending things (reply, react, forward) follows
+  // the reply rules; pin is for repliers, star for anyone who can read,
+  // delete for inbox.delete.
+  function menuFor(m) {
+    if (m.type === 'system' || m.type === 'call') return null
+    const reactable = canReactTo(m, parseWaDate)
+    const reason = !canReply ? null
+      : blocked ? 'You blocked this contact.'
+      : msLeft <= 0 ? 'Reactions need the 24-hour reply window to be open.'
+      : !reactable ? 'WhatsApp only takes reactions to messages from the last 30 days.'
+      : null
+    const items = [
+      canReply && windowOpen && m.meta_message_id && { key: 'reply', label: 'Reply' },
+      m.body && { key: 'copy', label: 'Copy' },
+      canReply && canForward(m) && { key: 'forward', label: 'Forward' },
+      canReply && (m.pinned_at ? { key: 'unpin', label: 'Unpin' } : { key: 'pin', label: 'Pin' }),
+      m.starred ? { key: 'unstar', label: 'Unstar' } : { key: 'star', label: 'Star' },
+      canDelete && { key: 'delete', label: 'Delete', danger: true },
+    ].filter(Boolean)
+    return {
+      reactions: { enabled: canReply && windowOpen && reactable, reason },
+      items,
+      onReact: (emoji) => onMessageAction?.('react', m, emoji),
+      onAction: (key) => {
+        if (key === 'reply') setReplyTo(m)
+        else if (key === 'copy') navigator.clipboard?.writeText(m.body).catch(() => {})
+        else onMessageAction?.(key, m)
+      },
+    }
+  }
+
+  const currentPin = pinned.length ? pinned[pinIndex % pinned.length] : null
 
   return (
     <div className="chat-canvas relative flex h-full flex-1 flex-col">
@@ -147,12 +236,48 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
 
         <ChatMenu
           conversation={conversation}
-          canDelete={can('inbox.delete')}
+          canDelete={canDelete}
           canBlock={canBlock}
-          onAction={onChatAction}
+          onAction={(key) => {
+            if (key === 'starred') { setSearch(null); setStarredOnly(true) } else onChatAction?.(key)
+          }}
         />
 
       </div>
+
+      {starredOnly && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-4 py-1.5">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="text-muted"><path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" /></svg>
+          <span className="flex-1 text-[13px] font-medium text-ink">Your starred messages <span className="font-normal text-muted">· {matches?.length ?? 0}</span></span>
+          <button type="button" onClick={() => setStarredOnly(false)} aria-label="Show all messages"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-inbox-control hover:text-ink">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+      )}
+
+      {/* Pinned messages, newest first; a tap goes to the message and moves on
+          to the next pin, as in WhatsApp. Pins are the team's, not the
+          customer's: the Cloud API has no pinning. */}
+      {currentPin && !starredOnly && (
+        <button
+          type="button"
+          onClick={() => { jumpTo(currentPin.id); setPinIndex((i) => (i + 1) % pinned.length) }}
+          title="Go to the pinned message"
+          className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2 text-left transition-colors hover:bg-inbox-row-hover"
+        >
+          {pinned.length > 1 && (
+            <span className="flex flex-col gap-[2px] self-stretch py-0.5" aria-hidden="true">
+              {pinned.map((p, i) => <span key={p.id} className={`w-[3px] flex-1 rounded-full ${i === pinIndex % pinned.length ? 'bg-brand' : 'bg-line'}`} />)}
+            </span>
+          )}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted"><path d="M9 4h6l-1 6 3 3H7l3-3-1-6z" /><path d="M12 16v5" /></svg>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11.5px] font-semibold uppercase tracking-[.3px] text-muted">Pinned{pinned.length > 1 ? ` · ${(pinIndex % pinned.length) + 1} of ${pinned.length}` : ''}</span>
+            <span className="block truncate text-[13px] text-ink">{snippet(currentPin)}</span>
+          </span>
+        </button>
+      )}
 
       {search !== null && (
         <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-4 pb-2.5">
@@ -189,7 +314,9 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
         ref={scrollRef}
         onScroll={(e) => {
           const el = e.currentTarget
-          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+          const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+          setAtBottom(bottom)
+          if (bottom) setUnseen(0)
         }}
         className="inbox-scroll relative min-h-0 flex-1 overflow-y-auto pb-3 pt-1 sm:px-[4.5%]"
       >
@@ -202,7 +329,7 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
         )}
         {matches && matches.length === 0 && (
           <div className="flex justify-center pt-3">
-            <span className={CANVAS_CHIP}>No messages match that search.</span>
+            <span className={CANVAS_CHIP}>{starredOnly ? 'You have not starred anything in this chat.' : 'No messages match that search.'}</span>
           </div>
         )}
         {rows.map((row) =>
@@ -214,6 +341,12 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
                 {formatDaySeparator(row.at)}
               </span>
             </div>
+          ) : row.type === 'system' ? (
+            /* WhatsApp's own notices (a changed number and the like) are
+               centred chips, never bubbles. */
+            <div key={row.id} data-message-id={row.id} className="flex justify-center pt-3">
+              <span className={`${CANVAS_CHIP} max-w-[78%] text-center leading-relaxed`}>{row.body}</span>
+            </div>
           ) : (
             <MessageBubble
               key={row.id ?? row.meta_message_id}
@@ -221,6 +354,13 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
               grouped={row.grouped}
               onOpenMedia={onOpenMedia}
               searchTerm={(search || '').trim()}
+              reactions={reactionsFor(row)}
+              quoted={row.context_wamid ? byWamid.get(row.context_wamid) ?? null : null}
+              quotedAuthor={row.context_wamid && byWamid.get(row.context_wamid) ? authorOf(byWamid.get(row.context_wamid)) : ''}
+              quotedMine={byWamid.get(row.context_wamid)?.direction === 'outbound'}
+              onJumpTo={jumpTo}
+              highlighted={highlightId === row.id}
+              menu={menuFor(row)}
             />
           ),
         )}
@@ -239,16 +379,28 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
         <div ref={endRef} />
       </div>
 
-      {/* Jump back to the newest message after scrolling up through history. */}
+      {/* Back to the newest message after scrolling up through history, with
+          a count of what arrived meanwhile, as WhatsApp shows it. Sits above
+          the composer whatever its height (reply bar, errors). */}
+      {notice && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[84px] z-10 flex justify-center px-4">
+          <span role="status" className="rounded-full bg-[rgba(11,20,26,0.82)] px-4 py-2 text-[13px] text-white shadow-[0_3px_10px_rgba(11,20,26,0.2)]">{notice}</span>
+        </div>
+      )}
       {!atBottom && !matches && (
         <button
           type="button"
-          onClick={() => { setAtBottom(true); endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }}
-          title="Jump to latest"
-          aria-label="Jump to latest message"
-          className="absolute bottom-[76px] right-5 z-10 grid h-9 w-9 place-items-center rounded-full border border-line bg-surface text-muted shadow-[0_3px_10px_rgba(16,26,44,0.13)] transition-colors hover:text-ink"
+          onClick={() => { setAtBottom(true); setUnseen(0); endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }}
+          title="Go to the latest message"
+          aria-label={unseen ? `Go to the latest message, ${unseen} new` : 'Go to the latest message'}
+          className="absolute bottom-[84px] right-5 z-10 grid h-[42px] w-[42px] place-items-center rounded-full border-0 bg-chat-raised text-chat-sub shadow-[0_2px_8px_rgba(11,20,26,0.22)] transition-colors hover:text-chat-text"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+          {unseen > 0 && (
+            <span className="absolute -top-1.5 -right-1 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-chat-accent px-1.5 text-[11px] font-bold leading-none text-chat-on-accent">
+              {unseen > 99 ? '99+' : unseen}
+            </span>
+          )}
         </button>
       )}
 
@@ -272,8 +424,33 @@ export function Conversation({ conversation, messages, loading, onSendText, onSe
           )}
         </div>
       ) : canReply
-        ? <Composer conversation={conversation} onSendText={onSendText} onSendMedia={onSendMedia} />
+        ? (
+          <Composer
+            conversation={conversation}
+            onSendText={async (body) => { await onSendText(body, replyTo?.id); setReplyTo(null) }}
+            onSendMedia={async (file, caption, opts = {}) => { await onSendMedia(file, caption, { ...opts, replyTo: replyTo?.id }); setReplyTo(null) }}
+            onCompose={setComposeKind}
+            canTemplate={canTemplate}
+            replyTo={replyTo}
+            replyAuthor={replyTo ? authorOf(replyTo) : ''}
+            replyMine={replyTo?.direction === 'outbound'}
+            onCancelReply={() => setReplyTo(null)}
+          />
+        )
         : <p className="inbox-readonly-note">You can read conversations, but your access does not include replying.</p>}
+
+      {composeKind && (
+        <ComposeDialog
+          kind={composeKind}
+          conversation={conversation}
+          onSend={async (kind, input) => {
+            const reply = kind === 'template' ? undefined : replyTo?.id
+            await onCompose(kind, reply ? { ...input, replyTo: reply } : input)
+            if (reply) setReplyTo(null)
+          }}
+          onClose={() => setComposeKind(null)}
+        />
+      )}
     </div>
   )
 }

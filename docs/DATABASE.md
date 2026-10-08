@@ -144,7 +144,7 @@ the API Worker's configured database.
 | --- | --- | --- |
 | `contacts` | Campaign/import contacts and template attributes | Phone, name, email, company |
 | `campaigns` | Template campaign metadata and stored audience | Sender identity, audience IDs |
-| `messages` | Campaign and conversational messages/status | Phones, message bodies, media metadata |
+| `messages` | Campaign and conversational messages/status; `payload` holds the structured form of locations, contact cards, buttons, lists, chosen options, addresses, referrals and templates | Phones, message bodies, media metadata, shared contact details and addresses |
 | `conversations` | One WhatsApp thread per phone; also the clear boundary and block state | Phone, profile name, activity summary |
 | `conversation_events` | Who cleared, deleted or blocked a chat, or deleted a message | Staff user id |
 | `message_stars` | Each agent's own starred messages | Staff user id |

@@ -31,6 +31,12 @@ const COPY = {
     confirm: 'Unblock',
     danger: false,
   },
+  deleteMessage: {
+    title: () => 'Delete this message?',
+    body: (name) => `It is removed from this chat for everyone on your team. WhatsApp cannot unsend it, so ${name} keeps their copy.`,
+    confirm: 'Delete',
+    danger: true,
+  },
 }
 
 export function ChatActionDialog({ action, conversation, onConfirm, onClose }) {
@@ -108,6 +114,7 @@ const ICONS = {
   delete: <><path d="M4 7h16" /><path d="M9.5 7V4.5h5V7" /><path d="M6.5 7l.9 12.5h9.2L17.5 7" /></>,
   block: <><circle cx="12" cy="12" r="8.5" /><path d="M6 6l12 12" /></>,
   unblock: <><circle cx="12" cy="12" r="8.5" /><path d="M8.5 12.5l2.4 2.4 4.6-5.2" /></>,
+  starred: <path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />,
 }
 
 export function ActionIcon({ action, className = '' }) {
@@ -118,8 +125,8 @@ export function ActionIcon({ action, className = '' }) {
   )
 }
 
-/* The header's "more" menu. Rendered only when the person holds one of the
-   two permissions, so a read-and-reply agent sees the header they had. */
+/* The header's "more" menu: the agent's own starred messages, then Clear
+   chat, Delete chat and Block for those who hold the permissions. */
 export function ChatMenu({ conversation, canDelete, canBlock, onAction }) {
   const [open, setOpen] = useState(false)
   const buttonRef = useRef(null)
@@ -133,11 +140,10 @@ export function ChatMenu({ conversation, canDelete, canBlock, onAction }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  if (!canDelete && !canBlock) return null
-
   const blocked = Boolean(conversation.blocked_at)
   const blockable = blocked || canBlockNow(conversation)
   const items = [
+    { key: 'starred', label: 'Starred messages' },
     canDelete && { key: 'clear', label: 'Clear chat' },
     canDelete && { key: 'delete', label: 'Delete chat', danger: true },
     canBlock && (blocked

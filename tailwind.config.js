@@ -68,6 +68,11 @@ export default {
           input: 'var(--chat-input)',
           'on-accent': 'var(--chat-on-accent)',
           meta: 'var(--chat-meta)',
+          quote: 'var(--chat-quote)',
+          'quote-you': 'var(--chat-quote-you)',
+          'quote-them': 'var(--chat-quote-them)',
+          secondary: 'var(--chat-secondary)',
+          action: 'var(--chat-action)',
         },
 
         // Inbox CHROME — the list, headers, search, filters, contact panel and

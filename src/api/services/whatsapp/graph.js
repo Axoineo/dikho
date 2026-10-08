@@ -141,11 +141,20 @@ export async function sendTextMessage(env, { to, body, contextWamid }) {
 // Sends a media reply by Meta media id (obtained from uploadMediaToMeta). A
 // caption is allowed on image/document/video but not audio; documents may carry
 // a filename shown to the recipient.
-export async function sendMediaMessage(env, { to, type, mediaId, caption, filename, contextWamid }) {
+// `voice` sends an OGG/Opus recording as a voice note (the recipient sees the
+// microphone and waveform) rather than as an audio file.
+export async function sendMediaMessage(env, { to, type, mediaId, caption, filename, contextWamid, voice = false }) {
   const media = { id: mediaId }
   if (caption && type !== 'audio') media.caption = caption
   if (type === 'document' && filename) media.filename = filename
+  if (type === 'audio' && voice) media.voice = true
   return postMessage(env, withContext({ to, type, [type]: media }, contextWamid))
+}
+
+// Sends an already-validated message part built by richContent.js (location,
+// contacts or interactive): `message` is { type, [type]: ... }.
+export async function sendStructuredMessage(env, { to, message, contextWamid }) {
+  return postMessage(env, withContext({ to, ...message }, contextWamid))
 }
 
 // Reacts to a message with one emoji; an empty emoji takes the reaction off.
@@ -253,6 +262,9 @@ export async function fetchApprovedTemplates(env) {
     status: template.status,
     bodyText: template.components?.find((component) => component.type === 'BODY')?.text ?? '',
     headerText: template.components?.find((component) => component.type === 'HEADER')?.text ?? '',
+    // TEXT, IMAGE, VIDEO, DOCUMENT or LOCATION. A media header needs its own
+    // parameter at send time, which the inbox does not collect.
+    headerFormat: template.components?.find((component) => component.type === 'HEADER')?.format ?? null,
     footerText: template.components?.find((component) => component.type === 'FOOTER')?.text ?? '',
     buttons: template.components?.find((component) => component.type === 'BUTTONS')?.buttons ?? [],
   }))

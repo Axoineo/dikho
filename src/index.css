@@ -70,6 +70,16 @@
   --chat-on-accent: #ffffff;      /* text/glyphs on an accent fill          */
   --chat-meta: rgba(17, 27, 33, 0.65);  /* 5.2:1 on the outgoing bubble     */
   --chat-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  /* Quoted message inside a bubble (a reply, a picked option): a tint of
+     whatever bubble it sits in, with the author's name in their colour.
+     Both names clear 4.5:1 on the tinted outgoing and incoming bubbles. */
+  --chat-quote: rgba(11, 20, 26, 0.055);
+  --chat-quote-you: #017561;
+  --chat-quote-them: #4b52b8;
+  /* Inline actions (reply buttons, links) in each kind of bubble; see
+     .bubble-in / .bubble-out. 5.1:1 on the outgoing bubble, 5.7:1 on white. */
+  --chat-action-in: #017561;
+  --chat-action-out: #017561;
 
   /* ---- Inbox CHROME (not the thread) ----------------------------------
      The thread above keeps WhatsApp's palette, because that is what agents'
@@ -967,6 +977,23 @@ button, input, textarea, select { border: 0; }
    corner the timestamp occupies rather than the whole image. */
 .media-scrim {
   background: linear-gradient(to top, rgba(11, 20, 26, 0.55), rgba(11, 20, 26, 0));
+}
+
+/* Secondary text (footers, quotes, sizes) and inline actions take their
+   colour from the bubble they sit in: --chat-sub is 2.5:1 on the dark
+   outgoing green, where the clock's own --chat-meta is 4.6:1. Measured on
+   both bubbles and on the quote tint in both themes; the lowest is 4.56:1. */
+:root {
+  --chat-secondary: var(--chat-sub);
+  --chat-action: var(--chat-action-in);
+}
+.bubble-in {
+  --chat-secondary: var(--chat-sub);
+  --chat-action: var(--chat-action-in);
+}
+.bubble-out {
+  --chat-secondary: var(--chat-meta);
+  --chat-action: var(--chat-action-out);
 }
 
 /* Search hit inside a message bubble. */
@@ -2333,6 +2360,13 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   --chat-on-accent: #111b21;      /* dark ink on #00a884 = 5.8:1            */
   --chat-meta: rgba(233, 237, 239, 0.75);  /* 4.6:1 on #005c4b              */
   --chat-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  --chat-quote: rgba(0, 0, 0, 0.2);
+  --chat-quote-you: #3fd59a;
+  --chat-quote-them: #aab4ff;
+  /* #3fd59a is only 4.25:1 on the dark outgoing green, so actions there are
+     a lighter mint (5.1:1); on the incoming bubble 7.9:1. */
+  --chat-action-in: #3fd59a;
+  --chat-action-out: #7fe0c4;
 
   /* Inbox chrome — dark. Lifted off #1a1d23 the same way the rail's are. */
   --inbox-row-hover: rgba(255, 255, 255, 0.04);
