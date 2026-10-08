@@ -1,7 +1,8 @@
 -- ============================================================================
 -- WHATSAPP INBOX: permissions for Clear chat, Delete chat and Block.
 --
---   inbox.delete  Clear and delete chats. Hides the thread for the whole team
+--   inbox.delete  Clear and delete chats, and delete single messages. Hides
+--                 them for the whole team
 --                 (D1 migration 0011 keeps the rows; the customer keeps their
 --                 own copy on WhatsApp).
 --   inbox.block   Block and unblock customers on the business's WhatsApp
@@ -23,8 +24,8 @@
 -- ============================================================================
 
 insert into public.permissions (key, module, action, label, description, allowed_scopes, developer_only, min_developer_level, sort_order) values
-  ('inbox.delete', 'WhatsApp Inbox', 'delete',  'Clear and delete chats',
-   'Hides a chat''s messages for the whole team. The customer keeps their copy.', array['all'], false, null, 172),
+  ('inbox.delete', 'WhatsApp Inbox', 'delete',  'Clear and delete chats and messages',
+   'Hides chats or single messages for the whole team. The customer keeps their copy.', array['all'], false, null, 172),
   ('inbox.block',  'WhatsApp Inbox', 'approve', 'Block and unblock customers',
    'A blocked number cannot message the business, and the business cannot message it.', array['all'], false, null, 173)
 on conflict (key) do update set

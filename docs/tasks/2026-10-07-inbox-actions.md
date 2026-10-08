@@ -62,7 +62,7 @@ lets a business do in a chat.
    the new columns, and without them the inbox fails and inbound messages
    park as failed):
    `npx wrangler d1 migrations apply dikho-whatsapp --remote -c wrangler.api.jsonc`
-2. Supabase: `20261007120000_inbox_chat_permissions.sql` (rename the file to
+2. Supabase: `20261008045656_inbox_chat_permissions.sql` (rename the file to
    the version MCP records).
 3. `npm run deploy:api` from a tree that contains everything already live.
 4. Push to `main` for the SPA.
