@@ -8,13 +8,14 @@ import { callUserRpc, logDenied, notifyStaff, requestContext } from '../../servi
 // Live Assist: with an employee's OK, a helper watches their Dikho tab and
 // points at things. Mounted behind requireAuth (app.js).
 //
-// The video never touches this Worker or the database: it goes browser to
-// browser (WebRTC), set up over a private Realtime channel that only the two
-// participants may use. This route records who helps whom and tells each
-// side's dashboard what happened, over their private `staff:<id>` channels.
-// Every rule (who may help whom, one session at a time, time limits, rate
-// limits) is enforced by the la_* functions in
-// supabase/migrations/20261007114458_live_assist.sql.
+// The video, chat and pinned notes never touch this Worker or the database:
+// they go browser to browser (WebRTC), set up over a private Realtime channel
+// that only the two participants may use. This route records who helps whom
+// and tells each side's dashboard what happened, over their private
+// `staff:<id>` channels. Every rule (who may help whom, one session per
+// person, time limits, rate limits) is enforced by the la_* functions in
+// supabase/migrations/20261007114458_live_assist.sql and
+// 20261008040426_live_assist_peer_help.sql.
 const assist = new Hono()
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -108,7 +109,14 @@ assist.post('/sessions/:id/end', async (c) => {
   return ok(c, sessionNotice(session))
 })
 
-// "Ask for help": tells everyone who may help this person (at most 25).
+// Who may help the caller, online first, for the "Who should help?" choice.
+// Any staff member: it only covers themselves.
+assist.get('/helpers', async (c) => {
+  return ok(c, await callUserRpc(c, 'la_my_helpers', { p_actor: actor(c) }))
+})
+
+// "Ask for help": tells everyone who may help this person (at most 25), or
+// only the one person they chose.
 assist.post('/help', async (c) => {
   const body = await readBoundedJson(c, MAX_BODY)
   const message = body?.message
@@ -116,15 +124,19 @@ assist.post('/help', async (c) => {
     throw new HTTPException(400, { message: 'Keep the message under 300 characters.' })
   }
   const section = typeof body?.section === 'string' && SECTION.test(body.section) ? body.section : null
+  const helperId = uuidOrNull(body?.helper_id, 'helper')
 
-  const result = await callUserRpc(c, 'la_request_help', {
-    p_actor: actor(c), p_message: message ?? null, p_section: section, p_ctx: requestContext(c),
-  })
+  const args = { p_actor: actor(c), p_message: message ?? null, p_section: section, p_ctx: requestContext(c) }
+  // Sent only when someone was chosen, so asking everyone keeps working on a
+  // database without migration 20261008040426 (which added p_helper).
+  if (helperId) args.p_helper = helperId
+  const result = await callUserRpc(c, 'la_request_help', args)
   const helpers = result.helpers ?? []
   if (!result.already_open && helpers.length) {
     const request = {
       id: result.request_id, requester_id: actor(c), requester_name: result.requester_name,
       message: result.message, section: result.section, created_at: new Date().toISOString(),
+      for_you: Boolean(result.helper_id),
     }
     await notifyStaff(c.env, helpers.map((userId) => ({ userId, event: 'help_request', payload: request })), 'assist.help_notify')
   }
@@ -132,6 +144,8 @@ assist.post('/help', async (c) => {
     request_id: result.request_id,
     already_open: result.already_open,
     expires_at: result.expires_at,
+    helper_id: result.helper_id ?? null,
+    helper_name: result.helper_name ?? null,
     helpers_notified: result.already_open ? null : helpers.length,
   }, result.already_open ? 200 : 201)
 })

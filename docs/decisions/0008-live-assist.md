@@ -1,6 +1,6 @@
 # 0008: Live Assist by consented tab sharing
 
-Status: Accepted (2026-10-07)
+Status: Accepted (2026-10-07); amended the same day (see the end)
 Builds on: [ADR 0007](0007-user-management-and-permissions.md)
 
 ## Context
@@ -83,3 +83,50 @@ channel-authorization checks through Realtime (outsiders cannot join, listen,
 inject or forge notices), 10 route tests, and a two-browser run in headless
 Chrome with real tab capture covering request, accept, video, pointer,
 highlight, page suggestion, stop, Ask for help, Help now and decline (22/22).
+
+## Amendment (2026-10-07): peers, chat, a chosen helper
+
+Asked for by the owner after the first version shipped: Admins also need each
+other's help, and a helper who cannot click needs a way to say "click this"
+without covering the employee's screen.
+
+- **Same level or below.** The helper needs `live_assist.use` and must be at
+  the employee's level or above (`la_can_help`, migration
+  `20261008040426_live_assist_peer_help.sql`), instead of strictly above.
+  Admins can help Admins, developers developers; Owners as before. This only
+  widens who may *ask*: the employee still accepts each time.
+- **One session per person, in either role.** Someone sharing their tab
+  cannot start helping, a helper cannot be helped, and a second helper cannot
+  pile on a request already waiting. Otherwise a shared tab could show the
+  viewer of another session and pass a third person's screen to someone they
+  never accepted. Accepting re-checks both people and ends the request as
+  `busy` if either went into another session.
+- **Chat and pinned notes, chosen design "banner + pinned notes".** On the
+  employee's screen nothing new covers the page by default: the helper's
+  newest message shows under the existing banner with quick replies (OK,
+  Done, Where?), the full chat opens only from the banner's Chat button, and
+  a note the helper pins sits beside the button or field it points at,
+  numbered, until the employee clicks that thing, presses Got it, or changes
+  page. Notes keep clear of the banner column and of each other. The helper
+  clicks a spot on the shared picture, then types (or picks a quick phrase)
+  to pin the note there; their chat is a column beside the picture, never
+  over it. Messages travel on the session's WebRTC data channel, are checked
+  on arrival (type, length, coordinates), shown as plain text, and are not
+  stored anywhere: they are gone when the session ends.
+- **Voice** was offered and not chosen for now; it would use the same
+  connection.
+- **Ask for help can name one person** (`help_requests.helper_id`), picked
+  from the people allowed to help, online first (`la_my_helpers`). Only they
+  are told and only they can take it. Without a name, everyone allowed is
+  told, as before.
+
+### Verification
+
+Local stack as above: the 48 earlier rule checks (four updated for the new
+rule) and 47 new ones (same-level help, demotion during a request, one session
+per person in every order, the chosen-helper flow, browser denials); 25 route
+and chat-logic tests; and a three-browser run with real tab capture (47/47):
+chat both ways, quick replies, pinned notes completed by clicking and cleared
+on a page change, typing and unread signals, the busy guard, Admin-to-Admin
+help and a help request to one chosen Admin. Screens checked in light and dark
+themes and at phone width.

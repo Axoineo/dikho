@@ -104,12 +104,17 @@ Settings page. Sign-in history is kept 180 days.
 
 ## Live Assist
 
-A helper with `live_assist.use` who outranks an employee can ask to see their
-Dikho tab ([ADR 0008](decisions/0008-live-assist.md)). The employee accepts
-each time and can stop at any time; the helper watches, points, highlights and
-suggests pages, and cannot click or type. Nothing is recorded; the audit log
-keeps who helped whom, when, and for how long. Any staff member can **Ask for
-help**, which tells the people who may help them.
+A helper with `live_assist.use` can ask to see the Dikho tab of a colleague at
+their own level or below, never themselves: Admins can help Admins, Managers
+and Staff; developers can help developers and everyone below; Owners can help
+anyone ([ADR 0008](decisions/0008-live-assist.md)). The employee accepts each
+time and can stop at any time. The helper watches, points, highlights, chats
+and pins short numbered notes beside things, and suggests pages; they cannot
+click or type. One session per person at a time, in either role. Nothing is
+recorded: video, chat and notes go browser to browser and are gone when the
+session ends; the audit log keeps who helped whom, when, and for how long. Any
+staff member can **Ask for help**, which tells everyone who may help them, or
+only the one person they choose.
 
 ## Surfaces
 
@@ -124,7 +129,7 @@ help**, which tells the people who may help them.
 | WhatsApp inbox live updates | Private channel, `inbox.view` |
 | Personal notice channel `staff:<id>` | Only that person may listen; only the Worker publishes |
 | Live Assist channel `assist:<session id>` | Only the helper and the employee of a waiting or live session may join or send |
-| `/api/assist/*` | Any staff member for their own state and help requests; `live_assist.use` to start a session; the `la_*` rules for the rest |
+| `/api/assist/*` | Any staff member for their own state, help requests and the list of who may help them; `live_assist.use` to start a session; the `la_*` rules for the rest |
 | WhatsApp OTP hook | Sends a code only to active staff (`staff_is_active`) |
 | `/api/public/*`, Meta webhook, `/api/gstn` | Unchanged: Turnstile, signatures, rate limits. Never grant dashboard access |
 

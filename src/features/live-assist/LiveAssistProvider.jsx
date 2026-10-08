@@ -1,10 +1,11 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AccessContext, PAGE_ACCESS, SECTION_LABELS, canOpen, hasPermission, sectionFor } from '../../lib/access'
 import { onStaffEvent } from '../../lib/staffBus'
 import { LiveAssistContext } from './liveAssistContext'
 import { assistApi } from './assistApi'
 import { captureThisTab, shareTab, viewTab } from './peer'
+import { chatMessage, chatReducer, emptyChat, helperMessage, readEmployeeMessage, readHelperMessage } from './chat'
 import { IncomingDialog, EmployeeOverlay } from './EmployeeAssist'
 import HelperViewer from './HelperViewer'
 import { AskHelpDialog, HelpToasts, MyHelpPill, Notice } from './HelpWidgets'
@@ -12,10 +13,13 @@ import './liveAssist.css'
 
 // Live Assist, for whoever is signed in, in either role:
 //   employee: answers a request, shares this tab, sees the helper's pointer,
-//             highlights and page suggestions, and can stop at any time;
-//   helper:   starts a session, watches, points, highlights, suggests pages.
-// Plus "Ask for help". The rules (who may help whom, time limits) are the
-// server's; this only drives the screens and the browser-to-browser link.
+//             highlights, notes and page suggestions, chats, and can stop at
+//             any time;
+//   helper:   starts a session, watches, points, highlights, pins notes,
+//             chats, suggests pages.
+// Plus "Ask for help". The rules (who may help whom, one session per person,
+// time limits) are the server's; this only drives the screens and the
+// browser-to-browser link. Chat lives in memory only (chat.js).
 
 // How long the helper waits for video after the employee accepts before
 // calling the connection failed (most networks connect in a few seconds).
@@ -33,14 +37,16 @@ const END_MESSAGES = {
   access_changed: 'Live Assist was stopped because someone\'s access changed.',
   no_connection: 'Could not connect directly to their browser. Some office or mobile networks block this; try from another network.',
   signal_failed: 'Could not open the private channel for this session.',
+  busy: 'They are in another Live Assist session right now.',
 }
+
+const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || name
 
 export default function LiveAssistProvider({ children }) {
   const access = useContext(AccessContext)
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const canHelp = hasPermission(access, 'live_assist.use')
-  const myName = access?.full_name ?? 'You'
 
   const [incoming, setIncoming] = useState(null)
   const [employee, setEmployee] = useState(null) // { session, phase }
@@ -51,6 +57,8 @@ export default function LiveAssistProvider({ children }) {
   const [dismissed, setDismissed] = useState(() => new Set())
   const [askOpen, setAskOpen] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [employeeChat, dispatchEmployeeChat] = useReducer(chatReducer, emptyChat)
+  const [helperChat, dispatchHelperChat] = useReducer(chatReducer, emptyChat)
   const employeePeer = useRef(null)
   const helperPeer = useRef(null)
   const connectTimer = useRef(null)
@@ -58,8 +66,12 @@ export default function LiveAssistProvider({ children }) {
   // re-registered (or run side effects inside state updaters) on every change.
   const helperRef = useRef(null)
   const employeeRef = useRef(null)
+  const employeeChatRef = useRef(emptyChat)
+  // The helper's next note number; a ref so two quick notes never share one.
+  const nextNote = useRef(1)
   useEffect(() => { helperRef.current = helper }, [helper])
   useEffect(() => { employeeRef.current = employee }, [employee])
+  useEffect(() => { employeeChatRef.current = employeeChat }, [employeeChat])
 
   const say = useCallback((text) => setNotice({ text, at: Date.now() }), [])
 
@@ -85,6 +97,7 @@ export default function LiveAssistProvider({ children }) {
     employeePeer.current = null
     setEmployee(null)
     setOverlay({ pointer: null, highlight: null, suggestion: null })
+    dispatchEmployeeChat({ type: 'reset' })
   }, [])
 
   const stopSharing = useCallback(async (reason = null) => {
@@ -105,6 +118,9 @@ export default function LiveAssistProvider({ children }) {
       // Only a page of this app, never an arbitrary address.
       const page = PAGE_ACCESS.find((p) => p.path === message.path)
       if (page) setOverlay((o) => ({ ...o, suggestion: { path: page.path, label: SECTION_LABELS[page.section] ?? page.path, at: Date.now() } }))
+    } else {
+      const chat = readHelperMessage(message)
+      if (chat) dispatchEmployeeChat({ type: 'receive', message: chat, now: Date.now() })
     }
   }, [])
 
@@ -137,10 +153,7 @@ export default function LiveAssistProvider({ children }) {
     }
     // The browser's own "Stop sharing" bar ends it too.
     stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-      employeePeer.current?.close()
-      employeePeer.current = null
-      setEmployee(null)
-      setOverlay({ pointer: null, highlight: null, suggestion: null })
+      closeEmployee()
       assistApi.end(answer.id).catch(() => {})
     })
     employeePeer.current = shareTab({
@@ -150,18 +163,16 @@ export default function LiveAssistProvider({ children }) {
       onState: (state) => {
         if (state === 'connected') setEmployee((e) => (e ? { ...e, phase: 'live' } : e))
         if (state === 'failed' || state === 'signal_failed') {
-          employeePeer.current?.close()
-          employeePeer.current = null
-          setEmployee(null)
-          setOverlay({ pointer: null, highlight: null, suggestion: null })
+          closeEmployee()
           assistApi.end(answer.id, 'connection_lost').catch(() => {})
           say('Live Assist ended: the connection was lost.')
         }
       },
     })
+    dispatchEmployeeChat({ type: 'reset' })
     setEmployee({ session: answer, phase: 'connecting' })
     return { ok: true }
-  }, [incoming, handleHelperMessage, say])
+  }, [incoming, handleHelperMessage, closeEmployee, say])
 
   const declineIncoming = useCallback(async () => {
     const id = incoming?.id
@@ -174,6 +185,38 @@ export default function LiveAssistProvider({ children }) {
   useEffect(() => {
     if (employee?.phase === 'live') employeePeer.current?.send({ t: 'section', section })
   }, [section, employee?.phase])
+
+  // Notes and highlights point at things on one page; on another page they
+  // would point at the wrong things, so they go, and the helper is told.
+  const lastPath = useRef(pathname)
+  useEffect(() => {
+    if (lastPath.current === pathname) return
+    lastPath.current = pathname
+    setOverlay((o) => (o.highlight ? { ...o, highlight: null } : o))
+    if (employeeChatRef.current.notes.length) {
+      dispatchEmployeeChat({ type: 'clear_notes' })
+      employeePeer.current?.send({ t: 'notes_cleared' })
+    }
+  }, [pathname])
+
+  // Stable, so the overlay's timers and listeners do not restart.
+  const employeeChatActions = useMemo(() => ({
+    toggle: () => dispatchEmployeeChat({ type: 'toggle' }),
+    open: () => dispatchEmployeeChat({ type: 'open' }),
+    close: () => dispatchEmployeeChat({ type: 'close' }),
+    dismissPeek: () => dispatchEmployeeChat({ type: 'dismiss_peek' }),
+    send: (text) => {
+      const message = chatMessage(text)
+      if (!message) return
+      employeePeer.current?.send(message)
+      dispatchEmployeeChat({ type: 'send', message, now: Date.now() })
+    },
+    typing: () => employeePeer.current?.send({ t: 'typing' }),
+    noteDone: (id, how) => {
+      employeePeer.current?.send({ t: 'note_done', id, how })
+      dispatchEmployeeChat({ type: 'note_done', id, how })
+    },
+  }), [])
 
   // ── Helper side ─────────────────────────────────────────────────────────
   const closeHelperPeer = useCallback(() => {
@@ -192,6 +235,11 @@ export default function LiveAssistProvider({ children }) {
       say('Finish your current Live Assist session first.')
       return
     }
+    // A tab being shared must never show another session's viewer.
+    if (employeeRef.current) {
+      say('Stop sharing your screen before you help someone.')
+      return
+    }
     let session
     try {
       session = await assistApi.start(member.user_id, helpRequestId)
@@ -200,14 +248,22 @@ export default function LiveAssistProvider({ children }) {
       return
     }
     if (helpRequestId) setHelpRequests((list) => list.filter((r) => r.id !== helpRequestId))
+    nextNote.current = 1
+    dispatchHelperChat({ type: 'reset' })
+    dispatchHelperChat({ type: 'open' })
     setHelper({ session, phase: 'waiting', reason: null, stream: null, section: null })
     helperPeer.current = viewTab({
       sessionId: session.id,
       onStream: (stream) => setHelper((h) => (h ? { ...h, stream } : h)),
       onData: (message) => {
-        if (message.t === 'section' && (message.section === null || typeof message.section === 'string')) {
-          setHelper((h) => (h ? { ...h, section: message.section } : h))
+        if (message.t === 'section') {
+          if (message.section === null || typeof message.section === 'string') setHelper((h) => (h ? { ...h, section: message.section } : h))
+          return
         }
+        const chat = readEmployeeMessage(message)
+        if (!chat) return
+        if (chat.t === 'notes_cleared') nextNote.current = 1
+        dispatchHelperChat({ type: 'receive', message: chat, now: Date.now() })
       },
       onState: (state) => {
         if (state === 'connected') {
@@ -231,7 +287,26 @@ export default function LiveAssistProvider({ children }) {
   const closeViewer = useCallback(() => {
     closeHelperPeer()
     setHelper(null)
+    dispatchHelperChat({ type: 'reset' })
   }, [closeHelperPeer])
+
+  const helperChatActions = useMemo(() => ({
+    toggle: () => dispatchHelperChat({ type: 'toggle' }),
+    open: () => dispatchHelperChat({ type: 'open' }),
+    send: (text, pin) => {
+      const message = helperMessage(text, pin, nextNote.current)
+      if (!message) return
+      if (message.t === 'note') nextNote.current = message.n + 1
+      helperPeer.current?.send(message)
+      dispatchHelperChat({ type: 'send', message, now: Date.now() })
+    },
+    typing: () => helperPeer.current?.send({ t: 'typing' }),
+    removeNotes: () => {
+      nextNote.current = 1
+      helperPeer.current?.send({ t: 'note_remove', id: 'all' })
+      dispatchHelperChat({ type: 'remove_notes' })
+    },
+  }), [])
 
   const sendToEmployee = useCallback((message) => helperPeer.current?.send(message), [])
 
@@ -308,15 +383,17 @@ export default function LiveAssistProvider({ children }) {
   }, [])
 
   // ── Ask for help ────────────────────────────────────────────────────────
-  const askForHelp = useCallback(async (message) => {
-    const result = await assistApi.askHelp(message, section)
+  const askForHelp = useCallback(async (message, helperId = null) => {
+    const result = await assistApi.askHelp(message, section, helperId)
     if (result.helpers_notified === 0) {
       await assistApi.cancelHelp(result.request_id).catch(() => {})
       say('Nobody can take Live Assist requests for your account yet. Ask an Owner to set it up.')
       return
     }
-    setMyHelp({ id: result.request_id, expires_at: result.expires_at })
-    say(result.already_open ? 'You have already asked. Someone will be with you shortly.' : 'Help is on the way. You will get a request to share your screen.')
+    setMyHelp({ id: result.request_id, expires_at: result.expires_at, helper_name: result.helper_name ?? null })
+    if (result.already_open) say('You have already asked. Someone will be with you shortly.')
+    else if (result.helper_name) say(`${firstName(result.helper_name)} has been asked. You will get a request to share your screen.`)
+    else say('Help is on the way. You will get a request to share your screen.')
   }, [section, say])
 
   const cancelHelp = useCallback(async () => {
@@ -337,21 +414,23 @@ export default function LiveAssistProvider({ children }) {
 
   const openRequests = useMemo(() => helpRequests.filter((r) => !dismissed.has(r.id)), [helpRequests, dismissed])
 
+  const helping = Boolean(helper && helper.phase !== 'ended')
   const value = useMemo(() => ({
     canHelp,
     helpRequests,
     helpRequestFor: (userId) => helpRequests.find((r) => r.requester_id === userId) ?? null,
     startAssist,
-    busy: Boolean(helper && helper.phase !== 'ended'),
+    // In a session in either role: one at a time per person.
+    busy: helping || Boolean(employee),
     openAskHelp: () => setAskOpen(true),
     hasOpenHelpRequest: Boolean(myHelp),
-  }), [canHelp, helpRequests, startAssist, helper, myHelp])
+  }), [canHelp, helpRequests, startAssist, helping, employee, myHelp])
 
   return (
     <LiveAssistContext.Provider value={value}>
       {children}
 
-      {incoming && !employee && (
+      {incoming && !employee && !helping && (
         <IncomingDialog session={incoming} onAccept={acceptIncoming} onDecline={declineIncoming} />
       )}
       {employee && (
@@ -359,6 +438,8 @@ export default function LiveAssistProvider({ children }) {
           session={employee.session}
           phase={employee.phase}
           overlay={overlay}
+          chat={employeeChat}
+          chatActions={employeeChatActions}
           onStop={onStop}
           onGo={onGo}
           onDismissSuggestion={onDismissSuggestion}
@@ -368,7 +449,8 @@ export default function LiveAssistProvider({ children }) {
       {helper && (
         <HelperViewer
           helper={helper}
-          myName={myName}
+          chat={helperChat}
+          chatActions={helperChatActions}
           endMessages={END_MESSAGES}
           onSend={sendToEmployee}
           onEnd={endHelper}
@@ -383,11 +465,11 @@ export default function LiveAssistProvider({ children }) {
           onDismiss={(id) => setDismissed((d) => new Set(d).add(id))}
         />
       )}
-      {myHelp && !employee && !incoming && <MyHelpPill onCancel={cancelHelp} />}
+      {myHelp && !employee && !incoming && <MyHelpPill helperName={myHelp.helper_name} onCancel={cancelHelp} />}
       {askOpen && (
         <AskHelpDialog
           onClose={() => setAskOpen(false)}
-          onSend={async (message) => { await askForHelp(message); setAskOpen(false) }}
+          onSend={async (message, helperId) => { await askForHelp(message, helperId); setAskOpen(false) }}
           already={Boolean(myHelp)}
         />
       )}

@@ -3,7 +3,7 @@
 Status: active (phase 1 code complete in the working tree; nothing deployed)
 Owner: Dikho Global Media LLP (rollout, decisions), coding agent (implementation)
 Started: 2026-10-06
-Last updated: 2026-10-06
+Last updated: 2026-10-08
 
 ## Goal
 
@@ -36,6 +36,13 @@ emergency. Every change is checked server-side and recorded.
   stop at any time. Nothing is recorded; the audit log keeps who helped whom,
   when and for how long. Owners and Admins downward, plus developers. No
   remote control and no rrweb dependency.
+- **Live Assist part 2** (asked for on 2026-10-07, ADR 0008 amendment):
+  colleagues at the same level can help each other (Admin to Admin,
+  developer to developer); "Ask for help" can go to one chosen person; chat
+  under the employee's banner plus numbered notes pinned beside things,
+  chosen design "banner + pinned notes", text only (voice not chosen for
+  now); one session per person at a time. Staff welcome WhatsApp template
+  `staff_registration_conformation` (English, one variable: first name).
 
 ## Non-goals (phase 1)
 
@@ -122,9 +129,11 @@ the inbox), and Cloudflare locations outside this machine's own.
 
 ## Next
 
-- Phase 2, Live Assist: built and verified locally on 2026-10-07 (ADR 0008);
-  rollout is migration `20261007114458_live_assist.sql`, then the API, then
-  the dashboard. Add a TURN relay if a network cannot connect directly.
+- Phase 2, Live Assist: live since 2026-10-07 (ADR 0008). Part 2 built and
+  verified locally on 2026-10-08; rollout is migration
+  `20261008040426_live_assist_peer_help.sql`, then the API (which also
+  carries the welcome template setting), then the dashboard. Add a TURN relay
+  if a network cannot connect directly.
 - Phase 3: developer area and feature flags.
 - Team/department scopes per module, starting with sales orders.
 - Bind media tickets to a user so revocation also ends them.

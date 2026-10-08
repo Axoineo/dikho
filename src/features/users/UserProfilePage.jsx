@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
-import { DEVELOPER_LABELS, ROLE_LABELS, useAccess } from '../../lib/access'
+import { DEVELOPER_LABELS, ROLE_LABELS, canAssist, useAccess } from '../../lib/access'
 import { usersApi } from './usersApi'
 import PermissionMatrix from './PermissionMatrix'
 import ConfirmDialog from './ConfirmDialog'
@@ -66,6 +66,8 @@ export default function UserProfilePage() {
   if (!member) return <div className="um-page"><div className="um-loading">Loading…</div></div>
 
   const manage = member.can_manage
+  // Live Assist reaches colleagues at your own level too, not only those you manage.
+  const assistable = Boolean(liveAssist?.canHelp) && member.status === 'active' && canAssist(access, member)
   const tabs = [
     ['overview', 'Overview'],
     ['access', 'Access & permissions'],
@@ -150,29 +152,31 @@ export default function UserProfilePage() {
             {liveAssist?.helpRequestFor(member.user_id) && <span className="um-help-chip">Asking for help</span>}
           </div>
         </div>
-        {manage && (
+        {(manage || assistable) && (
           <div className="um-profile-actions">
-            {liveAssist?.canHelp && member.status === 'active' && (
+            {assistable && (
               <button
                 type="button"
                 className="primary-button um-assist-button"
                 onClick={() => liveAssist.startAssist(member, liveAssist.helpRequestFor(member.user_id)?.id ?? null)}
                 disabled={!member.online || liveAssist.busy}
-                title={member.online ? `See ${member.full_name}'s Dikho tab, with their OK, and point at things` : `${member.full_name} is not online right now`}
+                title={liveAssist.busy
+                  ? 'Finish your current Live Assist session first'
+                  : member.online ? `See ${member.full_name}'s Dikho tab, with their OK, and point at things` : `${member.full_name} is not online right now`}
               >
                 Live Assist
               </button>
             )}
-            {member.status === 'invited' && can('users.create') && (
+            {manage && member.status === 'invited' && can('users.create') && (
               <button type="button" className="secondary-button" onClick={actions.welcome}>Resend welcome</button>
             )}
-            {can('users.sessions') && member.active_sessions > 0 && (
+            {manage && can('users.sessions') && member.active_sessions > 0 && (
               <button type="button" className="secondary-button" onClick={actions.signOutAll}>Sign out everywhere</button>
             )}
-            {can('users.suspend') && (member.status === 'suspended' || member.status === 'archived'
+            {manage && can('users.suspend') && (member.status === 'suspended' || member.status === 'archived'
               ? <button type="button" className="primary-button" onClick={actions.reactivate}>Reactivate</button>
               : <button type="button" className="um-danger-button" onClick={actions.suspend}>Suspend</button>)}
-            {can('users.suspend') && member.status !== 'archived' && (
+            {manage && can('users.suspend') && member.status !== 'archived' && (
               <button type="button" className="um-text-button" onClick={actions.archive}>Archive</button>
             )}
           </div>

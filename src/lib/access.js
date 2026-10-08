@@ -24,6 +24,24 @@ export function hasAny(access, keys) {
   return keys.some((key) => hasPermission(access, key))
 }
 
+// Mirrors staff_rank() in the database, only to decide what to show: the
+// server applies the real rule (la_can_help in
+// supabase/migrations/20261008040426_live_assist_peer_help.sql).
+export function staffRank(role, developerLevel) {
+  if (role === 'owner') return 40
+  if (developerLevel) return 30
+  if (role === 'admin') return 20
+  if (role === 'manager') return 10
+  return 0
+}
+
+/** Whether to offer Live Assist with this person: at your level or below. */
+export function canAssist(access, member) {
+  if (!access || !member || member.user_id === access.user_id) return false
+  return hasPermission(access, 'live_assist.use')
+    && staffRank(access.system_role, access.developer_level) >= staffRank(member.system_role, member.developer_level)
+}
+
 export function useAccess() {
   const access = useContext(AccessContext)
   return {

@@ -19,6 +19,14 @@ incident details or unreleased vulnerability exploitation instructions here.
   remote control and nothing recorded. Plus "Ask for help", which tells the
   people who can help. See ADR 0008.
 
+- Live Assist chat: messages under the employee's banner with quick replies,
+  numbered notes the helper pins beside a button or field (done when the
+  employee clicks it), and a chat column beside the helper's view. Not saved.
+  Colleagues at the same level can now help each other, "Ask for help" can go
+  to one chosen person, and nobody can be in two sessions at once.
+- The staff welcome WhatsApp template is configured and the sender matches
+  the approved template's real shape before sending.
+
 - User Management: staff profiles, departments and teams, permission
   templates, per-person permission overrides, system roles and developer
   levels, per-action permissions enforced by RLS and the API, an append-only

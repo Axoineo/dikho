@@ -150,3 +150,45 @@ test('broadcasts are capped at 30 people per call', async () => {
   await appFor(EMPLOYEE).request('/assist/help', post({}), env)
   assert.equal(broadcasts().length, 30)
 })
+
+test('asking one chosen person passes them on and tells only them', async () => {
+  rpc.la_request_help = async (b) => {
+    assert.equal(b.p_actor, EMPLOYEE)
+    assert.equal(b.p_helper, OTHER_HELPER)
+    return Response.json({
+      request_id: REQUEST, already_open: false, requester_name: 'Employee (synthetic)', message: null, section: 'sales-orders',
+      helper_id: OTHER_HELPER, helper_name: 'Other helper (synthetic)', helpers: [OTHER_HELPER],
+    })
+  }
+  const res = await appFor(EMPLOYEE).request('/assist/help', post({ section: 'sales-orders', helper_id: OTHER_HELPER.toUpperCase() }), env)
+  assert.equal(res.status, 201)
+  const { data } = await res.json()
+  assert.equal(data.helper_name, 'Other helper (synthetic)')
+  assert.deepEqual(broadcasts().map((m) => [m.topic, m.event, m.payload.for_you]), [[`staff:${OTHER_HELPER}`, 'help_request', true]])
+})
+
+test('asking everyone leaves the helper argument out, so older databases still answer', async () => {
+  rpc.la_request_help = async (b) => {
+    assert.equal('p_helper' in b, false)
+    return Response.json({ request_id: REQUEST, already_open: false, helpers: [HELPER] })
+  }
+  await appFor(EMPLOYEE).request('/assist/help', post({ helper_id: null }), env)
+  assert.equal(broadcasts()[0].payload.for_you, false)
+})
+
+test('a malformed chosen person is refused before any network call', async () => {
+  const res = await appFor(EMPLOYEE).request('/assist/help', post({ helper_id: 'someone' }), env)
+  assert.equal(res.status, 400)
+  assert.equal(calls.length, 0)
+})
+
+test('the helper list is for the verified caller only', async () => {
+  rpc.la_my_helpers = async (b) => {
+    assert.deepEqual(Object.keys(b), ['p_actor'])
+    assert.equal(b.p_actor, EMPLOYEE)
+    return Response.json([{ user_id: HELPER, full_name: 'Helper (synthetic)', online: true, busy: false }])
+  }
+  const res = await appFor(EMPLOYEE).request('/assist/helpers?p_actor=' + HELPER, {}, env)
+  assert.equal(res.status, 200)
+  assert.equal((await res.json()).data[0].user_id, HELPER)
+})

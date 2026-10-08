@@ -1,4 +1,5 @@
-import { sendTemplateMessage } from './whatsapp/graph.js'
+import { fetchApprovedTemplates, sendTemplateMessage } from './whatsapp/graph.js'
+import { buildComponents, sanitizeParam, templateTokens } from '../../lib/templateVars.js'
 import { logError, logEvent } from '../utils/logger.js'
 
 // "You've been added to Dikho" message, sent when an administrator adds
@@ -53,13 +54,54 @@ async function sendEmail(env, { email, fullName }) {
   return { ok: true }
 }
 
+// The approved template as Meta has it, so the send matches its real shape.
+// Meta refuses a parameter count that differs from the template's (error
+// 132000): that is how every lead confirmation failed in production while it
+// hardcoded one body parameter. Exact language first, then the same name in
+// any language (an `en_US` template does not answer to `en`).
+async function approvedWelcomeTemplate(env) {
+  const name = env.WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME
+  const language = env.WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG || 'en'
+  const list = await fetchApprovedTemplates(env)
+  return list.find((t) => t.name === name && t.language === language)
+    ?? list.find((t) => t.name === name)
+    ?? null
+}
+
+// A button that needs its own value (a link ending in {{1}}, a code to copy)
+// has nothing to be filled with here.
+const buttonNeedsValue = (button) => /\{\{/.test(button?.url ?? '') || ['COPY_CODE', 'OTP'].includes(button?.type)
+
 async function sendWhatsApp(env, { phone, fullName }) {
-  const result = await sendTemplateMessage(env, {
-    to: phone,
-    templateName: env.WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME,
-    languageCode: env.WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG || 'en',
-    components: [{ type: 'body', parameters: [{ type: 'text', text: (fullName.split(/\s+/)[0] || fullName).slice(0, 60) }] }],
-  })
+  const firstName = sanitizeParam(fullName.split(/\s+/)[0] || fullName).slice(0, 60)
+  let templateName = env.WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME
+  let languageCode = env.WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG || 'en'
+  // The documented shape (docs/CONFIGURATION.md): one body variable, the
+  // first name. Used as is only when Meta's template list cannot be read.
+  let components = [{ type: 'body', parameters: [{ type: 'text', text: firstName }] }]
+
+  let template
+  try {
+    template = await approvedWelcomeTemplate(env)
+  } catch (err) {
+    logError('users.welcome.template_lookup_failed', err)
+  }
+  if (template === null) return { ok: false, reason: `WhatsApp template ${templateName} is not approved` }
+  if (template) {
+    const tokens = templateTokens(template)
+    const buttons = template.buttons ?? []
+    if (tokens.length > 1 || buttons.some(buttonNeedsValue)) {
+      logEvent('users.welcome.template_shape', { tokens: tokens.length, buttons: buttons.map((b) => b?.type ?? 'unknown') })
+      return { ok: false, reason: 'WhatsApp template needs more values than the first name' }
+    }
+    templateName = template.name
+    languageCode = template.language || languageCode
+    components = tokens.length
+      ? buildComponents(template, { [tokens[0]]: { source: 'literal', value: firstName } }, {})
+      : undefined
+  }
+
+  const result = await sendTemplateMessage(env, { to: phone, templateName, languageCode, components })
   if (!result.ok) return { ok: false, reason: `WhatsApp error ${result.errorCode}` }
   return { ok: true }
 }

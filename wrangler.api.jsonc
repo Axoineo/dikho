@@ -76,6 +76,13 @@
     // approved Meta template exactly.
     "WHATSAPP_CG_LEAD_TEMPLATE_NAME": "client_conformation_",
     "WHATSAPP_CG_LEAD_TEMPLATE_LANG": "en",
+    // Welcome message by WhatsApp for someone added in User Management when no
+    // email can be sent (src/api/services/staffWelcome.js). Approved UTILITY template,
+    // one body variable (the first name). Non-secret, so it lives here for
+    // the same reason as the template above. The sender reads the template's
+    // real shape from Meta before each send.
+    "WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME": "staff_registration_conformation",
+    "WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG": "en",
     // Minutes between a /corporategifting submission and its WhatsApp
     // confirmation. The message is queued in D1 at submit time and sent by the
     // every-minute cron above, so the real delay is this value plus up to ~1

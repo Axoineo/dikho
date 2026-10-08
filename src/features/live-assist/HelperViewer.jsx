@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { PAGE_ACCESS, SECTION_LABELS } from '../../lib/access'
+import HelperChat from './HelperChat'
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || 'them'
 
@@ -31,14 +32,17 @@ function normalise(video, event) {
   return x < 0 || x > 1 || y < 0 || y > 1 ? null : { x, y }
 }
 
-export default function HelperViewer({ helper, endMessages, onSend, onEnd, onClose }) {
+export default function HelperViewer({ helper, chat, chatActions, endMessages, onSend, onEnd, onClose }) {
   const { session, phase, reason, stream, section } = helper
   const who = firstName(session.employee_name)
   const videoRef = useRef(null)
+  const inputRef = useRef(null)
   const lastSent = useRef(0)
   const [ripple, setRipple] = useState(null)
   const [suggested, setSuggested] = useState('')
   const [left, setLeft] = useState(null)
+  // The spot last clicked on their screen: the next message is pinned there.
+  const [pin, setPin] = useState(null)
 
   useEffect(() => {
     if (videoRef.current && videoRef.current.srcObject !== stream) videoRef.current.srcObject = stream ?? null
@@ -72,6 +76,25 @@ export default function HelperViewer({ helper, endMessages, onSend, onEnd, onClo
     onSend({ t: 'highlight', ...point })
     const box = e.currentTarget.getBoundingClientRect()
     setRipple({ x: e.clientX - box.left, y: e.clientY - box.top, at: Date.now() })
+    setPin({ ...point, at: Date.now() })
+    if (!chat.open) chatActions.open()
+  }
+
+  // Type straight after clicking; a pin nobody uses lapses after 20 seconds.
+  useEffect(() => {
+    if (!pin) return undefined
+    inputRef.current?.focus()
+    const t = setTimeout(() => setPin(null), 20_000)
+    return () => clearTimeout(t)
+  }, [pin])
+  useEffect(() => { if (phase !== 'live') setPin(null) }, [phase])
+
+  const chatSend = {
+    ...chatActions,
+    send: (text, at) => {
+      chatActions.send(text, at)
+      setPin(null)
+    },
   }
 
   function suggest(path) {
@@ -95,7 +118,7 @@ export default function HelperViewer({ helper, endMessages, onSend, onEnd, onClo
         <div className="la-viewer-tools">
           {phase === 'live' && (
             <label className="la-suggest">
-              <span className="um-visually-hidden">Suggest a page</span>
+              <span className="la-sr">Suggest a page</span>
               <select value={suggested} onChange={(e) => suggest(e.target.value)} aria-label="Suggest a page">
                 <option value="">Suggest a page…</option>
                 {SUGGESTIBLE.map((p) => <option key={p.path} value={p.path}>{p.label}</option>)}
@@ -108,28 +131,46 @@ export default function HelperViewer({ helper, endMessages, onSend, onEnd, onClo
         </div>
       </header>
 
-      <div className="la-stage">
-        {/* One video element for the whole session, so the stream stays
-            attached whichever message is showing over it. */}
-        <div
-          className={`la-screen${live ? '' : ' is-idle'}`}
-          onMouseMove={live ? move : undefined}
-          onMouseLeave={live ? () => onSend({ t: 'pointer_hide' }) : undefined}
-          onClick={live ? click : undefined}
-        >
-          <video ref={videoRef} autoPlay playsInline muted />
-          {ripple && live && <span key={ripple.at} className="la-ripple" style={{ left: ripple.x, top: ripple.y }} aria-hidden="true" />}
-        </div>
-        {!live && (
-          <div className="la-stage-message">
-            {phase === 'ended'
-              ? <p>{endMessages[reason] ?? 'Live Assist has ended.'}</p>
-              : <p className="la-waiting"><span className="la-spinner" aria-hidden="true" />{phase === 'waiting' ? `Asking ${who} to share their Dikho tab…` : 'Setting up the connection…'}</p>}
+      <div className={`la-viewer-body${chat.open ? '' : ' is-chat-closed'}`}>
+        <div className="la-viewer-main">
+          <div className="la-stage">
+            {/* One video element for the whole session, so the stream stays
+                attached whichever message is showing over it. */}
+            <div
+              className={`la-screen${live ? '' : ' is-idle'}`}
+              onMouseMove={live ? move : undefined}
+              onMouseLeave={live ? () => onSend({ t: 'pointer_hide' }) : undefined}
+              onClick={live ? click : undefined}
+            >
+              <video ref={videoRef} autoPlay playsInline muted />
+              {ripple && live && <span key={ripple.at} className="la-ripple" style={{ left: ripple.x, top: ripple.y }} aria-hidden="true" />}
+            </div>
+            {!live && (
+              <div className="la-stage-message">
+                {phase === 'ended'
+                  ? <p>{endMessages[reason] ?? 'Live Assist has ended.'}</p>
+                  : <p className="la-waiting"><span className="la-spinner" aria-hidden="true" />{phase === 'waiting' ? `Asking ${who} to share their Dikho tab…` : 'Setting up the connection…'}</p>}
+              </div>
+            )}
           </div>
-        )}
+          {live && (
+            <p className="la-viewer-hint">
+              Move your mouse over their screen to point. Click something to highlight it, then type to pin a
+              note beside it. You cannot click or type for them.
+            </p>
+          )}
+        </div>
+        <HelperChat
+          who={who}
+          chat={chat}
+          live={Boolean(live)}
+          ended={phase === 'ended'}
+          pin={live ? pin : null}
+          onClearPin={() => setPin(null)}
+          actions={chatSend}
+          inputRef={inputRef}
+        />
       </div>
-
-      {live && <p className="la-viewer-hint">Move your mouse over their screen to point. Click to highlight something. They see both; you cannot click or type for them.</p>}
     </div>
   )
 }

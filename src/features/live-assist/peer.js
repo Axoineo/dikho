@@ -7,9 +7,9 @@ import { supabase } from '../../lib/supabase'
 // setup messages ("signalling") over the private Realtime channel
 // `assist:<session id>`, which only the two participants may join or send on
 // (Realtime policies in supabase/migrations/20261007114458_live_assist.sql).
-// After that, video and the pointer messages go directly between the two
-// browsers, encrypted by WebRTC. Nothing passes through Dikho's servers and
-// nothing is recorded.
+// After that, video, the pointer, chat and pinned notes (chat.js) go directly
+// between the two browsers, encrypted by WebRTC. Nothing passes through
+// Dikho's servers and nothing is recorded.
 //
 // Only STUN servers are configured, which find a direct route on most
 // networks. Some strict office or mobile networks need a relay (TURN); that
@@ -49,12 +49,45 @@ function openSignal(sessionId, onMessage) {
   }
 }
 
+// Our messages are small; anything bigger is not one of them.
+const MAX_MESSAGE_BYTES = 4096
+
 function parseData(event) {
+  if (typeof event.data !== 'string' || event.data.length > MAX_MESSAGE_BYTES) return null
   try {
     const value = JSON.parse(event.data)
     return value && typeof value === 'object' ? value : null
   } catch {
     return null
+  }
+}
+
+// Chat, notes and their answers must arrive even if sent the moment the
+// connection comes up, before the data channel has opened, so those wait in
+// a short queue. Pointer moves and typing signals are only worth sending live.
+const KEEP_UNTIL_OPEN = new Set(['chat', 'note', 'note_remove', 'note_done', 'notes_cleared', 'section'])
+
+function dataSender() {
+  let channel = null
+  const queue = []
+  const flush = () => {
+    while (queue.length && channel?.readyState === 'open') channel.send(queue.shift())
+  }
+  return {
+    attach(next) {
+      channel = next
+      channel.addEventListener('open', flush)
+      flush()
+    },
+    send(message) {
+      const text = JSON.stringify(message)
+      if (channel?.readyState === 'open') channel.send(text)
+      else if (KEEP_UNTIL_OPEN.has(message?.t) && queue.length < 50) queue.push(text)
+    },
+    close() {
+      queue.length = 0
+      try { channel?.close() } catch { /* already closed */ }
+    },
   }
 }
 
@@ -67,6 +100,8 @@ function parseData(event) {
 export function shareTab({ sessionId, stream, onData, onState }) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
   const data = pc.createDataChannel('assist', { ordered: true })
+  const sender = dataSender()
+  sender.attach(data)
   for (const track of stream.getTracks()) pc.addTrack(track, stream)
 
   let answered = false
@@ -110,11 +145,9 @@ export function shareTab({ sessionId, stream, onData, onState }) {
   signal.joined.then(() => sendOffer(), () => onState?.('signal_failed'))
 
   return {
-    send(message) {
-      if (data.readyState === 'open') data.send(JSON.stringify(message))
-    },
+    send: sender.send,
     close() {
-      try { data.close() } catch { /* already closed */ }
+      sender.close()
       pc.close()
       for (const track of stream.getTracks()) track.stop()
       signal.close()
@@ -129,7 +162,7 @@ export function shareTab({ sessionId, stream, onData, onState }) {
  */
 export function viewTab({ sessionId, onStream, onData, onState }) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
-  let data = null
+  const sender = dataSender()
   let gotOffer = false
   const pendingIce = []
 
@@ -165,20 +198,18 @@ export function viewTab({ sessionId, onStream, onData, onState }) {
   pc.onconnectionstatechange = () => onState?.(pc.connectionState)
   pc.ontrack = (e) => onStream?.(e.streams[0] ?? new MediaStream([e.track]))
   pc.ondatachannel = (e) => {
-    data = e.channel
-    data.onmessage = (event) => {
+    e.channel.onmessage = (event) => {
       const message = parseData(event)
       if (message) onData?.(message)
     }
+    sender.attach(e.channel)
   }
 
   return {
-    send(message) {
-      if (data?.readyState === 'open') data.send(JSON.stringify(message))
-    },
+    send: sender.send,
     close() {
       clearInterval(hello)
-      try { data?.close() } catch { /* already closed */ }
+      sender.close()
       pc.close()
       signal.close()
     },

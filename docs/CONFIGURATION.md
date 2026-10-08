@@ -80,7 +80,7 @@ and [permissions](PERMISSIONS.md) remain separate requirements.
 | `SUPABASE_SEND_SMS_HOOK_SECRET` | Secret | [OTP hook](../src/api/routes/auth/index.js); required to verify Supabase's signed hook requests |
 | `WHATSAPP_AUTH_TEMPLATE_NAME` | Server setting | Approved authentication template; code has a Dikho-specific fallback that adopters must override |
 | `WHATSAPP_AUTH_TEMPLATE_LANG` | Server setting | Authentication template language; defaults to `en` |
-| `WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME` | Server setting | Approved UTILITY template for the staff welcome message to people added without an email. Unset: no WhatsApp welcome. Body has one variable, the first name |
+| `WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME` | Server setting | Approved UTILITY template for the staff welcome message when no email can be sent. Unset: no WhatsApp welcome. Body has one variable, the first name. Before each send the [sender](../src/api/services/staffWelcome.js) reads the approved template from Meta, uses its language, and sends nothing if it needs more values than that |
 | `WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG` | Server setting | Staff welcome template language; defaults to `en` |
 | `WHATSAPP_STATIC_TEMPLATE_NAME` | Server setting | [Template-list fallback](../src/api/routes/templates/index.js) used when provider lookup fails/returns no templates; code has an installation-specific default |
 | `WHATSAPP_STATIC_TEMPLATE_LANG` | Server setting | Fallback template language; defaults to `en` |
@@ -104,8 +104,9 @@ currently produce a complete, intentional module-disabled experience. See
 ### Staff welcome template
 
 Submit in Meta's WhatsApp Manager as category **Utility**, then set
-`WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME` to its name. Suggested text (one body
-variable, no buttons, no links that carry tokens):
+`WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME` to its name (this installation:
+`staff_registration_conformation`, English, in `wrangler.api.jsonc`).
+Suggested text (one body variable, no buttons, no links that carry tokens):
 
 > Hi {{1}}, you have been added to Dikho CRM. To sign in, open the Dikho
 > dashboard and choose WhatsApp: we will send a one-time code to this number.

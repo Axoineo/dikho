@@ -107,6 +107,11 @@ escalation rules and write `audit_log` in the same transaction.
   the same pattern: no browser privileges, written by the `la_*` functions
   through the Worker. `public.la_can_use_topic()` backs the Realtime policies
   that limit `assist:<session id>` channels to the two participants.
+  `la_can_help()` is the rank rule (the helper's level or below),
+  `la_may_help()` adds "active" and `live_assist.use`, and `la_busy()` keeps
+  each person in at most one live session. `help_requests.helper_id` is the
+  one person asked, or null for everyone allowed. Chat and pinned notes are
+  never stored.
 
 Avoid new sensitive policies using unconditional `USING (true)` or
 `WITH CHECK (true)`.
