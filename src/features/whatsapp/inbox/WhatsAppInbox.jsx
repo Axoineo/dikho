@@ -8,6 +8,7 @@ import { MediaLightbox } from './MediaLightbox'
 import { MediaTicketProvider } from './MediaTicketContext'
 import { ChatActionDialog } from './ChatActions'
 import { ForwardDialog } from './ForwardDialog'
+import { EMPTY_THREAD, mergeNewestPage, prependOlderPage, threadFromPage } from './messageModel'
 
 function sortConvs(list) {
   return [...list].sort((a, b) => (b.last_message_at || '').localeCompare(a.last_message_at || ''))
@@ -21,6 +22,9 @@ function upsertConv(list, conv) {
   return sortConvs(next)
 }
 
+// A thread updater that changes only the rows; the paging state rides along.
+const withRows = (update) => (thread) => ({ ...thread, messages: update(thread.messages) })
+
 function isViewable(m) {
   return m.type !== 'text' && m.media_status === 'ready' && m.media_url &&
     !(m.media_mime || '').startsWith('audio/')
@@ -32,8 +36,12 @@ export default function WhatsAppInbox() {
   const [loadError, setLoadError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [activeId, setActiveId] = useState(null)
-  const [messages, setMessages] = useState([])
+  // The open thread: its rows plus where the next older page starts.
+  const [thread, setThread] = useState(EMPTY_THREAD)
+  const { messages, hasMore, before } = thread
   const [loadingMsgs, setLoadingMsgs] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const loadingOlderRef = useRef(false)
   const [lightboxId, setLightboxId] = useState(null)
   // Closed by default. The thread is the work; contact details are a lookup
   // you ask for, and defaulting them open cost ~320px of message width on
@@ -71,26 +79,30 @@ export default function WhatsAppInbox() {
     return () => { alive = false }
   }, [reloadKey])
 
+  // Opens on the newest page; older ones load as the agent scrolls up. Set
+  // on the ref at once, not after the render, so a reply for a chat that was
+  // left meanwhile can be told apart and dropped.
   const openConversation = useCallback(async (conv) => {
+    activeIdRef.current = conv.id
     setActiveId(conv.id)
     setLoadingMsgs(true)
-    setMessages([])
+    setThread(EMPTY_THREAD)
     setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, unread_count: 0 } : c)))
     waApi.markRead(conv.id).catch(() => {})
     try {
-      const data = await waApi.messages(conv.id)
-      setMessages(data.messages || [])
+      const page = await waApi.messages(conv.id)
+      if (activeIdRef.current === conv.id) setThread(threadFromPage(page))
     } finally {
-      setLoadingMsgs(false)
+      if (activeIdRef.current === conv.id) setLoadingMsgs(false)
     }
   }, [])
 
   const appendMessage = useCallback((message) => {
-    setMessages((prev) => {
+    setThread(withRows((prev) => {
       if (prev.some((m) => m.id === message.id ||
         (message.meta_message_id && m.meta_message_id === message.meta_message_id))) return prev
       return [...prev, message]
-    })
+    }))
   }, [])
 
   const onNewMessage = useCallback(({ conversation, message }) => {
@@ -103,11 +115,11 @@ export default function WhatsAppInbox() {
   }, [appendMessage])
 
   const onMessageUpdated = useCallback(({ message }) => {
-    setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, ...message } : m)))
+    setThread(withRows((prev) => prev.map((m) => (m.id === message.id ? { ...m, ...message } : m))))
   }, [])
 
   const onStatus = useCallback(({ messageId, status }) => {
-    setMessages((prev) => prev.map((m) => (m.meta_message_id === messageId ? { ...m, status } : m)))
+    setThread(withRows((prev) => prev.map((m) => (m.meta_message_id === messageId ? { ...m, status } : m))))
   }, [])
 
   const onConversationUpdated = useCallback(({ id, avatar_url }) => {
@@ -122,8 +134,13 @@ export default function WhatsAppInbox() {
       ? { ...c, ...conversation, last_message_status: null, unread_count: 0 }
       : c)))
     if (conversation.id === activeIdRef.current) {
-      // Anything newer than the clear (a message that landed meanwhile) stays.
-      setMessages((prev) => prev.filter((m) => m.id > (conversation.cleared_through_id ?? Infinity)))
+      // Anything newer than the clear (a message that landed meanwhile) stays,
+      // and nothing older is left to page in.
+      setThread((t) => ({
+        ...t,
+        messages: t.messages.filter((m) => m.id > (conversation.cleared_through_id ?? Infinity)),
+        hasMore: false,
+      }))
     }
   }, [])
 
@@ -132,7 +149,7 @@ export default function WhatsAppInbox() {
     if (id === activeIdRef.current) {
       activeIdRef.current = null
       setActiveId(null)
-      setMessages([])
+      setThread(EMPTY_THREAD)
     }
   }, [])
 
@@ -141,7 +158,7 @@ export default function WhatsAppInbox() {
   }, [])
 
   const onMessageHidden = useCallback(({ id }) => {
-    setMessages((prev) => prev.filter((m) => m.id !== id))
+    setThread(withRows((prev) => prev.filter((m) => m.id !== id)))
   }, [])
 
   // Re-read the inbox from D1, which is the source of truth. The realtime
@@ -151,9 +168,12 @@ export default function WhatsAppInbox() {
   // list was fetched once on mount and afterwards only ever patched by
   // broadcasts, so a dropped socket left the inbox frozen on stale
   // conversations until someone reloaded the page by hand.
+  //
+  // The thread side re-reads only the newest page and merges it, so older
+  // pages the agent scrolled up through are not thrown away every 25 seconds.
   const refresh = useCallback(async () => {
     const openId = activeIdRef.current
-    const [convs, thread] = await Promise.all([
+    const [convs, page] = await Promise.all([
       waApi.conversations().catch(() => null),
       openId ? waApi.messages(openId).catch(() => null) : null,
     ])
@@ -165,7 +185,7 @@ export default function WhatsAppInbox() {
       ))))
     }
     // Guard against a thread switch mid-flight clobbering the new one.
-    if (thread && activeIdRef.current === openId) setMessages(thread.messages || [])
+    if (page && activeIdRef.current === openId) setThread((t) => mergeNewestPage(t, page))
   }, [])
 
   useInboxRealtime({
@@ -227,8 +247,27 @@ export default function WhatsAppInbox() {
   }, [])
   useEffect(() => () => clearTimeout(noticeTimer.current), [])
 
+  // The page older than the oldest one loaded, when the agent scrolls to the
+  // top of the thread. One request at a time.
+  const loadOlder = useCallback(async () => {
+    const id = activeIdRef.current
+    if (!id || !hasMore || loadingOlderRef.current) return
+    loadingOlderRef.current = true
+    setLoadingOlder(true)
+    try {
+      const page = await waApi.messages(id, before)
+      if (activeIdRef.current === id) setThread((t) => prependOlderPage(t, page, before))
+    } catch (err) {
+      console.error('[inbox] failed to load older messages', err)
+      showNotice('Could not load older messages. Please try again.')
+    } finally {
+      loadingOlderRef.current = false
+      setLoadingOlder(false)
+    }
+  }, [hasMore, before, showNotice])
+
   const mergeMessage = useCallback((row) => {
-    setMessages((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m)))
+    setThread(withRows((prev) => prev.map((m) => (m.id === row.id ? { ...m, ...row } : m))))
   }, [])
 
   const [forwarding, setForwarding] = useState(null) // the message being forwarded
@@ -310,6 +349,9 @@ export default function WhatsAppInbox() {
           conversation={activeConv}
           messages={messages}
           loading={loadingMsgs}
+          hasMore={hasMore}
+          loadingOlder={loadingOlder}
+          onLoadOlder={loadOlder}
           onSendText={handleSendText}
           onSendMedia={handleSendMedia}
           onOpenMedia={openMedia}

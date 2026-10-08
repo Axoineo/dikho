@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { Composer } from './Composer'
 import { Avatar } from './Avatar'
@@ -10,6 +10,9 @@ import { useAccess } from '../../../lib/access'
 
 // Day chips and system notices on the wallpaper.
 const CANVAS_CHIP = 'rounded-bubble bg-chat-raised px-3 py-[5px] text-[12.5px] text-chat-sub shadow-bubble'
+
+// How close to the top of the thread (px) the next older page starts loading.
+const LOAD_OLDER_AT = 300
 
 // Day separators plus run detection: a bubble starts a new run (and so gets a
 // tail and a wider gap) when the direction changes or a day break intervenes.
@@ -35,7 +38,7 @@ function buildRows(messages) {
    the canvas down — bubbles, tails, day chips, system notices — stays on the
    --chat-* palette, because that is the part agents read all day. */
 export function Conversation({
-  conversation, messages, loading, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo,
+  conversation, messages, loading, hasMore, loadingOlder, onLoadOlder, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo,
   onChatAction, onCompose, onMessageAction, notice,
 }) {
   const { can } = useAccess()
@@ -60,13 +63,39 @@ export function Conversation({
   // Auto-scroll only when already parked at the end. Yanking an agent back
   // down mid-scroll while a new message lands is how you lose your place in a
   // thread you were reading; instead the jump button counts what arrived.
-  useEffect(() => {
-    const fresh = messages.filter((m) => !seenIdsRef.current.has(m.id))
-    messages.forEach((m) => seenIdsRef.current.add(m.id))
+  // Rows in front of the first one already seen are older history the agent
+  // scrolled up to, not arrivals. A layout effect, so a freshly opened thread
+  // is at its end before any scroll event can read it as "near the top".
+  useLayoutEffect(() => {
+    const seen = seenIdsRef.current
+    const firstSeen = messages.findIndex((m) => seen.has(m.id))
+    const fresh = messages.slice(Math.max(firstSeen, 0)).filter((m) => !seen.has(m.id))
+    messages.forEach((m) => seen.add(m.id))
     if (atBottom) endRef.current?.scrollIntoView({ block: 'end' })
     else setUnseen((n) => n + fresh.filter((m) => m.direction === 'inbound' && m.type !== 'reaction').length)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, conversation?.id])
+
+  // An older page goes in above what is on screen without moving it: the
+  // distance from the bottom of the thread is held across the insert. It is
+  // recorded on every scroll and after every render, so it is current when
+  // the page lands. Rows went in above when the previous first row is still
+  // here but no longer first.
+  const fromBottomRef = useRef(0)
+  const firstIdRef = useRef(null)
+  const firstId = messages[0]?.id ?? null
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    const prevFirst = firstIdRef.current
+    firstIdRef.current = firstId
+    if (!el || prevFirst === null || prevFirst === firstId) return
+    if (messages.findIndex((m) => m.id === prevFirst) > 0) el.scrollTop = el.scrollHeight - fromBottomRef.current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstId])
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (el) fromBottomRef.current = el.scrollHeight - el.scrollTop
+  })
 
   // Switching threads always starts at the end, and drops any open search,
   // filter, reply or form.
@@ -220,8 +249,8 @@ export function Conversation({
         </button>
 
         {/* Find a message in this thread — the single most-asked-for thing in a
-            support inbox, and entirely client-side: the whole thread is
-            already loaded. */}
+            support inbox. Client-side, so it covers the messages loaded so
+            far: the newest page and any older ones scrolled up to. */}
         <button
           type="button"
           title="Search this conversation"
@@ -315,8 +344,12 @@ export function Conversation({
         onScroll={(e) => {
           const el = e.currentTarget
           const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+          fromBottomRef.current = el.scrollHeight - el.scrollTop
           setAtBottom(bottom)
           if (bottom) setUnseen(0)
+          // Not under a search or the starred filter: those show only what
+          // matches, so the top of the list is not the top of the thread.
+          if (el.scrollTop < LOAD_OLDER_AT && hasMore && !loadingOlder && !matches) onLoadOlder?.()
         }}
         className="inbox-scroll relative min-h-0 flex-1 overflow-y-auto pb-3 pt-1 sm:px-[4.5%]"
       >
@@ -325,6 +358,21 @@ export function Conversation({
         {loading && messages.length === 0 && (
           <div className="flex justify-center pt-3">
             <span className={CANVAS_CHIP}>Loading messages…</span>
+          </div>
+        )}
+        {/* Older history. Loads by itself near the top; the button is for
+            when the thread is too short to scroll, and for keyboards. One
+            element in both states, so keyboard focus survives the load. */}
+        {hasMore && !matches && messages.length > 0 && (
+          <div className="flex justify-center pt-3" aria-live="polite">
+            <button
+              type="button"
+              aria-disabled={loadingOlder}
+              onClick={() => { if (!loadingOlder) onLoadOlder?.() }}
+              className={`${CANVAS_CHIP} ${loadingOlder ? 'cursor-default' : 'transition-colors hover:text-chat-text'}`}
+            >
+              {loadingOlder ? 'Loading older messages…' : 'Load older messages'}
+            </button>
           </div>
         )}
         {matches && matches.length === 0 && (

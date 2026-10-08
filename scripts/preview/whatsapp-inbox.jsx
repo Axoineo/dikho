@@ -8,6 +8,11 @@
 //   ?open=Riya             open the first chat whose name contains this
 //   ?perms=view,reply      inbox permissions to hold (default: all four)
 //   ?campaigns=0           without campaigns.send (no template sending)
+//
+// "Long thread" holds 1,200 messages, so the thread pages the way the API
+// pages it (newest 500 first, older ones on scrolling up). A reaction on it
+// sits on the newest page while its message is on the second, and one row is
+// a late webhook: the highest id, with an older time.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -60,6 +65,7 @@ const conversations = [
   { id: 3, phone: '919800000003', wa_name: 'Lotus Events', last_inbound_at: at(20 * HOUR), unread_count: 0 },
   { id: 4, phone: '919800000004', wa_name: null, last_inbound_at: at(5 * HOUR), unread_count: 0, blocked_at: at(4 * HOUR) },
   { id: 5, phone: '919800000005', wa_name: 'Nikhil Rao', last_inbound_at: at(3 * DAY), unread_count: 0 },
+  { id: 6, phone: '919800000006', wa_name: 'Long thread', last_inbound_at: at(40 * MIN), unread_count: 0 },
 ].map((c) => ({ status: 'open', cleared_through_id: 0, blocked_at: null, contact_name: null, avatar_url: null, ...c }))
 
 const P = (payload) => ({ payload: JSON.stringify(payload) })
@@ -122,7 +128,15 @@ messages.push(
   msg(5, 'inbound', 3 * DAY + HOUR, 'Thanks for the quote. We will get back to you next week.'),
   msg(5, 'outbound', 3 * DAY, 'Sure, happy to help.'),
 )
-messages.sort((a, b) => a.created_at.localeCompare(b.created_at))
+// 1,200 messages, one every 30 minutes, the newest 40 minutes ago.
+{
+  const long = Array.from({ length: 1199 }, (_, i) => msg(6, i % 3 ? 'inbound' : 'outbound', 40 * MIN + (1199 - i) * 30 * MIN, `Long thread message ${i + 1}`))
+  const target = long[1199 - 650]
+  long[1199 - 100] = { ...long[1199 - 100], type: 'reaction', direction: 'inbound', body: '👍', context_wamid: target.meta_message_id }
+  messages.push(...long, msg(6, 'inbound', 40 * MIN + 1000 * 30 * MIN + 10 * SEC, 'Late webhook: the newest id, an old time'))
+}
+const byTime = (a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id)
+messages.sort(byTime)
 
 function summarise(conv) {
   const visible = messages.filter((m) => m.conversation_id === conv.id && m.id > conv.cleared_through_id)
@@ -174,8 +188,17 @@ window.fetch = async (request, init = {}) => {
   if (parts[1] !== 'conversations' || !conv) return json({ code: 'NOT_FOUND', message: 'Not found' }, 404)
 
   const action = parts[3] ?? ''
+  // Pages as the API does: the newest PAGE, or with ?before=<id> the page
+  // older than that message, oldest first, with hasMore.
   if (action === 'messages' && method === 'GET') {
-    return json({ messages: messages.filter((m) => m.conversation_id === conv.id && m.id > conv.cleared_through_id) })
+    const PAGE = 500
+    const thread = messages.filter((m) => m.conversation_id === conv.id && m.id > conv.cleared_through_id).sort(byTime)
+    const before = url.searchParams.get('before')
+    const cursor = before === null ? null : messages.find((m) => m.id === Number(before) && m.conversation_id === conv.id)
+    if (before !== null && !cursor) return json({ code: 'HTTP_EXCEPTION', message: 'Bad cursor' }, 400)
+    const upTo = cursor ? thread.filter((m) => byTime(m, cursor) < 0) : thread
+    window.__threadRequests = [...(window.__threadRequests ?? []), { conversation: conv.id, before }]
+    return json({ messages: upTo.slice(-PAGE), hasMore: upTo.length > PAGE })
   }
   if (action === 'read' || action === 'typing') return json({ ok: true })
   if (action === 'clear' || (action === '' && method === 'DELETE')) {

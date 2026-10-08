@@ -141,22 +141,50 @@ conversations.get('/', requirePermission('inbox.view'), async (c) => {
   return ok(c, { conversations: results })
 })
 
-/* ── GET /api/whatsapp/conversations/:id/messages — full thread ────────────
+/* ── GET /api/whatsapp/conversations/:id/messages — one page of the thread ──
    Everything after the last Clear chat / Delete chat, minus messages deleted
-   one by one (migration 0011). `starred` is the caller's own star. */
+   one by one (migration 0011). `starred` is the caller's own star.
+
+   The newest THREAD_PAGE rows, oldest first; `?before=<message id>` gives the
+   page older than that message, for scrolling up. `hasMore` says whether an
+   older page exists. Keyset order is (created_at, id), not id alone: inbound
+   rows carry WhatsApp's timestamp, so a late webhook gets a higher id than
+   newer messages. The cursor row is looked up without the hidden/cleared
+   filters, so a message deleted after the page was loaded still works as one. */
+const THREAD_PAGE = 500
 conversations.get('/:id/messages', requirePermission('inbox.view'), async (c) => {
   const id = Number(c.req.param('id'))
   if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Bad conversation id' })
 
+  const before = c.req.query('before')
+  let cursor = null
+  if (before !== undefined) {
+    const beforeId = /^\d{1,15}$/.test(before) ? Number(before) : 0
+    if (beforeId < 1) throw new HTTPException(400, { message: 'Bad cursor' })
+    cursor = await c.env.DB.prepare('SELECT id, created_at FROM messages WHERE id = ?1 AND conversation_id = ?2')
+      .bind(beforeId, id).first()
+    if (!cursor) throw new HTTPException(400, { message: 'Bad cursor' })
+  }
+
+  // One row past the page, to learn whether an older page exists. The
+  // `created_at <= ?4` half of the cursor lets the reverse scan of
+  // idx_messages_conversation start at the cursor instead of the newest row.
   const { results } = await c.env.DB.prepare(
-    `SELECT m.*,
-            EXISTS (SELECT 1 FROM message_stars s WHERE s.message_id = m.id AND s.user_id = ?2) AS starred
-     FROM messages m
-     WHERE m.conversation_id = ?1 AND m.hidden_at IS NULL
-       AND m.id > COALESCE((SELECT cleared_through_id FROM conversations WHERE id = ?1), 0)
-     ORDER BY m.created_at ASC LIMIT 500`,
-  ).bind(id, c.get('user')?.id ?? '').all()
-  return ok(c, { messages: results })
+    `SELECT * FROM (
+       SELECT m.*,
+              EXISTS (SELECT 1 FROM message_stars s WHERE s.message_id = m.id AND s.user_id = ?2) AS starred
+       FROM messages m
+       WHERE m.conversation_id = ?1 AND m.hidden_at IS NULL
+         AND m.id > COALESCE((SELECT cleared_through_id FROM conversations WHERE id = ?1), 0)
+         ${cursor ? 'AND m.created_at <= ?4 AND (m.created_at < ?4 OR m.id < ?5)' : ''}
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT ?3
+     ) ORDER BY created_at ASC, id ASC`,
+  ).bind(id, c.get('user')?.id ?? '', THREAD_PAGE + 1, ...(cursor ? [cursor.created_at, cursor.id] : [])).all()
+
+  const hasMore = results.length > THREAD_PAGE
+  if (hasMore) results.shift()
+  return ok(c, { messages: results, hasMore })
 })
 
 /* ── POST /api/whatsapp/conversations/:id/read — clear the unread badge ────

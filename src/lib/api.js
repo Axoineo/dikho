@@ -129,7 +129,8 @@ export async function apiBlob(path) {
 /* ── WhatsApp inbox ─────────────────────────────────────────────────────── */
 export const waApi = {
   conversations: () => apiGet('/whatsapp/conversations'),
-  messages: (id) => apiGet(`/whatsapp/conversations/${id}/messages`),
+  // The newest page, or with `before` (a message id) the page older than it.
+  messages: (id, before) => apiGet(`/whatsapp/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ''}`),
   markRead: (id) => apiPost(`/whatsapp/conversations/${id}/read`),
   sendText: (id, body, replyTo) => apiPost(`/whatsapp/conversations/${id}/messages`, { body, replyTo }),
   sendMedia: async (id, file, caption = '', { replyTo, voice = false } = {}) => {
