@@ -39,7 +39,7 @@ const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?ren
 // connection to Cloudflare.
 const CAPTCHA_WAIT_MS = 12000
 
-const DRIVE_CATALOGUE_URL = 'https://www.dropbox.com/scl/fo/hvs3nrxa5zfwyols7undr/AFJBK3hZ5JMtl0XUEyPY9sI?rlkey=9n71uwcr2splnw6de89q7ie9d&st=xknk2n8z&dl=0'
+const DRIVE_CATALOGUE_URL = 'https://drive.google.com/drive/folders/1bNf75b11q2JdIZTQebDI0m_r4mGPeMgN?usp=sharing'
 
 /* Each entry in `highlights` must be a verbatim substring of `quote`. They are
    drawn as a marker-pen wash BEHIND the words — the text itself stays the same
