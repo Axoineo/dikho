@@ -44,7 +44,8 @@ Workers plan, so nothing may depend on a schedule running by itself.
 
 4. **Tokens are unreadable from the database.** Refresh tokens are encrypted
    in the Worker with AES-256-GCM, a key held only as a Worker secret, and
-   the account id as associated data. A database administrator, a backup or
+   the mailbox address as associated data (a token copied onto another
+   mailbox's row does not decrypt). A database administrator, a backup or
    a leaked service-role key does not yield anyone's mail.
 
 5. **Gmail state and Dikho workflow are separate.** Assignment, workflow
@@ -54,10 +55,25 @@ Workers plan, so nothing may depend on a schedule running by itself.
 
 6. **Senders are separated by purpose.** Correspondence goes through the
    connected Gmail mailbox. Programmatic mail goes through a small
-   `EmailDeliveryService` with a Brevo provider (current, default) and an SES
-   v2 provider (signed with `aws4fetch`), switchable by configuration and off
-   until SES is verified. Campaign semantics stay outside the provider
-   interface.
+   `EmailDeliveryService` whose primary provider is Amazon SES v2 (signed
+   with `aws4fetch`, retries off), switched on only by
+   `EMAIL_SES_SEND_ENABLED` once the identity is verified. Brevo remains a
+   fallback for system email only while it is configured, so nothing that
+   works today stops. Campaigns use SES only. Campaign semantics stay outside
+   the provider interface.
+
+8. **Content is shown in isolation.** Message bodies and campaign/template
+   previews are served from the API origin behind a ten-minute ticket for one
+   person and one item, with access re-checked, in a `sandbox` page with its
+   own CSP (no network loads, one hash-pinned resize script). HTML is rebuilt
+   from an allowlist and remote images are dropped first.
+
+9. **Bulk email needs consent and a second person.** Only addresses with
+   recorded opt-in consent are marketable. Submitting freezes the recipients;
+   approval binds to a hash of sender, content, audience, recipient list and
+   schedule; an edit withdraws it; the writer and submitter cannot decide.
+   Dispatch re-checks the hash, consent and suppression per batch under a
+   database-enforced daily cap. No open or click tracking.
 
 7. **Background work is request-driven with leases.** Sync, watch renewal and
    campaign dispatch run on API traffic and explicit actions, claim work with
@@ -75,7 +91,9 @@ Workers plan, so nothing may depend on a schedule running by itself.
   administrators; bodies and attachments are not. This is the accepted
   residual exposure of metadata-first caching.
 - Losing `EMAIL_TOKEN_KEY` means reconnecting every mailbox. Rotation keeps
-  the previous key for decryption until tokens are re-encrypted.
+  the previous key for decryption until each mailbox reconnects.
+- Automations are not built: they need a scheduler that runs without
+  traffic, which this plan does not have.
 - Without Pub/Sub or a scheduler, a mailbox nobody is looking at is synced
   when someone next opens the Email Hub.
 
@@ -97,7 +115,8 @@ Workers plan, so nothing may depend on a schedule running by itself.
 - `supabase/tests/email_hub_*.sql` (run by `scripts/db/verify-local.sh`):
   members allowed, non-members, Owners and developers denied, no self-grant,
   personal delegation only by the owner, revoked members lose access,
-  browser roles have no table access.
+  browser roles have no table access; consent, self-approval, snapshot
+  tampering, withdrawn consent mid-send, daily budget, replayed SES events.
 - `tests/email-*.test.js`: route permission gates, OAuth state replay,
   token encryption binding, sanitizer, MIME, Pub/Sub JWT, SNS signatures.
 - After deployment: `get_advisors` shows no new security findings and the

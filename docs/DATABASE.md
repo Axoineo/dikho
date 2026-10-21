@@ -1,6 +1,6 @@
 # Database and Storage Guide
 
-Last updated: 2026-10-05
+Last updated: 2026-10-21
 
 Dikho uses two databases for different responsibilities:
 
@@ -115,6 +115,41 @@ escalation rules and write `audit_log` in the same transaction.
 
 Avoid new sensitive policies using unconditional `USING (true)` or
 `WITH CHECK (true)`.
+
+### Email Hub tables (not yet applied)
+
+Migrations `20261021120000_email_hub_mailboxes.sql` and
+`20261021130000_email_hub_campaigns.sql` are in the repository only. They
+follow the user-management pattern: RLS on, the restrictive "staff members
+only" policy, no privileges for `anon` or `authenticated`, and every rule in
+`em_*` SECURITY DEFINER functions (`search_path = ''`, qualified names,
+`EXECUTE` for `service_role` only) called by the API Worker with the
+authenticated person as `p_actor`. Changes are written to `audit_log` in the
+same transaction. Design: [ADR 0009](decisions/0009-email-hub.md).
+
+| Table | Holds | Does not hold |
+| --- | --- | --- |
+| `email_accounts`, `email_account_members` | Connected mailboxes and who may use each (viewer, responder, manager, admin) | |
+| `email_oauth_credentials` | One refresh token per mailbox, encrypted by the Worker (AES-256-GCM) | Access tokens, plaintext tokens |
+| `email_oauth_states` | Hash of a pending OAuth state and its PKCE verifier; one use, ten minutes | The state itself |
+| `email_threads` | Thread metadata: subject, participants, dates, labels, unread, attachment flag, Dikho assignee and status | Message bodies, attachments, raw MIME |
+| `email_thread_notes`, `email_thread_links` | Internal notes; links to clients, vendors and leads | |
+| `email_mailbox_sends` | Composer send ids, so a repeated submit sends nothing (kept 30 days) | Content |
+| `email_preferences` | Per address: marketing consent and how it was given, unsubscribes, suppression | |
+| `email_delivery_events` | Normalized SES events, deduplicated by SNS message id (kept 180 days) | Raw payloads, addresses |
+| `email_templates`, `email_template_versions` | Templates and every saved version | |
+| `email_campaigns`, `email_campaign_recipients` | Campaigns, their snapshot and approval hashes, and the frozen recipient list with each outcome | |
+| `email_send_budget` | Campaign emails per UTC day | Addresses |
+
+Removing a mailbox deletes its cached metadata, notes and links (cascade);
+disconnecting deletes only the token. Message content stays in Gmail.
+Campaign recipient rows are the record of who was sent what, so a campaign
+that has started cannot be edited, only duplicated.
+
+`scripts/db/verify-local.sh` applies every migration to a throwaway local
+PostgreSQL with Supabase stand-ins and runs `supabase/tests/*.sql`, which
+include allow and deny cases for both email migrations
+([Testing](TESTING.md)).
 
 ### Finance invariants
 
@@ -254,6 +289,9 @@ rollout so the old client is not cut off before the new server path is live.
 
 `staff_sessions` (sign-in IP, approximate city, device) is purged after 180
 days, each time the same person signs in again. `audit_log` is kept.
+Email Hub: OAuth states expire after ten minutes, composer send ids after 30
+days and SES delivery events after 180 days (each pruned on the next write);
+cached thread metadata is kept until its mailbox is removed.
 
 Define retention for webhook ledgers, login events, failed outbox rows, imported
 contacts, WhatsApp media and orphan documents. Logs and operational tables
