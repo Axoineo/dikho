@@ -4,8 +4,8 @@ import { STATUS } from './emailFormat'
 
 // Small pieces shared by the Email Hub screens.
 
-export function StatusPill({ status }) {
-  const s = STATUS[status] ?? { label: status, tone: '' }
+export function StatusPill({ status, map = STATUS }) {
+  const s = map[status] ?? { label: status, tone: '' }
   return <span className={`em-pill${s.tone ? ` is-${s.tone}` : ''}`}><span className={`em-dot${s.tone ? ` is-${s.tone}` : ''}`} />{s.label}</span>
 }
 

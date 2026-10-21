@@ -22,7 +22,11 @@ import {
   WhatsAppTemplates,
   EmailOverview,
   EmailInbox,
-  EmailSettings
+  EmailSettings,
+  EmailCampaigns,
+  EmailTemplates,
+  EmailConsent,
+  EmailAnalytics
 } from '../routes'
 
 /* ── Wrapper components that read outlet context ────────────────────────── */
@@ -87,6 +91,12 @@ export default function App() {
               <Route path="/email/inbox" element={<EmailInbox />} />
               <Route path="/email/inbox/:threadId" element={<EmailInbox />} />
               <Route path="/email/settings" element={<EmailSettings />} />
+              <Route path="/email/campaigns" element={<EmailCampaigns />} />
+              <Route path="/email/campaigns/:campaignId" element={<EmailCampaigns />} />
+              <Route path="/email/templates" element={<EmailTemplates />} />
+              <Route path="/email/templates/:templateId" element={<EmailTemplates />} />
+              <Route path="/email/consent" element={<EmailConsent />} />
+              <Route path="/email/analytics" element={<EmailAnalytics />} />
             </>
           )}
           <Route path="/users" element={<UsersPage />} />

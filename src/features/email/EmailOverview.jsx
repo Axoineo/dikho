@@ -18,7 +18,17 @@ export default function EmailOverview() {
   const [unread, setUnread] = useState(null)
   const [assigned, setAssigned] = useState(null)
   const [syncing, setSyncing] = useState(null)
+  const [marketing, setMarketing] = useState(null)
   const [toastNode, toast] = useToast()
+  const usesMail = can('email_inbox.view') || can('email_mailboxes.manage')
+  const usesMarketing = can('email_campaigns.view') || can('email_campaigns.create') || can('email_campaigns.approve')
+
+  useEffect(() => {
+    if (!usesMarketing) return
+    let alive = true
+    emailApi.campaigns().then((r) => { if (alive) setMarketing(r) }, () => {})
+    return () => { alive = false }
+  }, [usesMarketing])
 
   const mailboxes = useMemo(() => data?.mailboxes ?? [], [data])
   const hasMailbox = mailboxes.length > 0
@@ -72,7 +82,8 @@ export default function EmailOverview() {
         </div>
       )}
 
-      {data && !hasMailbox && <SetupCard data={data} status={status} />}
+      {data && !hasMailbox && usesMail && <SetupCard data={data} status={status} />}
+      {usesMarketing && (!hasMailbox || !usesMail) && <MarketingCard data={marketing} canApprove={can('email_campaigns.approve')} />}
 
       {data && hasMailbox && (
         <div className="em-grid" style={{ gap: 18 }}>
@@ -149,6 +160,7 @@ export default function EmailOverview() {
             </section>
           </div>
 
+          {usesMarketing && <MarketingCard data={marketing} canApprove={can('email_campaigns.approve')} />}
           <IntegrationsCard status={status} />
         </div>
       )}
@@ -164,6 +176,31 @@ function Stat({ label, value, sub, tone }) {
       <span className="em-stat-value" style={tone === 'warn' ? { color: 'var(--em-warn)' } : undefined}>{value}</span>
       <span className="em-stat-sub">{sub}</span>
     </div>
+  )
+}
+
+function MarketingCard({ data, canApprove }) {
+  const list = data?.campaigns ?? []
+  const count = (...statuses) => list.filter((c) => statuses.includes(c.status)).length
+  const awaiting = count('pending_approval')
+  return (
+    <section className="em-card" aria-labelledby="em-marketing-title">
+      <div className="em-card-head">
+        <div><h2 id="em-marketing-title">Campaigns</h2><p>Marketing email, approved by a second person before it is sent.</p></div>
+        <Link className="em-btn" to="/email/campaigns">Open campaigns</Link>
+      </div>
+      {!data ? <div className="em-skeleton" style={{ height: 60 }} aria-hidden="true" /> : (
+        <>
+          <dl className="em-breakdown">
+            <div><dt>Awaiting approval</dt><dd>{awaiting}</dd></div>
+            <div><dt>Drafts</dt><dd>{count('draft', 'rejected')}</dd></div>
+            <div><dt>Scheduled or sending</dt><dd>{count('approved', 'sending', 'paused')}</dd></div>
+          </dl>
+          {awaiting > 0 && canApprove && <p className="em-help" style={{ marginTop: 8 }}>{awaiting} campaign{awaiting === 1 ? '' : 's'} need{awaiting === 1 ? 's' : ''} an approver who did not write {awaiting === 1 ? 'it' : 'them'}.</p>}
+          {!data.readiness?.ready && <p className="em-help" style={{ marginTop: 8 }}>Sending through Amazon SES is not switched on yet.</p>}
+        </>
+      )}
+    </section>
   )
 }
 

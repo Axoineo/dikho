@@ -181,6 +181,21 @@ function SidebarIcon({ name, size = 20 }) {
         <path d="m14.2 9.3 2.7 2.7-2.7 2.7" />
       </svg>
     ),
+    /* Email consent: a shield with a tick. */
+    consent: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3.2 5 6v5.4c0 4.3 3 7.6 7 9.4 4-1.8 7-5.1 7-9.4V6Z" />
+        <path d="m8.9 12.1 2.2 2.2 4-4.2" />
+      </svg>
+    ),
+    /* Email analytics: a rising line over a baseline. */
+    trend: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3.6 20.2h16.8" />
+        <path d="m4.6 15.8 4.6-4.8 3.6 3.2 6.6-7.2" />
+        <path d="M15.2 7h4.2v4.2" />
+      </svg>
+    ),
     settings: (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
@@ -241,6 +256,10 @@ const WHATSAPP_ITEMS = [
 const EMAIL_ITEMS = [
   { to: '/email', label: 'Overview', icon: 'pulse', end: true },
   { to: '/email/inbox', label: 'Inbox', icon: 'inbox' },
+  { to: '/email/campaigns', label: 'Campaigns', icon: 'megaphone' },
+  { to: '/email/templates', label: 'Templates', icon: 'template' },
+  { to: '/email/consent', label: 'Consent', icon: 'consent' },
+  { to: '/email/analytics', label: 'Analytics', icon: 'trend' },
   { to: '/email/settings', label: 'Settings', icon: 'settings' },
 ]
 

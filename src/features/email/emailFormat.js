@@ -115,3 +115,70 @@ export function prefixed(prefix, subject) {
 
 /** One id per message in the composer, so a double submit sends once. */
 export const newSendId = () => crypto.randomUUID()
+
+// ── Campaigns, templates and consent ─────────────────────────────────────────
+export const CAMPAIGN_STATUS = {
+  draft: { label: 'Draft', tone: '' },
+  pending_approval: { label: 'Awaiting approval', tone: 'warn' },
+  approved: { label: 'Approved', tone: 'brand' },
+  rejected: { label: 'Changes requested', tone: 'danger' },
+  sending: { label: 'Sending', tone: 'brand' },
+  paused: { label: 'Paused', tone: 'warn' },
+  sent: { label: 'Sent', tone: 'ok' },
+  cancelled: { label: 'Cancelled', tone: '' },
+}
+
+// A recipient ends in exactly one of these; "sent" means SES accepted it and
+// no later event (delivered, bounced, ...) has arrived yet.
+export const DELIVERED_STATES = ['sent', 'delivered', 'bounced', 'complained', 'unsubscribed']
+export function campaignCounts(stats) {
+  const n = (k) => Number(stats?.[k] ?? 0)
+  const total = Object.values(stats ?? {}).reduce((a, b) => a + Number(b || 0), 0)
+  return {
+    total,
+    queued: n('pending') + n('sending'),
+    sent: DELIVERED_STATES.reduce((a, k) => a + n(k), 0),
+    delivered: n('delivered') + n('unsubscribed'),
+    bounced: n('bounced'),
+    complained: n('complained'),
+    unsubscribed: n('unsubscribed'),
+    failed: n('failed'),
+    uncertain: n('uncertain'),
+    skipped: n('skipped'),
+  }
+}
+
+export const SOURCE_LABELS = { client: 'Clients', vendor: 'Vendors', lead: 'Leads' }
+export const EMPTY_AUDIENCE = { sources: [], country: [], state: [], city: [], media: [], sub_media: [], active_only: true }
+
+export const CONSENT_SOURCES = {
+  form: 'Signed up on a form',
+  verbal: 'Agreed verbally',
+  written: 'Agreed in writing',
+  imported: 'Imported with consent records',
+  request: 'At their request',
+  unsubscribe_link: 'Unsubscribe link',
+  complaint: 'Marked as spam',
+}
+
+export const CAMPAIGN_EVENTS = {
+  'email_campaign.created': 'Created',
+  'email_campaign.edited': 'Edited after submission',
+  'email_campaign.submitted': 'Submitted for approval',
+  'email_campaign.approved': 'Approved',
+  'email_campaign.rejected': 'Changes requested',
+  'email_campaign.paused': 'Paused',
+  'email_campaign.resumed': 'Resumed',
+  'email_campaign.cancelled': 'Cancelled',
+  'email_campaign.sent': 'Finished sending',
+}
+
+/** <input type="datetime-local"> value for an ISO time, in local time. */
+export function toLocalInput(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+export const formatCount = (n) => Number(n ?? 0).toLocaleString()

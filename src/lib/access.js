@@ -78,7 +78,11 @@ export const PAGE_ACCESS = [
   { path: '/whatsapp', section: 'whatsapp', any: ['campaigns.view', 'campaigns.send'], exact: true },
   { path: '/email/inbox', section: 'email-inbox', any: ['email_inbox.view'] },
   { path: '/email/settings', section: 'email-settings', any: ['email_inbox.view', 'email_mailboxes.manage'] },
-  { path: '/email', section: 'email', any: ['email_inbox.view', 'email_mailboxes.manage'], exact: true },
+  { path: '/email/campaigns', section: 'email-campaigns', any: ['email_campaigns.view', 'email_campaigns.create', 'email_campaigns.approve'] },
+  { path: '/email/templates', section: 'email-templates', any: ['email_templates.manage', 'email_campaigns.create', 'email_campaigns.view'] },
+  { path: '/email/consent', section: 'email-consent', any: ['email_consent.manage', 'email_campaigns.create'] },
+  { path: '/email/analytics', section: 'email-analytics', any: ['email_campaigns.view', 'email_campaigns.approve'] },
+  { path: '/email', section: 'email', any: ['email_inbox.view', 'email_mailboxes.manage', 'email_campaigns.view', 'email_campaigns.create', 'email_campaigns.approve'], exact: true },
   { path: '/users', section: 'users', any: ['users.view'] },
   { path: '/dashboard', section: 'dashboard', any: [] },
   { path: '/settings', section: 'settings', any: [] },
@@ -117,6 +121,8 @@ export const SECTION_LABELS = {
   whatsapp: 'WhatsApp Dashboard', 'whatsapp-inbox': 'WhatsApp Inbox', 'whatsapp-contacts': 'WhatsApp Contacts',
   'whatsapp-campaigns': 'WhatsApp Campaigns', 'whatsapp-templates': 'WhatsApp Templates', users: 'User Management',
   email: 'Email Overview', 'email-inbox': 'Email Inbox', 'email-settings': 'Email Settings',
+  'email-campaigns': 'Email Campaigns', 'email-templates': 'Email Templates', 'email-consent': 'Email Consent',
+  'email-analytics': 'Email Analytics',
   dashboard: 'Dashboard', settings: 'Settings',
 }
 

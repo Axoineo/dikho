@@ -21,6 +21,10 @@ export const WhatsAppTemplates = lazyWithRetry(() => import('./features/whatsapp
 export const EmailOverview = lazyWithRetry(() => import('./features/email/EmailOverview'))
 export const EmailInbox = lazyWithRetry(() => import('./features/email/EmailInbox'))
 export const EmailSettings = lazyWithRetry(() => import('./features/email/EmailSettings'))
+export const EmailCampaigns = lazyWithRetry(() => import('./features/email/EmailCampaigns'))
+export const EmailTemplates = lazyWithRetry(() => import('./features/email/EmailTemplates'))
+export const EmailConsent = lazyWithRetry(() => import('./features/email/EmailConsent'))
+export const EmailAnalytics = lazyWithRetry(() => import('./features/email/EmailAnalytics'))
 
 /* ── Public routes (lazy-loaded, no auth required) ─────────────────────── */
 export const PublicVendorForm = lazyWithRetry(() => import('./features/public/PublicVendorForm'))
