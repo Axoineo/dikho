@@ -11,25 +11,121 @@ import { verifyRenderTicket } from '../../services/email/renderTicket.js'
 import { readMessage } from '../../services/email/mime.js'
 import { sanitizeHtml, textToHtml } from '../../services/email/sanitizeHtml.js'
 import { UUID, GMAIL_ID } from './shared.js'
+import { verifySnsMessage, normalizeSesEvent, snsUrlAllowed } from '../../services/email/sns.js'
+import { verifyUnsubscribe, dispatchCampaignBatch } from '../../services/email/campaigns.js'
+import { safeEqual } from '../../services/email/crypto.js'
+import { syncMailbox as syncOne } from '../../services/email/sync.js'
 import { syncMailbox, inBackground } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
 import accounts from './accounts.js'
 import threads from './threads.js'
 import compose from './compose.js'
+import marketing from './campaigns.js'
 
 // /api/email — the Email Hub (docs/decisions/0009-email-hub.md).
 //
-// Off unless EMAIL_HUB_ENABLED=true: every route, public ones included,
-// answers 404 so a half-configured module is invisible.
+// Off unless EMAIL_HUB_ENABLED=true: every route answers 404, so a
+// half-configured module is invisible. Two exceptions stay on whatever the
+// switch says, because mail already sent depends on them: unsubscribe links,
+// and SES delivery/bounce/complaint events.
 //
 // Route classes:
 //   no session (each authenticates itself):
 //     GET  /oauth/google/callback   one-time OAuth state + PKCE
 //     POST /webhooks/google-pubsub  Google-signed OIDC token
 //     GET  /render/:thread/:message ten-minute render ticket + live membership check
+//     GET/POST /unsubscribe         HMAC-signed recipient link (always on)
+//     POST /webhooks/ses            SNS signature, certificate host, topic (always on)
+//     POST /jobs/run                EMAIL_JOBS_SECRET, for an external scheduler
 //   everything else: requireAuth (live session, active staff), then the
 //   em_* functions decide permission and mailbox membership.
 const email = new Hono()
+
+// ── Unsubscribe (always on) ──────────────────────────────────────────────────
+// GET shows a confirmation page and changes nothing, so link scanners and
+// previews cannot unsubscribe anyone. POST (the page's button, or a mail
+// app's RFC 8058 one-click request) records it. Signed per recipient.
+const PAGE_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  'Cache-Control': 'no-store',
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+}
+const page = (title, body, status = 200) => new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>`
+  + '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f8fb;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#263247}'
+  + 'main{max-width:420px;margin:24px;padding:32px;background:#fff;border:1px solid #dfe5ed;border-radius:14px;text-align:center}'
+  + 'h1{margin:0 0 8px;font-size:20px}p{margin:0 0 20px;color:#5f6c82}button{min-height:44px;padding:0 22px;border:0;border-radius:12px;background:#185494;color:#fff;font-weight:600;font-size:15px;cursor:pointer}</style>'
+  + `</head><body><main>${body}</main></body></html>`, { status, headers: PAGE_HEADERS })
+
+async function unsubscribeTarget(c) {
+  const r = c.req.query('r')
+  const s = c.req.query('s')
+  return (await verifyUnsubscribe(c.env, r, s)) ? { r, s } : null
+}
+
+email.get('/unsubscribe', async (c) => {
+  const target = await unsubscribeTarget(c)
+  if (!target) return page('Link not valid', '<h1>This link is not valid</h1><p>It may have been copied incompletely. Use the link in the email again.</p>', 400)
+  return page('Unsubscribe', '<h1>Stop marketing emails?</h1><p>You will no longer receive campaigns from us. Messages about your own orders and invoices are not affected.</p>'
+    + `<form method="post" action="?r=${target.r}&amp;s=${target.s}"><button type="submit">Unsubscribe</button></form>`)
+})
+
+email.post('/unsubscribe', async (c) => {
+  await readBoundedBytes(c, 4 * 1024)
+  const target = await unsubscribeTarget(c)
+  if (!target) return page('Link not valid', '<h1>This link is not valid</h1><p>Use the link in the email again.</p>', 400)
+  try {
+    await callUserRpc(c, 'em_unsubscribe_recipient', { p_recipient: target.r })
+  } catch (err) {
+    logError('email.unsubscribe.failed', err)
+    return page('Try again', '<h1>Something went wrong</h1><p>Please try the link again in a minute.</p>', 503)
+  }
+  logEvent('email.unsubscribed', { via: 'link' })
+  return page('Unsubscribed', '<h1>You are unsubscribed</h1><p>You will not receive further marketing emails from us.</p>')
+})
+
+// ── Amazon SES events through SNS (always on) ───────────────────────────────
+email.post('/webhooks/ses', async (c) => {
+  const bytes = await readBoundedBytes(c, 256 * 1024)
+  let message
+  try {
+    message = JSON.parse(new TextDecoder().decode(bytes))
+  } catch {
+    return c.json({ success: false }, 400)
+  }
+  const verdict = await verifySnsMessage(c.env, message)
+  if (!verdict.ok) {
+    logEvent('email.sns.rejected', { reason: verdict.reason })
+    return c.json({ success: false }, verdict.reason === 'not_configured' ? 404 : 403)
+  }
+  if (message.Type === 'SubscriptionConfirmation') {
+    // Only a verified message for our own topic gets its subscription confirmed.
+    if (!snsUrlAllowed(message.SubscribeURL)) return c.json({ success: false }, 400)
+    const res = await fetch(message.SubscribeURL, { signal: AbortSignal.timeout(10_000) }).catch(() => null)
+    logEvent('email.sns.subscription', { confirmed: Boolean(res?.ok) })
+    return c.body(null, res?.ok ? 204 : 502)
+  }
+  if (message.Type === 'UnsubscribeConfirmation') {
+    logEvent('email.sns.unsubscribed', {})
+    return c.body(null, 204)
+  }
+  let event
+  try {
+    event = JSON.parse(message.Message)
+  } catch {
+    return c.body(null, 204)
+  }
+  try {
+    const result = await callUserRpc(c, 'em_record_delivery_event', { p_event: normalizeSesEvent(message.MessageId, event) })
+    logEvent('email.ses.event', { type: String(event?.eventType ?? event?.notificationType ?? 'unknown').slice(0, 30), result })
+  } catch (err) {
+    // Not acknowledged, so SNS retries.
+    logError('email.ses.record_failed', err)
+    return c.json({ success: false }, 503)
+  }
+  return c.body(null, 204)
+})
 
 email.use('*', async (c, next) => {
   if (!emailHubEnabled(c.env)) throw new HTTPException(404, { message: 'Not found' })
@@ -202,10 +298,31 @@ email.get('/render/:threadId/:messageId', async (c) => {
   }
 })
 
+// ── Background work for an external scheduler ────────────────────────────────
+// Cron Triggers do not fire on this account's plan, so anything that must run
+// without dashboard traffic (campaign batches, idle mailboxes) can be driven
+// by an independent scheduler (for example Supabase pg_cron + pg_net) calling
+// this with EMAIL_JOBS_SECRET. Unset secret: the endpoint does not exist.
+email.post('/jobs/run', async (c) => {
+  const secret = c.env.EMAIL_JOBS_SECRET
+  const header = c.req.header('Authorization') || ''
+  if (!secret || secret.length < 32 || !safeEqual(header, `Bearer ${secret}`)) throw new HTTPException(404, { message: 'Not found' })
+  const campaigns = await dispatchCampaignBatch(c.env)
+  let synced = null
+  try {
+    const due = await callUserRpc(c, 'em_sync_due', { p_user: null, p_limit: 1 })
+    if (Array.isArray(due) && due[0]) synced = await syncOne(c.env, due[0])
+  } catch (err) {
+    logError('email.jobs.sync_failed', err)
+  }
+  return c.json({ success: true, data: { campaigns, synced: Boolean(synced?.ok) } })
+})
+
 // ── Staff routes ─────────────────────────────────────────────────────────────
 email.use('*', requireAuth)
 email.route('/', accounts)
 email.route('/', threads)
 email.route('/', compose)
+email.route('/', marketing)
 
 export default email

@@ -18,6 +18,7 @@ import assist from './routes/assist/index.js'
 import email from './routes/email/index.js'
 import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
 import { maybeReconcileOnRequest } from './services/whatsapp/reconcile.js'
+import { maybeDispatchCampaignsOnRequest } from './services/email/campaigns.js'
 
 // Root Hono app for everything under /api. Kept separate from src/worker.js
 // so the SPA asset fallback never has to know about API internals.
@@ -53,6 +54,7 @@ export function createApiApp() {
   app.use('*', async (c, next) => {
     maybeDispatchOnRequest(c)   // corporate-gifting confirmation queue (30s)
     maybeReconcileOnRequest(c)  // parked WhatsApp delivery receipts (2 min)
+    maybeDispatchCampaignsOnRequest(c) // approved email campaign batches (30s; only when SES is ready)
     await next()
   })
 
