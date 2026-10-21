@@ -12,7 +12,7 @@ import { readMessage } from '../../services/email/mime.js'
 import { sanitizeHtml, textToHtml } from '../../services/email/sanitizeHtml.js'
 import { UUID, GMAIL_ID } from './shared.js'
 import { verifySnsMessage, normalizeSesEvent, snsUrlAllowed } from '../../services/email/sns.js'
-import { verifyUnsubscribe, dispatchCampaignBatch } from '../../services/email/campaigns.js'
+import { verifyUnsubscribe, dispatchCampaignBatch, buildCampaignMessage } from '../../services/email/campaigns.js'
 import { safeEqual } from '../../services/email/crypto.js'
 import { syncMailbox as syncOne } from '../../services/email/sync.js'
 import { syncMailbox, inBackground } from '../../services/email/sync.js'
@@ -36,6 +36,7 @@ import marketing from './campaigns.js'
 //     GET  /render/:thread/:message ten-minute render ticket + live membership check
 //     GET/POST /unsubscribe         HMAC-signed recipient link (always on)
 //     POST /webhooks/ses            SNS signature, certificate host, topic (always on)
+//     GET  /preview/:kind/:id       ten-minute preview ticket + live permission check
 //     POST /jobs/run                EMAIL_JOBS_SECRET, for an external scheduler
 //   everything else: requireAuth (live session, active staff), then the
 //   em_* functions decide permission and mailbox membership.
@@ -316,6 +317,33 @@ email.post('/jobs/run', async (c) => {
     logError('email.jobs.sync_failed', err)
   }
   return c.json({ success: true, data: { campaigns, synced: Boolean(synced?.ok) } })
+})
+
+// ── Campaign and template previews ───────────────────────────────────────────
+// Same isolation as messages (own origin, sandbox, no network loads), with
+// sample values in the variables and the real footer, so what is reviewed
+// and approved is what recipients see. Ticket for one person and one item;
+// permission re-checked through em_get_campaign / em_get_template.
+email.get('/preview/:kind/:id', async (c) => {
+  const headers = await renderHeaders(c.env)
+  const refuse = (status, text) => new Response(renderPage(`<p style="color:#5f6368">${text}</p>`), { status, headers })
+  const kind = c.req.param('kind')
+  const id = c.req.param('id')
+  if (!['campaign', 'template'].includes(kind) || !UUID.test(id)) return refuse(400, 'This preview link is not valid.')
+  const claim = await verifyRenderTicket(c.env, c.req.query('t'), { threadId: id.toLowerCase(), messageId: kind })
+  if (!claim) return refuse(403, 'This preview has expired. Reopen it.')
+  try {
+    const item = kind === 'campaign'
+      ? await callUserRpc(c, 'em_get_campaign', { p_actor: claim.userId, p_campaign: id.toLowerCase() })
+      : await callUserRpc(c, 'em_get_template', { p_actor: claim.userId, p_template: id.toLowerCase(), p_version: null })
+    const message = await buildCampaignMessage(c.env, { ...item, from_name: item.from_name || c.env.EMAIL_FROM_NAME || 'Dikho', id },
+      { id: '00000000-0000-4000-8000-000000000000', email: 'asha@example.com', name: 'Asha Verma', company: 'Example Industries' })
+    return new Response(renderPage(sanitizeHtml(message.html, { keepStyles: true }).html), { headers })
+  } catch (err) {
+    if (err?.fromRule) return refuse(404, 'This item is no longer available to you.')
+    logError('email.preview.failed', err)
+    return refuse(502, 'The preview could not be loaded. Try again.')
+  }
 })
 
 // ── Staff routes ─────────────────────────────────────────────────────────────

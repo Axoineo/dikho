@@ -10,6 +10,7 @@ import {
   CAMPAIGN_VARIABLES, TRANSACTIONAL_VARIABLES, unknownVariables, allowedSenders, campaignReadiness, maxRecipients, dailyCap,
   buildCampaignMessage,
 } from '../../services/email/campaigns.js'
+import { issueRenderTicket } from '../../services/email/renderTicket.js'
 import { actor, rpc, uuidParam, requestContext, noStore } from './shared.js'
 
 // Campaigns, templates, audiences, consent and analytics. Mounted behind
@@ -19,6 +20,13 @@ import { actor, rpc, uuidParam, requestContext, noStore } from './shared.js'
 const marketing = new Hono()
 const MAX_BODY = 1024 * 1024
 const SOURCES = new Set(['client', 'vendor', 'lead'])
+
+// Adds the path of an isolated preview of this campaign or template.
+async function withPreview(c, kind, item) {
+  if (!item?.id) return item
+  const ticket = await issueRenderTicket(c.env, { userId: actor(c), threadId: item.id, messageId: kind })
+  return ticket ? { ...item, preview_path: `/email/preview/${kind}/${item.id}?t=${ticket}` } : item
+}
 
 function cleanContent(body, allowed) {
   const out = {}
@@ -100,17 +108,17 @@ marketing.get('/campaigns', async (c) => {
 })
 
 marketing.post('/campaigns', requirePermission('email_campaigns.create'), async (c) => {
-  return ok(c, await rpc(c, 'em_save_campaign', { p_actor: actor(c), p_campaign: null, p_fields: await campaignFields(c), p_ctx: requestContext(c) }), 201)
+  return ok(c, await withPreview(c, 'campaign', await rpc(c, 'em_save_campaign', { p_actor: actor(c), p_campaign: null, p_fields: await campaignFields(c), p_ctx: requestContext(c) })), 201)
 })
 
 marketing.get('/campaigns/:id', async (c) => {
   noStore(c)
-  return ok(c, await rpc(c, 'em_get_campaign', { p_actor: actor(c), p_campaign: uuidParam(c) }))
+  return ok(c, await withPreview(c, 'campaign', await rpc(c, 'em_get_campaign', { p_actor: actor(c), p_campaign: uuidParam(c) })))
 })
 
 marketing.put('/campaigns/:id', requirePermission('email_campaigns.create'), async (c) => {
   const id = uuidParam(c)
-  return ok(c, await rpc(c, 'em_save_campaign', { p_actor: actor(c), p_campaign: id, p_fields: await campaignFields(c), p_ctx: requestContext(c) }))
+  return ok(c, await withPreview(c, 'campaign', await rpc(c, 'em_save_campaign', { p_actor: actor(c), p_campaign: id, p_fields: await campaignFields(c), p_ctx: requestContext(c) })))
 })
 
 marketing.post('/campaigns/:id/submit', requirePermission('email_campaigns.create'), async (c) => {
@@ -183,7 +191,7 @@ marketing.get('/templates', async (c) => {
 marketing.get('/templates/:id', async (c) => {
   const version = c.req.query('version')
   if (version && !/^\d{1,6}$/.test(version)) throw new HTTPException(400, { message: 'Invalid version' })
-  return ok(c, await rpc(c, 'em_get_template', { p_actor: actor(c), p_template: uuidParam(c), p_version: version ? Number(version) : null }))
+  return ok(c, await withPreview(c, 'template', await rpc(c, 'em_get_template', { p_actor: actor(c), p_template: uuidParam(c), p_version: version ? Number(version) : null })))
 })
 
 async function saveTemplate(c, id) {
@@ -193,7 +201,7 @@ async function saveTemplate(c, id) {
   const allowed = kind === 'transactional' || body?.kind === 'transactional' ? { ...CAMPAIGN_VARIABLES, ...TRANSACTIONAL_VARIABLES } : CAMPAIGN_VARIABLES
   const fields = cleanContent(body ?? {}, allowed)
   if (kind) fields.kind = kind
-  return ok(c, await rpc(c, 'em_save_template', { p_actor: actor(c), p_template: id, p_fields: fields, p_ctx: requestContext(c) }), id ? 200 : 201)
+  return ok(c, await withPreview(c, 'template', await rpc(c, 'em_save_template', { p_actor: actor(c), p_template: id, p_fields: fields, p_ctx: requestContext(c) })), id ? 200 : 201)
 }
 marketing.post('/templates', requirePermission('email_templates.manage'), (c) => saveTemplate(c, null))
 marketing.put('/templates/:id', requirePermission('email_templates.manage'), (c) => saveTemplate(c, uuidParam(c)))

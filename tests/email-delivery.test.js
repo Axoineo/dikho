@@ -393,3 +393,20 @@ test('a test send goes only to the requester, through SES, within the budget', a
   budget = false
   assert.equal((await req(`/campaigns/${CAMPAIGN}/test`, { method: 'POST', body: '{}' })).status, 429)
 })
+
+test('campaign previews: isolated page, sample values, real footer, permission re-checked', async () => {
+  const { issueRenderTicket } = await import('../src/api/services/email/renderTicket.js')
+  const app = createApiApp()
+  let actorSeen
+  handlers.rpc.em_get_campaign = async (args) => { actorSeen = args.p_actor; return Response.json({ id: CAMPAIGN, from_name: 'Dikho', subject: 'S', html: '<p>Hi {{first_name}}</p><img src="https://t.example/p.gif">' }) }
+  const ticket = await issueRenderTicket(env, { userId: 'a1111111-1111-4111-8111-111111111111', threadId: CAMPAIGN, messageId: 'campaign' })
+  const res = await app.request(`/api/email/preview/campaign/${CAMPAIGN}?t=${ticket}`, {}, env)
+  assert.equal(res.status, 200)
+  assert.match(res.headers.get('Content-Security-Policy'), /^sandbox allow-scripts/)
+  const page = await res.text()
+  assert.match(page, /Hi Asha/)
+  assert.match(page, /Unsubscribe/)
+  assert.doesNotMatch(page, /t\.example/)
+  assert.equal(actorSeen, 'a1111111-1111-4111-8111-111111111111')
+  assert.equal((await app.request(`/api/email/preview/template/${CAMPAIGN}?t=${ticket}`, {}, env)).status, 403, 'a campaign ticket does not open a template')
+})
