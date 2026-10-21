@@ -922,6 +922,23 @@ begin
 end
 $$;
 
+-- Labels as Gmail reported them after a change made from Dikho (read,
+-- archive, star, label), so the list is right before the next sync.
+create or replace function public.em_set_thread_labels(p_account uuid, p_gmail_thread_id text, p_label_ids text[])
+returns void
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  update public.email_threads
+  set label_ids = coalesce(p_label_ids, '{}'),
+      unread = 'UNREAD' = any (coalesce(p_label_ids, '{}')),
+      starred = 'STARRED' = any (coalesce(p_label_ids, '{}')),
+      synced_at = now()
+  where account_id = p_account and gmail_thread_id = p_gmail_thread_id
+$$;
+
 create or replace function public.em_mark_threads_deleted(p_account uuid, p_gmail_thread_ids text[])
 returns integer
 language plpgsql
@@ -1046,6 +1063,32 @@ begin
     'threads', case when v_count > v_limit then v_rows - v_limit else v_rows end,
     'has_more', v_count > v_limit
   );
+end
+$$;
+
+-- Cached threads of one mailbox by Gmail id, in the order given (results of
+-- a search run in Gmail itself). Needs viewer access to that mailbox.
+create or replace function public.em_get_threads(p_actor uuid, p_account uuid, p_gmail_thread_ids text[])
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_access jsonb;
+begin
+  v_access := public.em_access(p_actor, p_account, 'viewer');
+  if cardinality(p_gmail_thread_ids) > 100 then
+    perform public.um_fail(400, 'Too many conversations.');
+  end if;
+  return coalesce((
+    select jsonb_agg(public.em_thread_json(t) || jsonb_build_object(
+             'account_email', v_access ->> 'email_address', 'account_name', v_access ->> 'display_name')
+           order by array_position(p_gmail_thread_ids, t.gmail_thread_id))
+    from public.email_threads t
+    where t.account_id = p_account and t.gmail_thread_id = any (p_gmail_thread_ids) and t.gmail_deleted_at is null
+  ), '[]'::jsonb);
 end
 $$;
 

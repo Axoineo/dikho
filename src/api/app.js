@@ -15,6 +15,7 @@ import cgLeads from './routes/cgLeads/index.js'
 import users from './routes/users/index.js'
 import me from './routes/me/index.js'
 import assist from './routes/assist/index.js'
+import email from './routes/email/index.js'
 import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
 import { maybeReconcileOnRequest } from './services/whatsapp/reconcile.js'
 
@@ -95,6 +96,12 @@ export function createApiApp() {
   app.route('/users', users)
   app.route('/me', me)
   app.route('/assist', assist)
+
+  // Email Hub. Mixed: its provider callbacks (Google OAuth return, Gmail push)
+  // authenticate themselves and are registered before the router's own
+  // requireAuth, which covers every other /email route. The whole module
+  // answers 404 unless EMAIL_HUB_ENABLED=true. See routes/email/index.js.
+  app.route('/email', email)
 
   return app
 }
