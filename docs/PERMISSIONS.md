@@ -110,8 +110,8 @@ their role.
   view (`clients.view`, `vendors.view`, `leads.view`).
 
 Campaigns: `email_campaigns.create` writes and submits; `email_campaigns.approve`
-approves or requests changes, never on a campaign the person wrote or
-submitted; an approval covers one exact version (its fingerprint). Audiences
+approves or requests changes, never on a campaign the person wrote, last
+edited or submitted; an approval covers one exact version (its fingerprint). Audiences
 include only record kinds the creator may view, and only addresses with
 recorded marketing consent. `email_consent.manage` records consent (with how
 it was given), unsubscribes and suppression; `email_campaigns.create` may look
@@ -185,7 +185,7 @@ only the one person they choose.
 | WhatsApp OTP hook | Sends a code only to active staff (`staff_is_active`) |
 | `/api/email/*` | `EMAIL_HUB_ENABLED`, `requireAuth`, then the `em_*` rules (permission and, for mailboxes, membership) |
 | Email render and preview pages | Ten-minute ticket for one person and one item, membership or permission re-checked on load; sandboxed, separate origin |
-| Google OAuth return, Gmail push, SES events, unsubscribe | One-time hashed state with PKCE; Google-signed OIDC token; SNS signature and topic; per-recipient HMAC link. Never grant dashboard access |
+| Google OAuth return, Gmail push, SES events, unsubscribe | The return only hands on to `/email/connect`, which completes through `POST /api/email/oauth/google/complete` with a session, for the person who started (one-time hashed state, PKCE); Google-signed OIDC token; SNS signature and topic; per-recipient HMAC link. Never grant dashboard access |
 | `/api/public/*`, Meta webhook, `/api/gstn` | Unchanged: Turnstile, signatures, rate limits. Never grant dashboard access |
 
 ## Verification required for changes

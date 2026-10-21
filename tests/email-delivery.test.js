@@ -248,7 +248,10 @@ test('campaign messages carry a signed unsubscribe link and one-click headers', 
   const sig = new URL(link).searchParams.get('s')
   assert.equal(await verifyUnsubscribe(env, recipient.id, sig), true)
   assert.equal(await verifyUnsubscribe(env, 'eeeeeeee-1111-4111-8111-111111111111', sig), false, 'bound to the recipient')
-  assert.equal(await verifyUnsubscribe({ ...env, EMAIL_TOKEN_KEY: Buffer.alloc(32, 6).toString('base64') }, recipient.id, sig), false)
+  const rotated = { ...env, EMAIL_TOKEN_KEY: Buffer.alloc(32, 6).toString('base64') }
+  assert.equal(await verifyUnsubscribe(rotated, recipient.id, sig), false, 'another key does not verify')
+  assert.equal(await verifyUnsubscribe({ ...rotated, EMAIL_TOKEN_KEY_PREVIOUS: env.EMAIL_TOKEN_KEY }, recipient.id, sig), true,
+    'links sent before a rotation keep working while the previous key is set')
 })
 
 test('unsubscribe: GET only asks, POST records, a bad link changes nothing, works with the module off', async () => {

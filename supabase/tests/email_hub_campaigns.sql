@@ -105,6 +105,26 @@ begin
 end
 $$;
 
+-- The last person to edit a campaign cannot approve it either, even when a
+-- colleague submits it (here an Owner, who holds create and approve).
+do $$
+declare
+  v jsonb;
+  v_id uuid;
+begin
+  v := public.em_save_campaign('a1111111-1111-4111-8111-111111111111', null, jsonb_build_object(
+    'name', 'Edited by someone else', 'from_name', 'Dikho', 'from_email', 'news@dikho.example', 'subject', 'Rates',
+    'html', '<p>Hello</p>', 'audience', jsonb_build_object('sources', jsonb_build_array('client'), 'city', jsonb_build_array('Mumbai'))), '{}');
+  v_id := (v ->> 'id')::uuid;
+  perform public.em_save_campaign('a3333333-3333-4333-8333-333333333333', v_id, '{"subject":"Rates, rewritten"}', '{}');
+  v := public.em_submit_campaign('a1111111-1111-4111-8111-111111111111', v_id, 5000, '{}');
+  perform test.expect_error(format($f$select public.em_decide_campaign(%L, %L, true, %L, null, '{}')$f$,
+    'a3333333-3333-4333-8333-333333333333', v_id, v ->> 'snapshot_hash'), 'PT403', 'the last editor cannot approve');
+  v := public.em_decide_campaign('a2222222-2222-4222-8222-222222222222', v_id, false, v ->> 'snapshot_hash', 'Not now', '{}');
+  perform test.check(v ->> 'status' = 'rejected', 'an independent approver still decides');
+end
+$$;
+
 -- ── Dispatch: claims, budget, consent re-check, tamper detection ─────────
 do $$
 declare

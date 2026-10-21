@@ -709,7 +709,7 @@ as $$
     'snapshot_hash', p_campaign.snapshot_hash, 'approved_hash', p_campaign.approved_hash,
     'created_by', p_campaign.created_by,
     'created_by_name', (select m.full_name from public.staff_members m where m.user_id = p_campaign.created_by),
-    'created_at', p_campaign.created_at, 'updated_at', p_campaign.updated_at,
+    'created_at', p_campaign.created_at, 'updated_at', p_campaign.updated_at, 'updated_by', p_campaign.updated_by,
     'submitted_by_name', (select m.full_name from public.staff_members m where m.user_id = p_campaign.submitted_by),
     'submitted_by', p_campaign.submitted_by, 'submitted_at', p_campaign.submitted_at,
     'approved_by_name', (select m.full_name from public.staff_members m where m.user_id = p_campaign.approved_by),
@@ -950,8 +950,9 @@ begin
   if v_campaign.status <> 'pending_approval' then
     perform public.um_fail(409, 'This campaign is not waiting for approval.');
   end if;
-  if p_actor = v_campaign.created_by or p_actor is not distinct from v_campaign.submitted_by then
-    perform public.um_fail(403, 'You cannot approve or reject a campaign you wrote or submitted. Ask another approver.');
+  if p_actor = v_campaign.created_by or p_actor is not distinct from v_campaign.submitted_by
+     or p_actor is not distinct from v_campaign.updated_by then
+    perform public.um_fail(403, 'You cannot approve or reject a campaign you wrote, edited or submitted. Ask another approver.');
   end if;
   if p_hash is null or p_hash is distinct from v_campaign.snapshot_hash
      or v_campaign.snapshot_hash is distinct from public.em_campaign_hash(p_campaign) then

@@ -20,6 +20,7 @@ export const emailApi = {
   directory: () => apiGet('/email/directory'),
   recipients: (text) => apiGet(`/email/recipients${q({ q: text })}`),
   startConnect: (accountId) => apiPost('/email/oauth/google/start', accountId ? { account_id: accountId } : {}),
+  completeConnect: (body) => apiPost('/email/oauth/google/complete', body),
   disconnect: (accountId) => apiPost(`/email/accounts/${accountId}/disconnect`, {}),
   removeAccount: (accountId) => apiDelete(`/email/accounts/${accountId}`),
   sync: (accountId) => apiPost(`/email/accounts/${accountId}/sync`, {}),

@@ -23,6 +23,7 @@ import {
   EmailOverview,
   EmailInbox,
   EmailSettings,
+  EmailConnect,
   EmailCampaigns,
   EmailTemplates,
   EmailConsent,
@@ -91,6 +92,7 @@ export default function App() {
               <Route path="/email/inbox" element={<EmailInbox />} />
               <Route path="/email/inbox/:threadId" element={<EmailInbox />} />
               <Route path="/email/settings" element={<EmailSettings />} />
+              <Route path="/email/connect" element={<EmailConnect />} />
               <Route path="/email/campaigns" element={<EmailCampaigns />} />
               <Route path="/email/campaigns/:campaignId" element={<EmailCampaigns />} />
               <Route path="/email/templates" element={<EmailTemplates />} />

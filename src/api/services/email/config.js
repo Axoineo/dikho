@@ -14,7 +14,7 @@ import { tokenKeyConfigured } from './crypto.js'
 //   GOOGLE_PUBSUB_TOPIC          optional; projects/<p>/topics/<t> for Gmail push.
 //   GOOGLE_PUBSUB_AUDIENCE       the push subscription's OIDC audience.
 //   GOOGLE_PUBSUB_SERVICE_ACCOUNT the push subscription's service account email.
-//   APP_URL                      dashboard origin, for the post-connect redirect.
+//   APP_URL                      dashboard origin; Google's return is handed on to it.
 //   EMAIL_SYNC_DAYS / EMAIL_SYNC_MAX_THREADS   first-sync window and size.
 
 export function emailHubEnabled(env) {
@@ -45,9 +45,9 @@ function intIn(value, fallback, min, max) {
 export const syncDays = (env) => intIn(env.EMAIL_SYNC_DAYS, 60, 1, 365)
 export const syncMaxThreads = (env) => intIn(env.EMAIL_SYNC_MAX_THREADS, 150, 10, 500)
 
-/** Where the browser lands after Google sends it back. */
-export function settingsUrl(env, params) {
+/** The dashboard page that finishes a Google connection with its session. */
+export function connectUrl(env, params) {
   const base = (env.APP_URL || '').replace(/\/+$/, '')
   if (!/^https?:\/\/[^/]+$/.test(base)) return null
-  return `${base}/email/settings?${new URLSearchParams(params)}`
+  return `${base}/email/connect?${new URLSearchParams(params)}`
 }

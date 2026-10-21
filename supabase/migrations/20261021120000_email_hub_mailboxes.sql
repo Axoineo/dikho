@@ -413,6 +413,11 @@ begin
   if exists (select 1 from public.email_accounts where email_address = v_email) then
     perform public.um_fail(409, 'This address is already set up in Dikho.');
   end if;
+  -- A colleague's own address is their personal mailbox, connected by them;
+  -- registering it as "shared" would let a manager route its grant elsewhere.
+  if exists (select 1 from auth.users u join public.staff_members s on s.user_id = u.id where lower(u.email) = v_email) then
+    perform public.um_fail(400, 'This is a staff member''s own sign-in address. They connect it themselves as their personal mailbox.');
+  end if;
   insert into public.email_accounts (kind, email_address, display_name, created_by)
   values ('shared', v_email, nullif(btrim(left(p_display_name, 120)), ''), p_actor)
   returning * into v_account;
@@ -605,8 +610,12 @@ begin
 end
 $$;
 
--- Takes a state back exactly once. A replayed, unknown or expired state is a 400.
-create or replace function public.em_take_state(p_state_hash text)
+-- Takes a state back exactly once, for the person finishing the connection.
+-- A replayed, unknown or expired state returns null. A state started by
+-- someone else is consumed and refused ({refused: true}) and audited: a
+-- consent link forwarded to a colleague must never connect the colleague's
+-- mailbox to whoever sent it.
+create or replace function public.em_take_state(p_state_hash text, p_actor uuid)
 returns jsonb
 language plpgsql
 volatile
@@ -619,6 +628,11 @@ begin
   delete from public.email_oauth_states where state_hash = p_state_hash returning * into v_state;
   if v_state.state_hash is null or v_state.expires_at < now() then
     return null;
+  end if;
+  if p_actor is null or v_state.user_id is distinct from p_actor then
+    perform public.um_audit(p_actor, v_state.user_id, 'email_mailbox.connect_refused', null, null, null,
+      jsonb_build_object('reason', 'started_by_someone_else', 'account_id', v_state.account_id));
+    return jsonb_build_object('refused', true);
   end if;
   return jsonb_build_object('user_id', v_state.user_id, 'account_id', v_state.account_id, 'code_verifier', v_state.code_verifier);
 end
@@ -647,6 +661,11 @@ begin
     perform public.um_actor(p_actor, 'email_inbox.view');
     select * into v_account from public.email_accounts where email_address = v_email for update;
     if v_account.id is null then
+      -- Another staff member's sign-in address is theirs to connect.
+      if exists (select 1 from auth.users u join public.staff_members s on s.user_id = u.id
+                 where lower(u.email) = v_email and u.id <> p_actor) then
+        perform public.um_fail(403, 'This is another staff member''s mailbox. Only they can connect it.');
+      end if;
       insert into public.email_accounts (kind, email_address, display_name, owner_id, created_by)
       values ('personal', v_email, nullif(btrim(left(p_display_name, 120)), ''), p_actor, p_actor)
       returning * into v_account;
@@ -1302,6 +1321,7 @@ begin
         select p ->> 'email' as email, p ->> 'name' as name, 'recent' as source, '1' as rank
         from public.email_threads t
         join public.email_account_members m on m.account_id = t.account_id and m.user_id = p_actor
+        join public.email_accounts a on a.id = t.account_id and (a.kind = 'shared' or public.staff_is_active(a.owner_id))
         cross join lateral jsonb_array_elements(t.participants) p
         where t.gmail_deleted_at is null and t.last_message_at > now() - interval '180 days'
           and (lower(p ->> 'email') like v_like or lower(coalesce(p ->> 'name', '')) like v_like)

@@ -2,10 +2,9 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { requireAuth } from '../../middleware/requireAuth.js'
 import { readBoundedBytes } from '../../utils/body.js'
-import { callUserRpc, requestContext } from '../../services/userAdmin.js'
-import { emailHubEnabled, gmailConfigured, settingsUrl } from '../../services/email/config.js'
-import { sha256Hex, encryptToken } from '../../services/email/crypto.js'
-import { exchangeCode, revokeToken, rememberAccessToken, gmail, GmailError, GoogleAuthError } from '../../services/email/google.js'
+import { callUserRpc } from '../../services/userAdmin.js'
+import { emailHubEnabled, connectUrl } from '../../services/email/config.js'
+import { gmail, GmailError, GoogleAuthError } from '../../services/email/google.js'
 import { verifyPushToken } from '../../services/email/googleJwt.js'
 import { verifyRenderTicket } from '../../services/email/renderTicket.js'
 import { readMessage } from '../../services/email/mime.js'
@@ -31,7 +30,7 @@ import marketing from './campaigns.js'
 //
 // Route classes:
 //   no session (each authenticates itself):
-//     GET  /oauth/google/callback   one-time OAuth state + PKCE
+//     GET  /oauth/google/callback   hands the browser to the dashboard; completes nothing
 //     POST /webhooks/google-pubsub  Google-signed OIDC token
 //     GET  /render/:thread/:message ten-minute render ticket + live membership check
 //     GET/POST /unsubscribe         HMAC-signed recipient link (always on)
@@ -134,73 +133,23 @@ email.use('*', async (c, next) => {
 })
 
 // ── Google sends the browser back here after consent ─────────────────────────
-// The browser arrives by redirect, so there is no bearer token: the state
-// (random, hashed in the database, bound to the person who started, one use,
-// ten minutes) is what authenticates the request. Whatever happens, the
-// browser is sent to the Email settings page with a fixed outcome code; no
-// provider text, token or address appears in the URL.
-const OUTCOMES = new Set([
-  'connected', 'invalid', 'expired', 'cancelled', 'google_error', 'google_unreachable', 'exchange_failed',
-  'scope_missing', 'no_refresh_token', 'identity_invalid', 'wrong_domain', 'conflict', 'forbidden', 'failed', 'not_configured',
-])
-
-function finishConnect(c, outcome) {
-  const code = OUTCOMES.has(outcome) ? outcome : 'failed'
+// Nothing is completed here. A redirect carries no bearer token, so this page
+// cannot know who is in front of it, and the state alone only says who
+// STARTED: a consent link forwarded to a colleague would otherwise connect the
+// colleague's mailbox to the sender. The browser is handed on to the
+// dashboard, which finishes with its session (POST /oauth/google/complete);
+// the API then requires the same person who started. Only the state, the
+// one-use code and Google's short error code are passed on.
+email.get('/oauth/google/callback', (c) => {
   c.header('Cache-Control', 'no-store')
-  const url = settingsUrl(c.env, { connect: code })
-  if (url) return c.redirect(url, 303)
-  return c.html(`<!doctype html><meta charset="utf-8"><title>Dikho</title><p>${code === 'connected'
-    ? 'Mailbox connected. You can close this tab and return to Dikho.'
-    : 'The mailbox was not connected. Return to Dikho and try again.'}</p>`, code === 'connected' ? 200 : 400)
-}
-
-email.get('/oauth/google/callback', async (c) => {
-  if (!(await gmailConfigured(c.env))) return finishConnect(c, 'not_configured')
   const { state, code, error } = c.req.query()
-  if (typeof state !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(state)) return finishConnect(c, 'invalid')
-
-  // Consumed before anything else, so a state is good for exactly one try,
-  // whether Google said yes or no.
-  let taken
-  try {
-    taken = await callUserRpc(c, 'em_take_state', { p_state_hash: await sha256Hex(state) })
-  } catch (err) {
-    logError('email.oauth.state_failed', err)
-    return finishConnect(c, 'failed')
-  }
-  if (!taken) return finishConnect(c, 'expired')
-  if (error) return finishConnect(c, error === 'access_denied' ? 'cancelled' : 'google_error')
-  if (typeof code !== 'string' || code.length < 10 || code.length > 2048) return finishConnect(c, 'invalid')
-
-  let grant
-  try {
-    grant = await exchangeCode(c.env, { code, verifier: taken.code_verifier })
-  } catch (err) {
-    return finishConnect(c, err.code ?? 'exchange_failed')
-  }
-
-  try {
-    const account = await callUserRpc(c, 'em_store_connection', {
-      p_actor: taken.user_id,
-      p_account: taken.account_id ?? null,
-      p_email: grant.email,
-      p_subject: grant.subject,
-      p_display_name: grant.name,
-      p_token_enc: await encryptToken(c.env, grant.refreshToken, grant.email),
-      p_scopes: grant.scopes,
-      p_ctx: requestContext(c),
-    })
-    rememberAccessToken(account.id, grant.accessToken, grant.expiresIn)
-    logEvent('email.oauth.connected', { kind: account.kind })
-    inBackground(c, syncMailbox(c.env, account.id))
-    return finishConnect(c, 'connected')
-  } catch (err) {
-    // Refused (wrong address, someone else's mailbox, no longer allowed):
-    // the grant Google just issued is revoked rather than left alive.
-    inBackground(c, revokeToken(grant.refreshToken))
-    if (!err.fromRule) logError('email.oauth.store_failed', err)
-    return finishConnect(c, err.status === 409 ? 'conflict' : err.status === 403 ? 'forbidden' : 'failed')
-  }
+  const params = {}
+  if (typeof state === 'string' && /^[A-Za-z0-9_-]{20,128}$/.test(state)) params.state = state
+  if (typeof code === 'string' && code.length >= 10 && code.length <= 2048) params.code = code
+  if (typeof error === 'string' && /^[a-z_]{1,64}$/.test(error)) params.error = error
+  const url = connectUrl(c.env, params)
+  if (url) return c.redirect(url, 303)
+  return c.html('<!doctype html><meta charset="utf-8"><title>Dikho</title><p>The mailbox was not connected: the dashboard address is not configured. Ask an administrator.</p>', 503)
 })
 
 // ── Gmail push (Cloud Pub/Sub) ───────────────────────────────────────────────

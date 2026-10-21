@@ -99,8 +99,8 @@ Public routes:
 - Turnstile-protected public form writes;
 - format-gated, budgeted GSTIN lookup;
 - ticket-protected WhatsApp media and public avatar reads;
-- Email Hub provider callbacks: Google OAuth return (one-time hashed state,
-  PKCE), Gmail Pub/Sub push (Google-signed OIDC token), SES events through SNS
+- Email Hub provider callbacks: the Google OAuth return (hands the browser
+  to the dashboard, which completes with its session), Gmail Pub/Sub push (Google-signed OIDC token), SES events through SNS
   (message signature, certificate host, topic), signed unsubscribe links, and
   ticket-protected message and campaign previews.
 
@@ -216,7 +216,7 @@ flowchart LR
 | GST provider | server-held API key | format/checksum gate, edge cache, rate brake, daily budget |
 | Meta sends | server-held access token | authentication, idempotency, batch/concurrency limits |
 | Alert email | server-held provider key | best-effort delivery and sanitized logging |
-| Google OAuth / Gmail | one-time hashed state + PKCE; encrypted refresh token | ID token claims and Workspace domain checked; no-store bodies; per-mailbox membership |
+| Google OAuth / Gmail | one-time hashed state + PKCE, completed only by the signed-in person who started it; encrypted refresh token | ID token claims and Workspace domain checked; no-store bodies; per-mailbox membership |
 | Gmail push (Pub/Sub) | Google OIDC JWT (RS256) | audience and service-account checks; push only triggers a sync, never carries content |
 | Amazon SES | SigV4 with a send-only IAM key | send switch off by default, retries off, timeouts reported as uncertain, daily cap |
 | SES events (SNS) | SNS message signature from the X.509 certificate | certificate host allowlist, topic match, freshness, dedupe by message id |

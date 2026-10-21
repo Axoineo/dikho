@@ -20,7 +20,10 @@ Workers plan, so nothing may depend on a schedule running by itself.
 
 1. **Gmail is the source of truth for correspondence.** Dikho connects
    mailboxes with Google OAuth (authorization code, one-time server-side
-   state, PKCE, `gmail.modify` + `openid email`, offline access). It caches
+   state, PKCE, `gmail.modify` + `openid email`, offline access). Google's
+   return completes nothing by itself: the dashboard finishes the connection
+   with the person's session, and only the person who started it can (a
+   consent link sent to a colleague connects nothing). It caches
    thread-level metadata (subject, participants, dates, labels, unread,
    attachment flag) in Supabase and fetches message bodies and attachments
    from Gmail on demand, returning them with `Cache-Control: no-store`.

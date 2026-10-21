@@ -107,9 +107,8 @@ export function campaignReadiness(env) {
 }
 
 // ── Unsubscribe links ────────────────────────────────────────────────────────
-async function unsubscribeKey(env) {
-  return env.EMAIL_TOKEN_KEY ? sha256Hex(`dikho-unsubscribe:${env.EMAIL_TOKEN_KEY}`) : null
-}
+const unsubscribeKeyFrom = (secret) => (secret ? sha256Hex(`dikho-unsubscribe:${secret}`) : null)
+const unsubscribeKey = (env) => unsubscribeKeyFrom(env.EMAIL_TOKEN_KEY)
 
 export async function unsubscribeUrl(env, recipientId) {
   const key = await unsubscribeKey(env)
@@ -118,10 +117,15 @@ export async function unsubscribeUrl(env, recipientId) {
   return `${base}/api/email/unsubscribe?r=${recipientId}&s=${await hmacSha256(key, `r:${recipientId}`)}`
 }
 
+// Links signed before a key rotation keep working while the previous key is
+// configured: someone must always be able to unsubscribe.
 export async function verifyUnsubscribe(env, recipientId, signature) {
-  const key = await unsubscribeKey(env)
-  if (!key || !/^[0-9a-f-]{36}$/.test(recipientId ?? '') || !/^[A-Za-z0-9_-]{43}$/.test(signature ?? '')) return false
-  return safeEqual(await hmacSha256(key, `r:${recipientId}`), signature)
+  if (!/^[0-9a-f-]{36}$/.test(recipientId ?? '') || !/^[A-Za-z0-9_-]{43}$/.test(signature ?? '')) return false
+  for (const secret of [env.EMAIL_TOKEN_KEY, env.EMAIL_TOKEN_KEY_PREVIOUS]) {
+    const key = await unsubscribeKeyFrom(secret)
+    if (key && safeEqual(await hmacSha256(key, `r:${recipientId}`), signature)) return true
+  }
+  return false
 }
 
 // ── Building one message ─────────────────────────────────────────────────────

@@ -43,14 +43,24 @@ declare
   v jsonb;
 begin
   perform public.em_begin_connect('44444444-4444-4444-8444-444444444444', null, repeat('a', 64), repeat('v', 43), '{}');
-  v := public.em_take_state(repeat('a', 64));
+  v := public.em_take_state(repeat('a', 64), '44444444-4444-4444-8444-444444444444');
   perform test.check(v ->> 'user_id' = '44444444-4444-4444-8444-444444444444', 'state returns its starter');
-  perform test.check(public.em_take_state(repeat('a', 64)) is null, 'a state cannot be used twice');
-  perform test.check(public.em_take_state(repeat('b', 64)) is null, 'an unknown state is refused');
+  perform test.check(public.em_take_state(repeat('a', 64), '44444444-4444-4444-8444-444444444444') is null, 'a state cannot be used twice');
+  perform test.check(public.em_take_state(repeat('b', 64), '44444444-4444-4444-8444-444444444444') is null, 'an unknown state is refused');
+
+  -- A consent link Sam forwards to Ria cannot be finished by Ria: refused,
+  -- used up, and audited against Sam.
+  perform public.em_begin_connect('44444444-4444-4444-8444-444444444444', null, repeat('f', 64), repeat('v', 43), '{}');
+  v := public.em_take_state(repeat('f', 64), '55555555-5555-4555-8555-555555555555');
+  perform test.check((v ->> 'refused')::boolean is true and v ->> 'code_verifier' is null, 'another person cannot finish someone else''s connection');
+  perform test.check(public.em_take_state(repeat('f', 64), '44444444-4444-4444-8444-444444444444') is null, 'a refused state is used up');
+  perform test.check(exists (select 1 from public.audit_log where event_type = 'email_mailbox.connect_refused'
+    and actor_id = '55555555-5555-4555-8555-555555555555' and target_user_id = '44444444-4444-4444-8444-444444444444'), 'the refusal is audited');
+  perform test.check((public.em_take_state(repeat('g', 64), null)) is null, 'no state, no answer');
 
   insert into public.email_oauth_states (state_hash, user_id, code_verifier, expires_at)
   values (repeat('c', 64), '44444444-4444-4444-8444-444444444444', repeat('v', 43), now() - interval '1 second');
-  perform test.check(public.em_take_state(repeat('c', 64)) is null, 'an expired state is refused');
+  perform test.check(public.em_take_state(repeat('c', 64), '44444444-4444-4444-8444-444444444444') is null, 'an expired state is refused');
 
   v := public.em_store_connection('44444444-4444-4444-8444-444444444444', null, 'Sam@Example.invalid', 'google-sub-sam',
     'Sam Sales', 'k0000000000000000.iv.ciphertext', array['https://www.googleapis.com/auth/gmail.modify'], '{}');
@@ -66,6 +76,9 @@ select test.expect_error($$select public.em_begin_connect('66666666-6666-4666-86
 -- Someone else cannot claim Sam's address as their own personal mailbox.
 select test.expect_error($$select public.em_store_connection('55555555-5555-4555-8555-555555555555', null, 'sam@example.invalid', 'x',
   'x', 'k0000000000000000.iv.ciphertext', '{}', '{}')$$, 'PT409', 'address already connected by someone else');
+-- Nor a colleague's sign-in address that is not connected yet.
+select test.expect_error($$select public.em_store_connection('55555555-5555-4555-8555-555555555555', null, 'Noah@example.invalid', 'x',
+  'x', 'k0000000000000000.iv.ciphertext', '{}', '{}')$$, 'PT403', 'a colleague''s address cannot become your personal mailbox');
 
 -- ── Only members read; Owners and developers are not members ──────────────
 do $$
@@ -135,6 +148,8 @@ begin
   perform test.check(public.em_mailbox_role('33333333-3333-4333-8333-333333333333', v_acc) is null, 'creating does not make you a member');
   perform test.expect_error($f$select public.em_create_shared('33333333-3333-4333-8333-333333333333', 'sales@example.invalid', 'Again', '{}')$f$,
     'PT409', 'duplicate address');
+  perform test.expect_error($f$select public.em_create_shared('33333333-3333-4333-8333-333333333333', 'noah@example.invalid', 'Noah', '{}')$f$,
+    'PT400', 'a staff member''s own address is not a shared mailbox');
 
   perform public.em_begin_connect('33333333-3333-4333-8333-333333333333', v_acc, repeat('e', 64), repeat('v', 43), '{}');
   perform test.expect_error(format($f$select public.em_begin_connect(%L, %L, %L, %L, '{}')$f$,
@@ -319,7 +334,7 @@ select test.expect_error($$insert into public.email_account_members (account_id,
 reset role;
 select test.act_as_anon();
 select test.expect_error('select count(*) from public.email_accounts', '42501', 'anon cannot read mailboxes');
-select test.expect_error($$select public.em_take_state(repeat('a', 64))$$, '42501', 'anon cannot call em_*');
+select test.expect_error($$select public.em_take_state(repeat('a', 64), null)$$, '42501', 'anon cannot call em_*');
 reset role;
 
 rollback;

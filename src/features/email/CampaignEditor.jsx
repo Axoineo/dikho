@@ -108,7 +108,7 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
   const canCreate = can('email_campaigns.create')
   const editable = (campaign ? campaign.can_edit : canCreate) && !LOCKED.has(status) && !started
   const me = access?.user_id
-  const wroteIt = campaign && (campaign.created_by === me || campaign.submitted_by === me)
+  const wroteIt = campaign && [campaign.created_by, campaign.updated_by, campaign.submitted_by].includes(me)
   const counts = useMemo(() => campaignCounts(campaign?.stats), [campaign])
 
   const update = (patch) => { setForm((f) => ({ ...f, ...patch })); setDirty(true); setError('') }
@@ -476,7 +476,7 @@ function ActionsCard({ campaign, status, editable, canCreate, ready, dirty, wrot
             <div><dt>Fingerprint</dt><dd><code>{fingerprint}</code></dd></div>
           </dl>
           {!campaign.can_approve && <p className="em-help">Waiting for someone with approval rights.</p>}
-          {campaign.can_approve && wroteIt && <Banner title="Another approver must decide">You wrote or submitted this campaign, so you cannot approve it yourself.</Banner>}
+          {campaign.can_approve && wroteIt && <Banner title="Another approver must decide">You wrote, edited or submitted this campaign, so you cannot approve it yourself.</Banner>}
           {campaign.can_approve && !wroteIt && (
             <>
               <p className="em-help">Check the preview, the sender and the audience. Your approval covers exactly this version.</p>

@@ -4,12 +4,13 @@ import { requirePermission } from '../../middleware/requireAuth.js'
 import { ok } from '../../utils/response.js'
 import { readBoundedJson, readJsonOr } from '../../utils/body.js'
 import { gmailConfigured, pushConfigured, workspaceDomain } from '../../services/email/config.js'
-import { randomToken, sha256Hex, pkceChallenge, decryptToken } from '../../services/email/crypto.js'
-import { authorizationUrl, gmail, revokeToken, forgetAccessToken } from '../../services/email/google.js'
+import { randomToken, sha256Hex, pkceChallenge, decryptToken, encryptToken } from '../../services/email/crypto.js'
+import { authorizationUrl, exchangeCode, gmail, revokeToken, forgetAccessToken, rememberAccessToken } from '../../services/email/google.js'
 import { syncMailbox, stopWatch, maybeSyncForUser, inBackground } from '../../services/email/sync.js'
 import { sanitizeHtml } from '../../services/email/sanitizeHtml.js'
 import { deliveryStatus } from '../../services/email/delivery.js'
-import { logError } from '../../utils/logger.js'
+import { logError, logEvent } from '../../utils/logger.js'
+import { callUserRpc } from '../../services/userAdmin.js'
 import { actor, rpc, uuidParam, requestContext, withGmail, publicAccount, noStore } from './shared.js'
 
 // Mailboxes, their members, and connecting them to Google. Mounted behind
@@ -78,7 +79,8 @@ accounts.get('/recipients', async (c) => {
 // ── Connecting to Google ─────────────────────────────────────────────────────
 // Returns Google's consent URL. The state is random, stored only as a hash,
 // bound to this person (and, for a shared mailbox, to that mailbox), good for
-// ten minutes and for one use. PKCE binds the code to this server's verifier.
+// ten minutes and for one use, and only this person can finish it (below).
+// PKCE binds the code to this server's verifier.
 accounts.post('/oauth/google/start', async (c) => {
   if (!(await gmailConfigured(c.env))) {
     throw new HTTPException(503, { message: 'Google sign-in is not set up for Dikho yet. Ask an administrator.' })
@@ -95,6 +97,71 @@ accounts.post('/oauth/google/start', async (c) => {
   }, { action: 'email.mailbox_connect' })
   noStore(c)
   return ok(c, { url: authorizationUrl(c.env, { state, challenge: await pkceChallenge(verifier), loginHint: started?.login_hint }) })
+})
+
+// Finishes a connection, from the dashboard page Google's return was handed
+// to, with that person's session. The state must have been started by this
+// same person (em_take_state refuses and audits anyone else before Google is
+// asked for anything), so a consent link sent to a colleague connects nothing.
+// Answers a fixed outcome code; no provider text, token or address.
+const OUTCOMES = new Set([
+  'connected', 'invalid', 'expired', 'cancelled', 'google_error', 'google_unreachable', 'exchange_failed', 'scope_missing',
+  'no_refresh_token', 'identity_invalid', 'wrong_domain', 'conflict', 'forbidden', 'not_yours', 'failed', 'not_configured',
+])
+const outcome = (c, code) => { noStore(c); return ok(c, { outcome: OUTCOMES.has(code) ? code : 'failed' }) }
+
+accounts.post('/oauth/google/complete', async (c) => {
+  if (!(await gmailConfigured(c.env))) return outcome(c, 'not_configured')
+  const body = await readBoundedJson(c, 4 * 1024)
+  const { state, code, error } = body ?? {}
+  if (typeof state !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(state)) return outcome(c, 'invalid')
+
+  // Consumed before anything else, so a state is good for exactly one try,
+  // whether Google said yes or no and whoever presents it.
+  let taken
+  try {
+    taken = await callUserRpc(c, 'em_take_state', { p_state_hash: await sha256Hex(state), p_actor: actor(c) })
+  } catch (err) {
+    logError('email.oauth.state_failed', err)
+    return outcome(c, 'failed')
+  }
+  if (!taken) return outcome(c, 'expired')
+  if (taken.refused) {
+    logEvent('email.oauth.refused', { reason: 'started_by_someone_else' })
+    return outcome(c, 'not_yours')
+  }
+  if (error) return outcome(c, error === 'access_denied' ? 'cancelled' : 'google_error')
+  if (typeof code !== 'string' || code.length < 10 || code.length > 2048) return outcome(c, 'invalid')
+
+  let grant
+  try {
+    grant = await exchangeCode(c.env, { code, verifier: taken.code_verifier })
+  } catch (err) {
+    return outcome(c, err.code ?? 'exchange_failed')
+  }
+
+  try {
+    const account = await callUserRpc(c, 'em_store_connection', {
+      p_actor: taken.user_id,
+      p_account: taken.account_id ?? null,
+      p_email: grant.email,
+      p_subject: grant.subject,
+      p_display_name: grant.name,
+      p_token_enc: await encryptToken(c.env, grant.refreshToken, grant.email),
+      p_scopes: grant.scopes,
+      p_ctx: requestContext(c),
+    })
+    rememberAccessToken(account.id, grant.accessToken, grant.expiresIn)
+    logEvent('email.oauth.connected', { kind: account.kind })
+    inBackground(c, syncMailbox(c.env, account.id))
+    return outcome(c, 'connected')
+  } catch (err) {
+    // Refused (wrong address, someone else's mailbox, no longer allowed):
+    // the grant Google just issued is revoked rather than left alive.
+    inBackground(c, revokeToken(grant.refreshToken))
+    if (!err.fromRule) logError('email.oauth.store_failed', err)
+    return outcome(c, err.status === 409 ? 'conflict' : err.status === 403 ? 'forbidden' : 'failed')
+  }
 })
 
 // Stops using a mailbox. The database forgets the grant first, so access ends

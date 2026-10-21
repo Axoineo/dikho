@@ -101,7 +101,7 @@ test('staff routes need a session; provider callbacks do not use one', async () 
   // The OAuth return carries no bearer token and is not refused for it.
   const res = await request('/oauth/google/callback')
   assert.equal(res.status, 303)
-  assert.equal(res.headers.get('Location'), 'https://app.example.invalid/email/settings?connect=invalid')
+  assert.equal(res.headers.get('Location'), 'https://app.example.invalid/email/connect?')
   assert.equal(calls.length, 0)
 })
 
@@ -139,7 +139,28 @@ test('start refuses when Google is not configured', async () => {
   assert.equal(res.status, 503)
 })
 
-test('callback: one use of the state, encrypted grant stored for the person who started', async () => {
+// Google's return completes nothing: it only hands the browser to the
+// dashboard, which finishes with its own session.
+test('callback: hands state and code to the dashboard and asks nobody', async () => {
+  const res = await request(`/oauth/google/callback?state=${'s'.repeat(43)}&code=4/synthetic-code&scope=x`)
+  assert.equal(res.status, 303)
+  assert.equal(res.headers.get('Location'), `https://app.example.invalid/email/connect?state=${'s'.repeat(43)}&code=4%2Fsynthetic-code`)
+  assert.equal(res.headers.get('Cache-Control'), 'no-store')
+  const odd = await request('/oauth/google/callback?state=short&error=%3Cscript%3E')
+  assert.equal(odd.headers.get('Location'), 'https://app.example.invalid/email/connect?', 'malformed values are not passed on')
+  assert.equal(calls.length, 0, 'no database, no Google')
+})
+
+const complete = (body, overrides) => request('/oauth/google/complete', json(body), overrides)
+const outcomeOf = async (res) => (await res.json()).data.outcome
+
+test('complete: needs a session', async () => {
+  const res = await request('/oauth/google/complete', { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } })
+  assert.equal(res.status, 401)
+  assert.ok(!calls.some((c) => c.url.includes('em_take_state')))
+})
+
+test('complete: one use of the state, encrypted grant stored for the person who started', async () => {
   const verifier = 'v'.repeat(64)
   let stored
   rpc.em_take_state = async () => Response.json({ user_id: USER, account_id: null, code_verifier: verifier })
@@ -150,56 +171,64 @@ test('callback: one use of the state, encrypted grant stored for the person who 
     assert.equal(form.get('grant_type'), 'authorization_code')
     return tokenReply()()
   }
-  const res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code')
+  const res = await complete({ state: 's'.repeat(43), code: '4/synthetic-code' })
   await settle()
-  assert.equal(res.headers.get('Location'), 'https://app.example.invalid/email/settings?connect=connected')
+  assert.equal(await outcomeOf(res), 'connected')
+  assert.equal(res.headers.get('Cache-Control'), 'no-store')
   assert.equal(stored.p_actor, USER)
   assert.equal(stored.p_email, 'sam@example.com')
   assert.equal(stored.p_subject, 'google-sub-1')
   assert.doesNotMatch(stored.p_token_enc, /synthetic-refresh/, 'never stored in the clear')
   assert.equal(await decryptToken(env, stored.p_token_enc, 'sam@example.com'), '1//synthetic-refresh')
-  const takeCall = calls.find((c) => c.url.endsWith('/em_take_state'))
-  assert.equal(JSON.parse(takeCall.body).p_state_hash, await sha256Hex('s'.repeat(43)))
+  const take = JSON.parse(calls.find((c) => c.url.endsWith('/em_take_state')).body)
+  assert.equal(take.p_state_hash, await sha256Hex('s'.repeat(43)))
+  assert.equal(take.p_actor, USER, 'the database is told who is finishing')
 })
 
-test('callback: a replayed or expired state stops before Google is asked', async () => {
+test('complete: a consent link finished by someone other than its starter connects nothing', async () => {
+  rpc.em_take_state = async () => Response.json({ refused: true })
+  rpc.em_store_connection = async () => { throw new Error('must not store') }
+  const res = await complete({ state: 's'.repeat(43), code: '4/victim-code-xyz' })
+  assert.equal(await outcomeOf(res), 'not_yours')
+  assert.ok(!calls.some((c) => c.url.includes('oauth2.googleapis.com')), 'the code is never exchanged')
+})
+
+test('complete: a replayed or expired state stops before Google is asked', async () => {
   rpc.em_take_state = async () => Response.json(null)
-  const res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code')
-  assert.equal(res.headers.get('Location'), 'https://app.example.invalid/email/settings?connect=expired')
+  const res = await complete({ state: 's'.repeat(43), code: '4/synthetic-code' })
+  assert.equal(await outcomeOf(res), 'expired')
   assert.ok(!calls.some((c) => c.url.includes('oauth2.googleapis.com')))
+  assert.equal(await outcomeOf(await complete({ state: 'x', code: '4/synthetic-code' })), 'invalid')
 })
 
-test('callback: consent declined, wrong workspace, missing scope, unverified email', async () => {
+test('complete: consent declined, wrong workspace, missing scope, unverified email', async () => {
   rpc.em_take_state = async () => Response.json({ user_id: USER, account_id: null, code_verifier: 'v'.repeat(64) })
   rpc.em_store_connection = async () => { throw new Error('must not store') }
+  const state = 's'.repeat(43)
+  const code = '4/synthetic-code'
 
-  let res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&error=access_denied')
-  assert.match(res.headers.get('Location'), /connect=cancelled$/)
+  assert.equal(await outcomeOf(await complete({ state, error: 'access_denied' })), 'cancelled')
 
   google.token = tokenReply({ id_token: idToken(goodClaims({ hd: 'other.example' })) })
-  res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code', {}, { GOOGLE_WORKSPACE_DOMAIN: 'example.com' })
-  assert.match(res.headers.get('Location'), /connect=wrong_domain$/)
+  assert.equal(await outcomeOf(await complete({ state, code }, { GOOGLE_WORKSPACE_DOMAIN: 'example.com' })), 'wrong_domain')
 
   google.token = tokenReply({ scope: 'openid email' })
-  res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code')
-  assert.match(res.headers.get('Location'), /connect=scope_missing$/)
+  assert.equal(await outcomeOf(await complete({ state, code })), 'scope_missing')
 
   google.token = tokenReply({ id_token: idToken(goodClaims({ email_verified: false })) })
-  res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code')
-  assert.match(res.headers.get('Location'), /connect=identity_invalid$/)
+  assert.equal(await outcomeOf(await complete({ state, code })), 'identity_invalid')
 
   google.token = tokenReply({ id_token: idToken(goodClaims({ aud: 'someone-else' })) })
-  res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code')
-  assert.match(res.headers.get('Location'), /connect=identity_invalid$/)
+  assert.equal(await outcomeOf(await complete({ state, code })), 'identity_invalid')
 })
 
-test('callback: a refused connection revokes the fresh grant', async () => {
+test('complete: a refused connection revokes the fresh grant', async () => {
   rpc.em_take_state = async () => Response.json({ user_id: USER, account_id: ACCOUNT, code_verifier: 'v'.repeat(64) })
   rpc.em_store_connection = async () => Response.json({ code: 'PT409', message: 'You signed in to Google as a different address' }, { status: 409 })
   google.token = tokenReply()
-  const res = await request('/oauth/google/callback?state=' + 's'.repeat(43) + '&code=4/synthetic-code')
+  const res = await complete({ state: 's'.repeat(43), code: '4/synthetic-code' })
   await settle()
-  assert.match(res.headers.get('Location'), /connect=conflict$/)
+  assert.equal(await outcomeOf(res), 'conflict')
   assert.ok(calls.some((c) => c.url.startsWith('https://oauth2.googleapis.com/revoke')))
 })
 

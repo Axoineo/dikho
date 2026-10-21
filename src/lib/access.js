@@ -78,6 +78,7 @@ export const PAGE_ACCESS = [
   { path: '/whatsapp', section: 'whatsapp', any: ['campaigns.view', 'campaigns.send'], exact: true },
   { path: '/email/inbox', section: 'email-inbox', any: ['email_inbox.view'] },
   { path: '/email/settings', section: 'email-settings', any: ['email_inbox.view', 'email_mailboxes.manage'] },
+  { path: '/email/connect', section: 'email-settings', any: ['email_inbox.view', 'email_mailboxes.manage'] },
   { path: '/email/campaigns', section: 'email-campaigns', any: ['email_campaigns.view', 'email_campaigns.create', 'email_campaigns.approve'] },
   { path: '/email/templates', section: 'email-templates', any: ['email_templates.manage', 'email_campaigns.create', 'email_campaigns.view'] },
   { path: '/email/consent', section: 'email-consent', any: ['email_consent.manage', 'email_campaigns.create'] },
