@@ -821,6 +821,11 @@ button, input, textarea, select { border: 0; }
   opacity: 1;
   transition: opacity var(--rail-fade);
 }
+/* Modules that are not WhatsApp wear the brand blue instead of its green. */
+.nav-badge-brand {
+  background: var(--brand-blue-soft);
+  color: var(--brand-blue);
+}
 .nav-caret {
   position: absolute;          /* out of the flex flow, so it can never push
                                   the icon or label around mid-animation */
@@ -2455,6 +2460,10 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 [data-theme="dark"] .nav-badge {
   background: rgba(37, 211, 102, 0.16);
   color: #25d366;
+}
+[data-theme="dark"] .nav-badge-brand {
+  background: rgba(91, 160, 224, 0.18);
+  color: #8fc2f0;
 }
 [data-theme="dark"] .nav-sublist {
   border-left-color: rgba(255, 255, 255, 0.08);

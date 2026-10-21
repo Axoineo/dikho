@@ -250,6 +250,16 @@ begin
   perform test.expect_error(format($f$select public.em_link(%L, %L, 'client', '999999', true)$f$, '55555555-5555-4555-8555-555555555555', v_thread),
     'PT404', 'cannot link a missing record');
 
+  -- Suggestions: participants of your own mailboxes; clients only with clients.view.
+  v := public.em_suggest_recipients('44444444-4444-4444-8444-444444444444', 'buyer');
+  perform test.check(jsonb_array_length(v) = 1 and v -> 0 ->> 'source' = 'recent', 'sam sees the participant, not the client record');
+  v := public.em_suggest_recipients('55555555-5555-4555-8555-555555555555', 'client co');
+  perform test.check(jsonb_array_length(v) = 1 and v -> 0 ->> 'source' = 'client', 'ria (clients.view) finds the client');
+  v := public.em_suggest_recipients('11111111-1111-4111-8111-111111111111', 'buyer');
+  perform test.check(not exists (select 1 from jsonb_array_elements(v) e where e ->> 'source' = 'recent'),
+    'an Owner does not see participants of mailboxes they are not in');
+  perform test.check(jsonb_array_length(public.em_suggest_recipients('44444444-4444-4444-8444-444444444444', 'b')) = 0, 'two characters minimum');
+
   -- Removing Sam clears his assignment.
   perform public.em_set_member('55555555-5555-4555-8555-555555555555', v_shared, '44444444-4444-4444-8444-444444444444', null, '{}');
   perform test.check((select assigned_to from public.email_threads where id = v_thread) is null, 'removed member loses assignments');

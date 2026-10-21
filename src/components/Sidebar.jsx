@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { AccessContext, canOpen } from '../lib/access'
+import { AccessContext, canOpen, EMAIL_HUB_BUILD } from '../lib/access'
 import { useLiveAssist } from '../features/live-assist/liveAssistContext'
 
 /* Outlined 24px glyphs on a shared 1.7 stroke, so the rail reads as one set.
@@ -16,6 +16,13 @@ function SidebarIcon({ name, size = 20 }) {
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20.4 11.8a8.3 8.3 0 0 1-12.4 7.2l-4.5 1.2 1.3-4.4A8.3 8.3 0 1 1 20.4 11.8Z" />
         <path d="M9.3 8.9c.25-.33.72-.3.88.08l.6 1.36c.1.23.06.5-.12.67l-.45.44a6.3 6.3 0 0 0 2.5 2.5l.44-.45c.17-.18.44-.22.67-.12l1.36.6c.38.16.41.63.08.88a2.5 2.5 0 0 1-2 .43 7.4 7.4 0 0 1-4.4-4.4 2.5 2.5 0 0 1 .44-1.99Z" />
+      </svg>
+    ),
+
+    mail: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="5" width="18" height="14" rx="2.4" />
+        <path d="m3.6 7.2 7.3 5.3a1.9 1.9 0 0 0 2.2 0l7.3-5.3" />
       </svg>
     ),
 
@@ -207,13 +214,13 @@ function SidebarIcon({ name, size = 20 }) {
   return icons[name] || null
 }
 
-/* Five 34px rows plus the panel's 6px padding. Used to keep the hover panel
-   on screen when the group sits near the bottom of a short window, and to
-   line its first row up with the rail button that opened it. */
+/* A group's rows (34px each) plus the panel's 6px padding. Used to keep the
+   hover panel on screen when the group sits near the bottom of a short
+   window, and to line its first row up with the rail button that opened it. */
 const FLYOUT_PAD = 6
 const FLYOUT_ITEM_H = 34
 const FLYOUT_BORDER = 1        // .sidebar-flyout's 1px border, top and bottom
-const FLYOUT_H = FLYOUT_BORDER * 2 + FLYOUT_PAD * 2 + FLYOUT_ITEM_H * 5
+const flyoutHeight = (rows) => FLYOUT_BORDER * 2 + FLYOUT_PAD * 2 + FLYOUT_ITEM_H * rows
 
 /* Must match the .is-leaving animations in index.css: the panel stays mounted
    for this long after it is dismissed so it can animate out. */
@@ -230,10 +237,19 @@ const WHATSAPP_ITEMS = [
   { to: '/whatsapp/templates', label: 'Templates', icon: 'template' },
 ]
 
-function WhatsAppGroup({ items, collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
+// The Email Hub's pages; shown only in builds with VITE_EMAIL_HUB=true.
+const EMAIL_ITEMS = [
+  { to: '/email', label: 'Overview', icon: 'pulse', end: true },
+  { to: '/email/inbox', label: 'Inbox', icon: 'inbox' },
+  { to: '/email/settings', label: 'Settings', icon: 'settings' },
+]
+
+/* One module with sub-pages (WhatsApp, Email): a disclosure row on the open
+   rail, a hover flyout on the collapsed one. */
+function NavGroup({ label, icon, base, badge, badgeTone, items, collapsed, onNavigate, onShowTip, onHideTip, onOpenFlyout, onCloseFlyout }) {
   const { pathname } = useLocation()
   const panelRef = useRef(null)
-  const sectionActive = pathname.startsWith('/whatsapp')
+  const sectionActive = pathname === base || pathname.startsWith(`${base}/`)
   // Closed by default: the five sub-items only appear once the group is opened.
   // It opens itself on the way *into* the section (deep link, or a link from
   // another page), but never forces itself back open afterwards, so the
@@ -279,7 +295,7 @@ function WhatsAppGroup({ items, collapsed, onNavigate, onShowTip, onHideTip, onO
      click read as dead up there. */
   function handleTrigger(e) {
     if (collapsed) {
-      onOpenFlyout?.(e)
+      onOpenFlyout?.(e, items)
       return
     }
     setOpen((v) => !v)
@@ -300,24 +316,24 @@ function WhatsAppGroup({ items, collapsed, onNavigate, onShowTip, onHideTip, onO
         className={`nav-item${sectionActive ? ' active' : ''}${!collapsed && open && !sectionActive ? ' is-open' : ''}`}
         onClick={handleTrigger}
         aria-expanded={open}
-        data-tip="WhatsApp"
-        onMouseEnter={collapsed ? onOpenFlyout : onShowTip}
+        data-tip={label}
+        onMouseEnter={collapsed ? (e) => onOpenFlyout?.(e, items) : onShowTip}
         onMouseLeave={collapsed ? onCloseFlyout : onHideTip}
       >
-        <span className="nav-icon"><SidebarIcon name="whatsapp" size={20} /></span>
+        <span className="nav-icon"><SidebarIcon name={icon} size={20} /></span>
         {/* "WhatsApp" everywhere this control appears — label, rail tooltip and
             flyout header. The formal name needs 137px and the row leaves less
             than that for label *and* badge, so it truncated to "WhatsApp
             Marketi..."; having the tooltip and panel then say the longer name
             just made one control answer to two. Page titles still read
             "WhatsApp Marketing". */}
-        <span className="nav-label">WhatsApp</span>
+        <span className="nav-label">{label}</span>
         {/* WhatsApp green (#25d366, the same value as .wa-mark), so the badge
             belongs to the module it sits on rather than to the brand blue used
             for the active nav state. The green only works as text on the dark
             sidebar — on white it is 1.98:1 — so light mode uses a deeper green
             of the same family over the same tint. */}
-        <span className="nav-badge">Beta</span>
+        {badge && <span className={`nav-badge${badgeTone === 'brand' ? ' nav-badge-brand' : ''}`}>{badge}</span>}
         <span className={`nav-caret${open ? ' is-open' : ''}`}>
           <SidebarIcon name="caret" />
         </span>
@@ -598,6 +614,7 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
   const access = useContext(AccessContext)
   const allowed = (item) => canOpen(access, item.to)
   const whatsappItems = WHATSAPP_ITEMS.filter(allowed)
+  const emailItems = EMAIL_HUB_BUILD ? EMAIL_ITEMS.filter(allowed) : []
   const allItems = [
     { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: '/clients', label: 'Clients', icon: 'clients' },
@@ -628,7 +645,7 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
      mid-journey. */
   const [flyout, setFlyout] = useState(null)
   const flyoutTimer = useRef(null)
-  const openFlyout = useCallback((e) => {
+  const openFlyout = useCallback((e, groupItems) => {
     if (!railActive) return
     clearTimeout(flyoutTimer.current)
     const r = e.currentTarget.getBoundingClientRect()
@@ -637,8 +654,9 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
     // it never runs off the bottom of a short window.
     const alignedTop = r.top + r.height / 2 - (FLYOUT_BORDER + FLYOUT_PAD + FLYOUT_ITEM_H / 2)
     setFlyout({
-      top: Math.max(8, Math.min(alignedTop, window.innerHeight - FLYOUT_H - 12)),
+      top: Math.max(8, Math.min(alignedTop, window.innerHeight - flyoutHeight(groupItems.length) - 12)),
       leaving: false,
+      items: groupItems,
     })
   }, [railActive])
   const closeFlyout = useCallback(() => {
@@ -721,7 +739,26 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
             </NavLink>
           ))}
 
-          {whatsappItems.length > 0 && <WhatsAppGroup
+          {emailItems.length > 0 && <NavGroup
+            label="Email"
+            icon="mail"
+            base="/email"
+            badge="Beta"
+            badgeTone="brand"
+            items={emailItems}
+            collapsed={collapsed}
+            onNavigate={handleNav}
+            onShowTip={showTip}
+            onHideTip={hideTip}
+            onOpenFlyout={openFlyout}
+            onCloseFlyout={closeFlyout}
+          />}
+
+          {whatsappItems.length > 0 && <NavGroup
+            label="WhatsApp"
+            icon="whatsapp"
+            base="/whatsapp"
+            badge="Beta"
             items={whatsappItems}
             collapsed={collapsed}
             onNavigate={handleNav}
@@ -758,7 +795,7 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
           onMouseEnter={keepFlyout}
           onMouseLeave={closeFlyout}
         >
-          {whatsappItems.map((item) => (
+          {flyout.items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

@@ -64,6 +64,12 @@ export async function apiDelete(path, payload) {
   }))
 }
 
+// Multipart request with the session token (a form that carries files). No
+// Content-Type header: the browser sets the multipart boundary.
+export async function apiSendForm(path, form, method = 'POST') {
+  return unwrap(await fetch(`${BASE}${path}`, { method, headers: await authHeader(), body: form }))
+}
+
 // Unauthenticated POST to an /api/public route (the two public forms). No
 // Authorization header by design: these routes carry no session and are gated
 // server-side on a Cloudflare Turnstile token in the body, which the Worker
@@ -95,6 +101,12 @@ export async function apiPublicPostForm(path, form) {
 // typing, so a slow response can never land on top of a newer one.
 export async function apiPublicGet(path, { signal } = {}) {
   return unwrap(await fetch(`${BASE}${path}`, { signal }))
+}
+
+// Absolute URL of an API path the browser loads by itself (an email message
+// frame). The path already carries its own short-lived ticket.
+export function apiUrl(path) {
+  return `${BASE}${path}`
 }
 
 // Builds a direct, streamable URL for re-hosted media using a signed ticket, so

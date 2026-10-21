@@ -427,3 +427,51 @@ test('push: a duplicate or stale notification triggers no sync', async () => {
   await settle()
   assert.equal(res.status, 204)
 })
+
+// ── Message frames ───────────────────────────────────────────────────────────
+test('render tickets: one person, one message, ten minutes', async () => {
+  const { issueRenderTicket, verifyRenderTicket } = await import('../src/api/services/email/renderTicket.js')
+  const ids = { threadId: THREAD, messageId: '18c0a2' }
+  const ticket = await issueRenderTicket(env, { userId: USER, ...ids })
+  assert.deepEqual(await verifyRenderTicket(env, ticket, ids), { userId: USER })
+  assert.equal(await verifyRenderTicket(env, ticket, { ...ids, messageId: '18c0a3' }), null, 'another message')
+  assert.equal(await verifyRenderTicket(env, ticket, { ...ids, threadId: ACCOUNT }), null, 'another conversation')
+  assert.equal(await verifyRenderTicket(env, ticket, ids, Date.now() + 11 * 60_000), null, 'expired')
+  assert.equal(await verifyRenderTicket({ EMAIL_TOKEN_KEY: Buffer.alloc(32, 1).toString('base64') }, ticket, ids), null, 'other key')
+  const [payload, sig] = ticket.split('.')
+  assert.equal(await verifyRenderTicket(env, `${payload}x.${sig}`, ids), null, 'tampered')
+})
+
+test('render: sandboxed page under its own CSP, membership re-checked, only the right message', async () => {
+  const { issueRenderTicket } = await import('../src/api/services/email/renderTicket.js')
+  const { encryptToken } = await import('../src/api/services/email/crypto.js')
+  const tokenEnc = await encryptToken(env, '1//r', 'sam@example.com')
+  let opened
+  rpc.em_open_thread = async (args) => { opened = args; return Response.json({ thread: { id: THREAD, account_id: ACCOUNT, gmail_thread_id: '18c0a1' },
+    account: { id: ACCOUNT, email_address: 'sam@example.com', role: 'viewer', token_enc: tokenEnc } }) }
+  google.token = async () => Response.json({ access_token: 'a', expires_in: 3599 })
+  const html = base64url(new TextEncoder().encode('<p>Hello</p><script>alert(1)</script>'))
+  gmailHandler = async () => Response.json({ id: '18c0a2', threadId: '18c0a1', payload: { mimeType: 'text/html', body: { data: html } } })
+
+  const ticket = await issueRenderTicket(env, { userId: USER, threadId: THREAD, messageId: '18c0a2' })
+  const res = await request(`/render/${THREAD}/18c0a2?t=${ticket}`, {}, { ALLOWED_ORIGINS: 'https://app.example.invalid' })
+  assert.equal(res.status, 200)
+  const csp = res.headers.get('Content-Security-Policy')
+  assert.match(csp, /^sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox;/)
+  assert.match(csp, /default-src 'none'; script-src 'sha256-[A-Za-z0-9+/=]+'; style-src 'unsafe-inline'; img-src data:/)
+  assert.match(csp, /frame-ancestors https:\/\/app\.example\.invalid$/)
+  assert.equal(res.headers.get('Cache-Control'), 'no-store')
+  const page = await res.text()
+  assert.match(page, /<p>Hello<\/p>/)
+  assert.doesNotMatch(page, /alert/)
+  assert.equal(opened.p_actor, USER, 'access re-checked for the ticket holder')
+
+  // A message from another conversation of the same mailbox is refused.
+  gmailHandler = async () => Response.json({ id: '18c0a2', threadId: 'ffff', payload: { mimeType: 'text/html', body: { data: html } } })
+  assert.equal((await request(`/render/${THREAD}/18c0a2?t=${ticket}`)).status, 404)
+  // No ticket, wrong ticket, revoked membership.
+  assert.equal((await request(`/render/${THREAD}/18c0a2`)).status, 403)
+  assert.equal((await request(`/render/${THREAD}/18c0a3?t=${ticket}`)).status, 403)
+  rpc.em_open_thread = async () => Response.json({ code: 'PT404', message: 'Conversation not found.' }, { status: 404 })
+  assert.equal((await request(`/render/${THREAD}/18c0a2?t=${ticket}`)).status, 404)
+})

@@ -5,8 +5,12 @@ import { readBoundedBytes } from '../../utils/body.js'
 import { callUserRpc, requestContext } from '../../services/userAdmin.js'
 import { emailHubEnabled, gmailConfigured, settingsUrl } from '../../services/email/config.js'
 import { sha256Hex, encryptToken } from '../../services/email/crypto.js'
-import { exchangeCode, revokeToken, rememberAccessToken } from '../../services/email/google.js'
+import { exchangeCode, revokeToken, rememberAccessToken, gmail, GmailError, GoogleAuthError } from '../../services/email/google.js'
 import { verifyPushToken } from '../../services/email/googleJwt.js'
+import { verifyRenderTicket } from '../../services/email/renderTicket.js'
+import { readMessage } from '../../services/email/mime.js'
+import { sanitizeHtml, textToHtml } from '../../services/email/sanitizeHtml.js'
+import { UUID, GMAIL_ID } from './shared.js'
 import { syncMailbox, inBackground } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
 import accounts from './accounts.js'
@@ -19,9 +23,10 @@ import compose from './compose.js'
 // answers 404 so a half-configured module is invisible.
 //
 // Route classes:
-//   provider callbacks (no session; each authenticates itself):
+//   no session (each authenticates itself):
 //     GET  /oauth/google/callback   one-time OAuth state + PKCE
 //     POST /webhooks/google-pubsub  Google-signed OIDC token
+//     GET  /render/:thread/:message ten-minute render ticket + live membership check
 //   everything else: requireAuth (live session, active staff), then the
 //   em_* functions decide permission and mailbox membership.
 const email = new Hono()
@@ -133,6 +138,68 @@ email.post('/webhooks/google-pubsub', async (c) => {
     }
   }
   return c.body(null, 204)
+})
+
+// ── One message, rendered for an iframe ──────────────────────────────────────
+// Served from the API origin, not inlined in the dashboard, so the message
+// gets an origin and a Content-Security-Policy of its own: the dashboard's CSP
+// (no inline styles) would otherwise apply to it and break every email.
+// Authenticated by a ten-minute ticket for one person and one message, and
+// the person's mailbox access is re-checked on every load. The document is
+// sandboxed (opaque origin), allows no network loads, and runs exactly one
+// script: the hash-pinned one that reports its height to the dashboard.
+// Measures <body>, not the document: the document is never shorter than the
+// frame showing it, so a frame sized from it could grow but never shrink.
+const RESIZE_SCRIPT = "(function(){var b=document.body;function s(){parent.postMessage({type:'dikho-email-height',height:Math.ceil(Math.max(b.getBoundingClientRect().height,b.scrollHeight))},'*')}addEventListener('load',s);if(window.ResizeObserver){new ResizeObserver(s).observe(b)}})();"
+const RENDER_STYLE = 'html,body{margin:0;padding:0;background:#fff;color:#202124}'
+  + 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;line-height:1.55;overflow-wrap:anywhere;word-break:break-word;padding:2px;overflow-y:hidden}'
+  + 'img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}a{color:#185494}'
+  + 'blockquote{margin:8px 0 8px 4px;padding-left:12px;border-left:3px solid #dadce0;color:#5f6368}'
+let resizeHash = null
+
+async function renderHeaders(env) {
+  if (!resizeHash) {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(RESIZE_SCRIPT)))
+    resizeHash = `'sha256-${btoa(String.fromCharCode(...digest))}'`
+  }
+  const ancestors = (env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim())
+    .filter((o) => /^https?:\/\/[A-Za-z0-9.-]+(:\d{1,5})?$/.test(o))
+  return {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy': [
+      'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox',
+      "default-src 'none'", `script-src ${resizeHash}`, "style-src 'unsafe-inline'", 'img-src data:', 'font-src data:',
+      "form-action 'none'", "base-uri 'none'", `frame-ancestors ${ancestors.length ? ancestors.join(' ') : "'none'"}`,
+    ].join('; '),
+    'Cache-Control': 'no-store',
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+  }
+}
+
+const renderPage = (body) => `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>${RENDER_STYLE}</style></head><body>${body}<script>${RESIZE_SCRIPT}</script></body></html>`
+
+email.get('/render/:threadId/:messageId', async (c) => {
+  const headers = await renderHeaders(c.env)
+  const refuse = (status, text) => new Response(renderPage(`<p style="color:#5f6368">${text}</p>`), { status, headers })
+  const threadId = c.req.param('threadId')
+  const messageId = c.req.param('messageId')
+  if (!UUID.test(threadId) || !GMAIL_ID.test(messageId)) return refuse(400, 'This message link is not valid.')
+  const claim = await verifyRenderTicket(c.env, c.req.query('t'), { threadId: threadId.toLowerCase(), messageId })
+  if (!claim) return refuse(403, 'This preview has expired. Close and reopen the conversation.')
+
+  try {
+    const meta = await callUserRpc(c, 'em_open_thread', { p_actor: claim.userId, p_thread: threadId.toLowerCase(), p_min_role: 'viewer' })
+    const message = await gmail(c.env, meta.account, `/messages/${messageId}`, { query: 'format=full' })
+    if (message?.threadId !== meta.thread.gmail_thread_id) return refuse(404, 'This message is not part of the conversation.')
+    const m = readMessage(message)
+    const body = m.html ? sanitizeHtml(m.html).html : textToHtml(m.text)
+    return new Response(renderPage(body), { headers })
+  } catch (err) {
+    if (err?.fromRule || err?.status === 404) return refuse(404, 'This message is no longer available to you.')
+    if (!(err instanceof GmailError) && !(err instanceof GoogleAuthError)) logError('email.render.failed', err)
+    return refuse(502, 'The message could not be loaded from Gmail. Try again.')
+  }
 })
 
 // ── Staff routes ─────────────────────────────────────────────────────────────

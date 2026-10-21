@@ -7,6 +7,7 @@ import { readMessage, summarizeThread, METADATA_QUERY } from '../../services/ema
 import { sanitizeHtml } from '../../services/email/sanitizeHtml.js'
 import { inBackground } from '../../services/email/sync.js'
 import { fromBase64url } from '../../services/email/crypto.js'
+import { issueRenderTicket } from '../../services/email/renderTicket.js'
 import { logError } from '../../utils/logger.js'
 import {
   actor, rpc, uuidParam, patternParam, requestContext, withGmail, publicAccount, noStore, GMAIL_ID, ATTACHMENT_ID,
@@ -75,9 +76,12 @@ threads.get('/threads/:id', async (c) => {
     }
   })
 
-  const messages = (thread?.messages ?? []).slice(-100).map((raw) => {
+  const messages = await Promise.all((thread?.messages ?? []).slice(-100).map(async (raw) => {
     const m = readMessage(raw)
     const html = m.html ? sanitizeHtml(m.html) : null
+    // The frame loads the message from /render with a ticket for this one
+    // message; the sanitized HTML is also returned for quoting in replies.
+    const ticket = html && GMAIL_ID.test(m.id ?? '') ? await issueRenderTicket(c.env, { userId: actor(c), threadId: id, messageId: m.id }) : null
     return {
       id: m.id,
       date: m.date,
@@ -91,11 +95,12 @@ threads.get('/threads/:id', async (c) => {
       unread: m.unread,
       draft: m.labels.includes('DRAFT'),
       html: html?.html ?? null,
+      render_path: ticket ? `/email/render/${id}/${m.id}?t=${ticket}` : null,
       blocked_images: html?.blockedImages ?? 0,
       text: m.text.slice(0, 200_000),
       attachments: m.attachments,
     }
-  })
+  }))
 
   // The full thread also refreshes the cached metadata (labels, unread).
   const summary = summarizeThread(thread)

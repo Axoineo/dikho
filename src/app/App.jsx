@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useOutletContext } from 'react-router-dom'
-import { landingPath } from '../lib/access'
+import { landingPath, EMAIL_HUB_BUILD } from '../lib/access'
 import AuthenticatedLayout from '../layouts/AuthenticatedLayout'
 import PublicLayout from '../layouts/PublicLayout'
 import { PlaceholderPage } from '../components/PlaceholderPage'
@@ -19,7 +19,10 @@ import {
   WhatsAppDashboard,
   WhatsAppContacts,
   WhatsAppCampaigns,
-  WhatsAppTemplates
+  WhatsAppTemplates,
+  EmailOverview,
+  EmailInbox,
+  EmailSettings
 } from '../routes'
 
 /* ── Wrapper components that read outlet context ────────────────────────── */
@@ -78,6 +81,14 @@ export default function App() {
           <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
           <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
           <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
+          {EMAIL_HUB_BUILD && (
+            <>
+              <Route path="/email" element={<EmailOverview />} />
+              <Route path="/email/inbox" element={<EmailInbox />} />
+              <Route path="/email/inbox/:threadId" element={<EmailInbox />} />
+              <Route path="/email/settings" element={<EmailSettings />} />
+            </>
+          )}
           <Route path="/users" element={<UsersPage />} />
           <Route path="/users/:userId" element={<UserProfilePage />} />
           <Route path="/settings" element={<SettingsRoute />} />

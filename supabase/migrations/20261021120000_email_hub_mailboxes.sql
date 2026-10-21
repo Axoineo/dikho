@@ -1275,6 +1275,61 @@ begin
 end
 $$;
 
+-- Recipient suggestions for the composer: people from the actor's own
+-- mailboxes, and clients, vendors and leads the actor may view. At most 8.
+create or replace function public.em_suggest_recipients(p_actor uuid, p_query text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_q text := lower(btrim(left(coalesce(p_query, ''), 80)));
+  v_like text;
+begin
+  perform public.um_actor(p_actor, 'email_inbox.view');
+  if char_length(v_q) < 2 then
+    return '[]'::jsonb;
+  end if;
+  v_like := '%' || replace(replace(replace(v_q, '\', '\\'), '%', '\%'), '_', '\_') || '%';
+
+  return coalesce((
+    select jsonb_agg(x order by x ->> 'rank', x ->> 'email')
+    from (
+      select distinct on (lower(s.email)) jsonb_build_object('email', lower(s.email), 'name', s.name, 'source', s.source, 'rank', s.rank) as x
+      from (
+        select p ->> 'email' as email, p ->> 'name' as name, 'recent' as source, '1' as rank
+        from public.email_threads t
+        join public.email_account_members m on m.account_id = t.account_id and m.user_id = p_actor
+        cross join lateral jsonb_array_elements(t.participants) p
+        where t.gmail_deleted_at is null and t.last_message_at > now() - interval '180 days'
+          and (lower(p ->> 'email') like v_like or lower(coalesce(p ->> 'name', '')) like v_like)
+        union all
+        select c.email, coalesce(c.contact_person, c.company_name), 'client', '2'
+        from public.clients c
+        where public.em_holds(p_actor, 'clients.view') and c.email is not null
+          and (lower(c.email) like v_like or lower(coalesce(c.company_name, '')) like v_like or lower(coalesce(c.contact_person, '')) like v_like)
+        union all
+        select v.email, coalesce(v.contact_person, v.company_name), 'vendor', '3'
+        from public.vendors v
+        where public.em_holds(p_actor, 'vendors.view') and v.email is not null
+          and (lower(v.email) like v_like or lower(coalesce(v.company_name, '')) like v_like or lower(coalesce(v.contact_person, '')) like v_like)
+        union all
+        select g.email, g.name, 'lead', '4'
+        from public.cg_leads g
+        where public.em_holds(p_actor, 'leads.view') and g.email is not null
+          and (lower(g.email) like v_like or lower(coalesce(g.name, '')) like v_like or lower(coalesce(g.company_name, '')) like v_like)
+      ) s
+      where s.email ~ '^[^[:space:]@]{1,64}@[^[:space:]@]{1,189}\.[^[:space:]@]{2,63}$'
+      order by lower(s.email), s.rank
+      limit 200
+    ) y
+    limit 8
+  ), '[]'::jsonb);
+end
+$$;
+
 create or replace function public.em_link(p_actor uuid, p_thread uuid, p_type text, p_entity text, p_linked boolean)
 returns jsonb
 language plpgsql

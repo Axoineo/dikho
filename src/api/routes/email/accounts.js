@@ -68,6 +68,13 @@ accounts.get('/directory', async (c) => {
   return ok(c, await rpc(c, 'em_directory', { p_actor: actor(c) }))
 })
 
+// Composer autocomplete: only addresses this person could already see.
+accounts.get('/recipients', async (c) => {
+  const query = String(c.req.query('q') ?? '').slice(0, 80)
+  noStore(c)
+  return ok(c, query.trim().length < 2 ? [] : await rpc(c, 'em_suggest_recipients', { p_actor: actor(c), p_query: query }))
+})
+
 // ── Connecting to Google ─────────────────────────────────────────────────────
 // Returns Google's consent URL. The state is random, stored only as a hash,
 // bound to this person (and, for a shared mailbox, to that mailbox), good for
