@@ -22,7 +22,7 @@
     "aws4fetch": "^1.0.20",
     "country-state-city": "^3.2.1",
     "gitleaks": "^1.0.0",
-    "hono": "^4.13.8",
+    "hono": "^4.13.13",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
