@@ -1,6 +1,6 @@
 # Engineering Roadmap
 
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-21
 
 This is a directional priority list, not a promise of dates. Keep detailed
 implementation state in a task brief under `docs/tasks/`. Update this file
@@ -53,6 +53,28 @@ deployed; the rollout is in
 - [ ] Define retention for leads, contacts, webhook events, login events,
       documents and WhatsApp media.
 - [ ] Add deploy smoke tests and an environment health checklist.
+
+## Email Hub
+
+Implemented in the repository behind `EMAIL_HUB_ENABLED` / `VITE_EMAIL_HUB`;
+nothing is applied or deployed. State and rollout:
+[task brief](tasks/2026-10-21-email-hub.md), [ADR 0009](decisions/0009-email-hub.md).
+
+- [ ] Owner review of ADR 0009 and the two migrations; apply them to a staging
+      project and repeat the allow/deny suites there.
+- [ ] Google Cloud: OAuth client (Internal), consent screen, optional Pub/Sub
+      topic and push subscription *(owner action)*.
+- [ ] Amazon SES: verified domain identity (DKIM, SPF, DMARC at the
+      authoritative DNS provider), production access, configuration set, SNS
+      topic to `/api/email/webhooks/ses`, send-only IAM user *(owner action)*.
+- [ ] Pilot with one personal and one shared mailbox; then a first campaign to
+      a small consenting list with `EMAIL_DAILY_CAP` set low.
+- [ ] A reliable scheduler (for example `pg_cron` + `pg_net` calling
+      `/api/email/jobs/run`) before scheduled campaigns or automations are
+      relied on for timing.
+- [ ] Automations (follow-ups, reminders) on that scheduler; not built.
+- [ ] Move the remaining Brevo users (the device-check Edge Function's alert
+      email) to SES, then retire Brevo.
 
 ## Product evolution
 

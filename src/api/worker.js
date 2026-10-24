@@ -1,6 +1,7 @@
 import { createApiApp } from './app.js'
 import { reconcileInbound, reconcileStatuses } from './services/whatsapp/reconcile.js'
 import { dispatchDueCgLeadConfirmations } from './services/whatsapp/cgLeadConfirmation.js'
+import { dispatchCampaignBatch } from './services/email/campaigns.js'
 import { logEvent, logError } from './utils/logger.js'
 
 // Entry point for the standalone `dikho-api` Worker
@@ -47,6 +48,10 @@ export default {
       } catch (err) {
         logError('cron.cg_lead_dispatch_failed', err)
       }
+
+      // Email campaign batches, if the Email Hub and SES are switched on.
+      // Does nothing otherwise; safe alongside the request-driven dispatch.
+      if (env.EMAIL_HUB_ENABLED === 'true') await dispatchCampaignBatch(env)
 
       // The reconciler is the heavy D1 sweep, so it stays off the
       // every-minute schedule — running it 10x more often spends row-reads

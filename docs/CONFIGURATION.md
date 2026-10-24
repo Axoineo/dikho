@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Last reviewed: 2026-10-04
+Last reviewed: 2026-10-21
 
 This inventory describes variable names and code consumers. It intentionally
 contains no credentials, private resource identifiers or production contact
@@ -37,6 +37,7 @@ Changing these values requires rebuilding and redeploying the SPA.
 | `VITE_SUPABASE_URL` | [Supabase client](../src/lib/supabase.js) | Required; use the adopting organization's project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | [Supabase client](../src/lib/supabase.js) | Required public publishable key; access is constrained by RLS, never replace with a service-role key |
 | `VITE_API_BASE` | [API client](../src/lib/api.js) | API origin without a trailing slash or `/api`; set explicitly because code currently falls back to the existing Dikho API origin ([apiBase.js](../src/lib/apiBase.js)) when unset |
+| `VITE_EMAIL_HUB` | [Navigation and routes](../src/lib/access.js) | `true` builds the Email Hub's navigation and routes; anything else leaves them out of the bundle. Navigation only, not a security boundary: the API enforces `EMAIL_HUB_ENABLED` and every permission and mailbox membership |
 | `CSP_MODE` | [Build config](../vite.config.js) (build-time only, never in the bundle) | Unset: the generated `dist/_headers` sends `Content-Security-Policy-Report-Only`. `enforce`: sends the enforcing header. The policy's Supabase and API origins come from `VITE_SUPABASE_URL` and `VITE_API_BASE` |
 
 The public Turnstile site key is currently a source constant in
@@ -56,9 +57,9 @@ environment. Supplying a `VITE_` value does not configure its server counterpart
 | `SUPABASE_URL` | Server setting; public URL | [Session verification](../src/api/middleware/requireAuth.js), public-write RPCs and realtime broadcasts; required for those features |
 | `SUPABASE_ANON_KEY` | Publishable/anonymous credential used server-side; not a service-role secret | [Session verification](../src/api/middleware/requireAuth.js) (sent with the caller's token to `my_access()`); missing auth configuration rejects protected requests |
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret, privileged | [Public-write RPCs](../src/api/services/supabaseRpc.js), [public document storage](../src/api/services/supabaseStorage.js), [private inbox broadcasts](../src/api/services/whatsapp/realtime.js), and [User Management](../src/api/services/userAdmin.js) (the `um_*` functions, creating and banning sign-in accounts, sign-out notices); never browser-visible |
-| `APP_URL` | Server setting | Dashboard address written into the [staff welcome email](../src/api/services/staffWelcome.js); without it the email names no link |
-| `BREVO_API_KEY` | Optional secret | Staff welcome email from the API Worker. Separate from the Edge Function's copy; missing key means welcome messages go by WhatsApp or not at all |
-| `BREVO_SENDER_EMAIL` | Server setting | Verified sender for the staff welcome email; required with `BREVO_API_KEY` |
+| `APP_URL` | Server setting | Dashboard address written into the [staff welcome email](../src/api/services/staffWelcome.js) and as the Email Hub's return page after Google sign-in (`<APP_URL>/email/connect`, which finishes the connection with the person's session); without it the email names no link and mailbox connection cannot finish |
+| `BREVO_API_KEY` | Optional secret, legacy | Staff welcome email from the API Worker when Amazon SES is not ready (see Email delivery below). Separate from the Edge Function's copy; with neither provider ready, welcome messages go by WhatsApp or not at all |
+| `BREVO_SENDER_EMAIL` | Server setting, legacy | Verified sender for Brevo; required with `BREVO_API_KEY` |
 | `ALLOWED_ORIGINS` | Server setting | [API CORS](../src/api/middleware/cors.js); comma-separated exact browser origins; empty means no allowed cross-origin browser origin |
 | `TURNSTILE_SECRET` | Secret | [Turnstile verifier](../src/api/services/turnstile.js); required for public form writes |
 | `TURNSTILE_HOSTNAMES` | Server setting | Comma-separated hostnames, without scheme/path; required, with expected action checks; missing allowlist or secret fails closed |
@@ -129,6 +130,56 @@ traffic. Its missing-binding behavior currently leaves the endpoint without
 that limiter. These fail-open cases are implementation limitations, not a
 recommended deployment configuration.
 
+## API Worker Email Hub
+
+The module answers `404` unless `EMAIL_HUB_ENABLED=true`, except the
+unsubscribe link and the SES event webhook, which stay on so links already
+sent keep working and bounces keep being recorded. Each integration below
+reports ready or not ready by presence only; a missing setting switches that
+part off instead of half-working. Design: [ADR 0009](decisions/0009-email-hub.md).
+
+| Name | Class | Consumer / behavior |
+| --- | --- | --- |
+| `EMAIL_HUB_ENABLED` | Server setting | `true` turns the [module](../src/api/routes/email/index.js) on; anything else, off |
+| `GOOGLE_CLIENT_ID` | Server-side provider identifier | Google OAuth client (Web application, Internal user type) for connecting mailboxes |
+| `GOOGLE_CLIENT_SECRET` | Secret | OAuth code exchange and token refresh |
+| `GOOGLE_OAUTH_REDIRECT_URI` | Server setting | Exactly `https://<API origin>/api/email/oauth/google/callback`, also registered on the OAuth client; must be `https` |
+| `GOOGLE_WORKSPACE_DOMAIN` | Server setting | Optional. When set, only accounts of this Google Workspace domain may connect (checked on the ID token's `hd` claim and the address) |
+| `EMAIL_TOKEN_KEY` | Secret | 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts Gmail refresh tokens (AES-256-GCM, mailbox address as associated data), and derives render/preview tickets and unsubscribe signatures. Without it no mailbox can connect and campaigns cannot send |
+| `EMAIL_TOKEN_KEY_PREVIOUS` | Secret | Optional. The key being rotated out, used for decryption only: tokens it encrypted keep working, and a mailbox stores a token under the new key only when it is reconnected. Keep it until every mailbox has reconnected. Unsubscribe links signed with it keep working while it is set; render and preview tickets use the current key only, so open previews simply expire |
+| `GOOGLE_PUBSUB_TOPIC` | Server-side provider identifier | Optional, `projects/<project>/topics/<topic>` that Gmail `watch` publishes to. Without the three Pub/Sub settings, mailboxes refresh when someone opens Email or presses Sync |
+| `GOOGLE_PUBSUB_AUDIENCE` | Server setting | The push subscription's OIDC audience; the [push verifier](../src/api/services/email/googleJwt.js) requires it |
+| `GOOGLE_PUBSUB_SERVICE_ACCOUNT` | Server setting | The push subscription's service account email; tokens from any other account are refused |
+| `EMAIL_SYNC_DAYS`, `EMAIL_SYNC_MAX_THREADS` | Resource settings | First-sync window (default 60 days, 1 to 365) and size (default 150 threads, 10 to 500), sized for the Workers Free subrequest limit |
+| `EMAIL_JOBS_SECRET` | Secret | Optional, at least 32 characters. Lets an external scheduler call `POST /api/email/jobs/run` (bearer token) to send the next campaign batch and refresh one due mailbox. Unset: the route refuses every call |
+
+### Email delivery (system email and campaigns)
+
+[`delivery.js`](../src/api/services/email/delivery.js) sends mail written by
+Dikho itself. Amazon SES is the primary provider; Brevo is used only while it
+is configured and SES is not ready. Campaigns use SES only.
+
+| Name | Class | Consumer / behavior |
+| --- | --- | --- |
+| `EMAIL_PROVIDER` | Server setting | `ses` or `brevo` forces one provider; unset picks SES when ready, else Brevo when configured |
+| `EMAIL_FROM_ADDRESS` | Server setting | Verified SES sender for system email, e.g. `noreply@<domain>`; also the default campaign sender |
+| `EMAIL_FROM_NAME` | Server setting | Display name; defaults to the organization name in code |
+| `AWS_SES_REGION` | Server setting | SES region, e.g. `ap-south-1` |
+| `AWS_SES_ACCESS_KEY_ID` | Server-side credential identifier | IAM user limited to `ses:SendEmail` on the verified identity and configuration set |
+| `AWS_SES_SECRET_ACCESS_KEY` | Secret | Matching secret key |
+| `AWS_SES_CONFIGURATION_SET` | Server setting | Configuration set whose event destination publishes to SNS; without it no delivery, bounce or complaint events arrive |
+| `EMAIL_SES_SEND_ENABLED` | Safety switch | `true` only after the identity, production access, IAM policy and events are verified. Anything else: SES is never called |
+| `AWS_SNS_TOPIC_ARN` | Server setting | The only SNS topic the [SES webhook](../src/api/routes/email/index.js) accepts (signature, certificate host and topic are all checked) |
+| `API_PUBLIC_URL` | Server setting | `https` origin of the API Worker, used to build unsubscribe links; campaigns do not send without it |
+| `EMAIL_DAILY_CAP` | Cost-control setting | Positive ceiling on campaign and test emails per UTC day, enforced in the database. Missing or invalid: campaigns do not send |
+| `EMAIL_CAMPAIGN_SENDERS` | Server setting | Comma-separated From addresses campaigns may use (each verified in SES); defaults to `EMAIL_FROM_ADDRESS` |
+| `EMAIL_CAMPAIGN_MAX_RECIPIENTS` | Cost-control setting | Per-campaign recipient limit, default 5,000, at most 50,000 |
+| `EMAIL_FOOTER_ADDRESS` | Server setting | Optional postal address shown in the campaign footer |
+
+Campaign readiness is reported on the Campaigns page by name only (for example
+"Amazon SES sending"), never with a value. Approval works while sending is not
+ready; nothing is sent until every item is present.
+
 ## Cloudflare bindings and scheduled work
 
 | Binding / setting | Owner | Purpose |
@@ -137,7 +188,7 @@ recommended deployment configuration.
 | `MEDIA` | API Worker | Private R2 storage for WhatsApp media and publicly readable avatar objects through restricted routes |
 | `GSTIN_RATE_LIMITER` | API Worker | Edge rate-limit binding used by public GST lookup |
 | `ASSETS` | Standalone SPA Worker | [`src/worker.js`](../src/worker.js) uses it for asset fallback, but [`wrangler.jsonc`](../wrangler.jsonc) does not declare it. Production serves the SPA from Cloudflare Pages and does not use this Worker |
-| `triggers.crons` | API Worker | Scheduled outbox dispatch and receipt reconciliation; registered, but not firing on the current plan (see below), so the API also performs this work on ordinary requests |
+| `triggers.crons` | API Worker | Scheduled outbox dispatch, receipt reconciliation and (when the Email Hub is on) the next campaign batch; registered, but not firing on the current plan (see below), so the API also performs this work on ordinary requests |
 
 Resource names, account/project IDs and bucket identifiers must point to the
 adopter's own environment. Do not reproduce existing private values in a setup
@@ -149,8 +200,8 @@ Cron configuration is not evidence that jobs execute successfully. On the
 current Cloudflare Workers Free plan the cron triggers deploy and are listed but
 have never dispatched: on 2026-10-01 a queued probe row stayed pending well
 past its due time and `wrangler tail` recorded no scheduled invocations. The
-delayed-confirmation dispatcher and the receipt reconciler therefore also run
-from ordinary API requests, throttled per isolate, so queued work waits for the
+delayed-confirmation dispatcher, the receipt reconciler and email campaign
+batches therefore also run from ordinary API requests, throttled per isolate, so queued work waits for the
 next request when there is no traffic. Do not build features that need
 guaranteed timing on cron, and after any plan change re-run a probe before
 trusting it. See [Deployment](DEPLOYMENT.md) and

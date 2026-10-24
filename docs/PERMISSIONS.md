@@ -1,6 +1,6 @@
 # Permissions and Access Model
 
-Last reviewed: 2026-10-06
+Last reviewed: 2026-10-21
 
 Status: **implemented in the repository, not yet deployed.** Rollout steps are
 in the [User Management task](tasks/2026-10-06-user-management.md); the decision
@@ -57,6 +57,7 @@ where listed.
 | Invoices | `invoices.view/create/issue` | RLS `invoices`, `invoice_lines`, `invoice_sequences`; `issue_invoice()` |
 | Payments | `payments.view/record` | RLS `payments`, `payment_allocations` |
 | WhatsApp | `inbox.view/reply/delete/block`, `wa_contacts.view/import/delete`, `campaigns.view/send`, `wa_templates.view`, `whatsapp.maintain` | API routes; inbox Realtime channel needs `inbox.view` |
+| Email (not yet deployed) | `email_inbox.view`, `email_mailboxes.manage`, `email_campaigns.view/create/approve`, `email_templates.manage`, `email_consent.manage` | `em_*` functions behind `/api/email`; mailboxes also need membership (below) |
 | User Management | `users.view/create/edit/roles/permissions/suspend/sessions`, `templates.manage`, `departments.manage`, `audit_logs.view`, `live_assist.use` | `um_*` functions behind `/api/users` |
 | Developer | `developer_tools.access`, `feature_flags.view/manage` | developer access only |
 
@@ -76,6 +77,48 @@ Built-in templates: Sales Executive, Sales Manager, Finance, Operations,
 Procurement, WhatsApp Support, Marketing, Management (read everything) and
 Administrator (every business permission). Their exact contents are in the
 migration and visible under User Management, Permission templates.
+
+## Email mailboxes: a second gate
+
+Status: in the repository behind `EMAIL_HUB_ENABLED`; the two migrations are
+not applied anywhere yet ([ADR 0009](decisions/0009-email-hub.md)).
+
+A permission opens the Email module; it never opens a mailbox. Reading or
+acting on a mailbox needs **both** `email_inbox.view` **and** a row in
+`email_account_members` for that mailbox. This is the one place where Owners
+and developers do not get access by holding every permission: they need
+membership like anyone else, so nobody reads a colleague's mail because of
+their role.
+
+| Mailbox role | Can |
+| --- | --- |
+| Viewer | Read conversations |
+| Responder | Also reply, send, file (labels, read, archive), take or release conversations, add notes and CRM links |
+| Manager | Also assign conversations to others |
+| Admin | Also choose members and connect or disconnect the mailbox |
+
+- **Personal mailbox:** connected by its owner, who becomes its admin. Only the
+  owner adds or removes members; no administrator, Owner or developer can.
+- **Shared mailbox** (sales@, accounts@): created by holders of
+  `email_mailboxes.manage`, who choose its members. That permission sets a
+  mailbox up; it does not let the holder read it, and adding themselves is
+  refused: nobody grants themselves membership. Another manager, or the
+  mailbox's admins, must add them.
+- Every membership change is in the audit log. A mailbox someone may not use
+  answers `404`, so its existence is not revealed.
+- The CRM panel beside a conversation shows only record kinds the person may
+  view (`clients.view`, `vendors.view`, `leads.view`).
+
+Campaigns: `email_campaigns.create` writes and submits; `email_campaigns.approve`
+approves or requests changes, never on a campaign the person wrote, last
+edited or submitted; an approval covers one exact version (its fingerprint). Audiences
+include only record kinds the creator may view, and only addresses with
+recorded marketing consent. `email_consent.manage` records consent (with how
+it was given), unsubscribes and suppression; `email_campaigns.create` may look
+an address up. Built-in templates: Administrator gets all seven; Sales
+Executive, Sales Manager and WhatsApp Support get `email_inbox.view`;
+Marketing gets campaigns view/create and templates; Management gets campaigns
+view.
 
 ## Rules that stop privilege escalation
 
@@ -140,6 +183,9 @@ only the one person they choose.
 | Live Assist channel `assist:<session id>` | Only the helper and the employee of a waiting or live session may join or send |
 | `/api/assist/*` | Any staff member for their own state, help requests and the list of who may help them; `live_assist.use` to start a session; the `la_*` rules for the rest |
 | WhatsApp OTP hook | Sends a code only to active staff (`staff_is_active`) |
+| `/api/email/*` | `EMAIL_HUB_ENABLED`, `requireAuth`, then the `em_*` rules (permission and, for mailboxes, membership) |
+| Email render and preview pages | Ten-minute ticket for one person and one item, membership or permission re-checked on load; sandboxed, separate origin |
+| Google OAuth return, Gmail push, SES events, unsubscribe | The return only hands on to `/email/connect`, which completes through `POST /api/email/oauth/google/complete` with a session, for the person who started (one-time hashed state, PKCE); Google-signed OIDC token; SNS signature and topic; per-recipient HMAC link. Never grant dashboard access |
 | `/api/public/*`, Meta webhook, `/api/gstn` | Unchanged: Turnstile, signatures, rate limits. Never grant dashboard access |
 
 ## Verification required for changes

@@ -1,9 +1,11 @@
 import { fetchApprovedTemplates, sendTemplateMessage } from './whatsapp/graph.js'
 import { buildComponents, sanitizeParam, templateTokens } from '../../lib/templateVars.js'
 import { logError, logEvent } from '../utils/logger.js'
+import { activeProvider, sendEmail as deliverEmail } from './email/delivery.js'
 
 // "You've been added to Dikho" message, sent when an administrator adds
-// someone. Email when the person has one (Brevo), otherwise WhatsApp through
+// someone. Email when the person has one (Amazon SES, or Brevo while it is
+// still configured; see services/email/delivery.js), otherwise WhatsApp through
 // an approved utility template. It carries no link token or code: the person
 // signs in the normal way, with a one-time code to the same email or number.
 //
@@ -12,14 +14,13 @@ import { logError, logEvent } from '../utils/logger.js'
 // anything is sent.
 //
 // Configuration (docs/CONFIGURATION.md):
-//   BREVO_API_KEY (secret), BREVO_SENDER_EMAIL, APP_URL
+//   the email delivery settings (EMAIL_PROVIDER, EMAIL_FROM_ADDRESS, AWS_SES_*,
+//   or BREVO_API_KEY + BREVO_SENDER_EMAIL), APP_URL
 //   WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME, WHATSAPP_STAFF_WELCOME_TEMPLATE_LANG
 // A channel whose configuration is missing is skipped, not an error.
 
-const TIMEOUT_MS = 10_000
-
 export function welcomeChannelFor(env, { email, phone }) {
-  if (email && env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL) return 'email'
+  if (email && activeProvider(env)) return 'email'
   if (phone && env.WHATSAPP_STAFF_WELCOME_TEMPLATE_NAME && env.WHATSAPP_ACCESS_TOKEN) return 'whatsapp'
   return null
 }
@@ -34,24 +35,18 @@ async function sendEmail(env, { email, fullName }) {
     ? `<a href="${escapeHtml(env.APP_URL)}" style="color:#185494;">${escapeHtml(env.APP_URL.replace(/^https?:\/\//, ''))}</a>`
     : 'the Dikho dashboard'
   const style = 'font-family:sans-serif;font-size:15px;color:#263247;line-height:1.5;'
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: { 'api-key': env.BREVO_API_KEY, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    body: JSON.stringify({
-      sender: { name: 'Dikho', email: env.BREVO_SENDER_EMAIL },
-      to: [{ email }],
-      subject: 'You have been added to Dikho CRM',
-      htmlContent: `
+  const result = await deliverEmail(env, {
+    to: [{ email }],
+    subject: 'You have been added to Dikho CRM',
+    tags: { purpose: 'staff_welcome' },
+    html: `
 <p style="${style}">Hi ${name},</p>
 <p style="${style}">You now have an account on Dikho CRM.</p>
 <p style="${style}">To sign in, open ${where} and enter this email address. We will email you a one-time code. There is no password to remember.</p>
 <p style="${style}">If you were not expecting this, you can ignore this email.</p>
 <p style="font-family:sans-serif;font-size:13px;color:#5f6c82;">Dikho</p>`,
-    }),
   })
-  if (!res.ok) return { ok: false, reason: `email provider returned ${res.status}` }
-  return { ok: true }
+  return result.ok ? { ok: true } : { ok: false, reason: result.reason }
 }
 
 // The approved template as Meta has it, so the send matches its real shape.

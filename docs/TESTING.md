@@ -1,6 +1,6 @@
 # Testing and Verification Guide
 
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-21
 
 The repository has a small automated test suite for security-critical helpers.
 `npm run check` runs lint, those tests, the production build and the
@@ -37,9 +37,34 @@ mocked) and generate their keys in memory. CI runs them on Node 20 and 22.
 | `tests/public-vendor-upload.test.js` | Public vendor route: server-chosen keys, ignored caller paths, disguised/empty/oversized documents refused before Turnstile, cleanup on rejection |
 | `tests/otp-hook-and-media.test.js` | OTP hook refusing non-staff and oversized requests; media served with download/sandbox headers and unsatisfiable ranges |
 | `tests/logger.test.js` | Log redaction by key and by content |
+| `tests/email-content.test.js` | Email HTML sanitizer against script, handler, URL, CSS and nesting payloads; remote images blocked; MIME parsing and header injection; token encryption (wrong key, wrong mailbox, rotation); PKCE |
+| `tests/email-api.test.js` | Email Hub routes: module flag, public/authenticated classes, OAuth state and callback outcomes, thread open, labels, attachments, send dedupe and the uncertain result, Gmail push JWT, render tickets |
+| `tests/email-delivery.test.js` | SES requests and failure modes (retries off, timeout uncertain, throttling), SNS signatures with a generated certificate, unsubscribe links, campaign dispatch outcomes, jobs secret, campaign routes and previews |
 
 Add new tests in the same style: import the module under test directly, mock
 every external call and use obviously synthetic values.
+
+## Local database tests
+
+```bash
+bash scripts/db/verify-local.sh
+```
+
+Applies every migration in `supabase/migrations/` to a throwaway local
+PostgreSQL (Unix socket only, deleted on exit) on top of
+`scripts/db/supabase-stubs.sql`, which stands in for Supabase's roles,
+`auth`, `storage` and `realtime`. Then it runs `supabase/tests/*.sql`, which
+act as real users through `test.act_as()` and stop at the first failed
+check. It never connects to a Supabase project and needs no credentials, only
+PostgreSQL server binaries (`PG_BIN`). It is not part of `npm run check`.
+
+| File | Covers |
+| --- | --- |
+| `supabase/tests/email_hub_mailboxes.sql` | No browser privileges on email tables; the two mailbox gates; Owners and developers without membership; no self-grant; personal mailboxes delegated only by their owner; 404 for mailboxes one may not use; OAuth state single use; send dedupe; role limits on assignment |
+| `supabase/tests/email_hub_campaigns.sql` | Consent and suppression; audiences limited to viewable record kinds; submission freezing consenting recipients; no self-approval; approval bound to the snapshot hash; edits withdrawing approval; tampering pausing dispatch; consent withdrawn mid-send; daily budget; replayed SES events |
+
+The stand-ins approximate Supabase; a staging project is still needed before
+a remote apply.
 
 ## Legacy probes
 
@@ -78,9 +103,8 @@ Session and staff verification, Turnstile, webhook signatures, media tickets,
 upload and import limits and log redaction are covered above. Prioritize isolated tests for:
 
 - per-role permissions, once the matrix is decided;
-- RLS, Storage and Realtime allow/deny cases against a local Supabase Postgres
-  in CI (run by hand for the staff and storage migrations; see the hardening
-  task brief for the method);
+- RLS, Storage and Realtime allow/deny cases in CI (the local harness above
+  runs by hand today);
 - duplicate and replayed webhook deliveries against the idempotency ledger;
 - public GST and WhatsApp daily budgets;
 - campaign claims, retries and duplicate requests;

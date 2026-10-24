@@ -98,3 +98,50 @@ APISETU_API_KEY=
 # Blank sends no Referer (correct for an unrestricted key).
 #   production: https://dikho-api.fineeurox.workers.dev
 APISETU_REFERER=
+
+# ─── Email Hub (docs/CONFIGURATION.md "API Worker Email Hub") ────────────────
+# Off unless 'true'. The unsubscribe link and the SES webhook stay on anyway.
+EMAIL_HUB_ENABLED=false
+
+# Google Cloud > APIs & Services > Credentials > OAuth client (Web, Internal).
+# The redirect URI must be registered on the client exactly as written here.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8787/api/email/oauth/google/callback
+# Optional: only accounts of this Workspace domain may connect.
+GOOGLE_WORKSPACE_DOMAIN=
+
+# 32 random bytes, base64: `openssl rand -base64 32`. Encrypts Gmail refresh
+# tokens and signs previews and unsubscribe links. Production:
+#   npx wrangler secret put EMAIL_TOKEN_KEY --name dikho-api
+EMAIL_TOKEN_KEY=
+# Only while rotating: the old key, for decryption and old links.
+EMAIL_TOKEN_KEY_PREVIOUS=
+
+# Optional Gmail push (Pub/Sub). All three or none.
+GOOGLE_PUBSUB_TOPIC=
+GOOGLE_PUBSUB_AUDIENCE=
+GOOGLE_PUBSUB_SERVICE_ACCOUNT=
+
+# Optional: bearer secret (32+ characters) for POST /api/email/jobs/run.
+EMAIL_JOBS_SECRET=
+
+# ─── Email delivery: Amazon SES first, Brevo only as legacy fallback ───────
+# EMAIL_PROVIDER=ses
+EMAIL_FROM_ADDRESS=
+EMAIL_FROM_NAME=
+AWS_SES_REGION=
+AWS_SES_ACCESS_KEY_ID=
+AWS_SES_SECRET_ACCESS_KEY=
+AWS_SES_CONFIGURATION_SET=
+AWS_SNS_TOPIC_ARN=
+# Stays false until the SES identity, production access, IAM policy and
+# event publishing are verified. While false, SES is never called.
+EMAIL_SES_SEND_ENABLED=false
+
+# Campaigns (SES only). Without a positive daily cap, nothing is sent.
+API_PUBLIC_URL=
+EMAIL_DAILY_CAP=
+EMAIL_CAMPAIGN_SENDERS=
+EMAIL_CAMPAIGN_MAX_RECIPIENTS=5000
+EMAIL_FOOTER_ADDRESS=

@@ -1,6 +1,6 @@
 # Security Audit and Hardening Plan
 
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-21
 
 This document records the repository-level security review. It contains no
 credential values, account identifiers, database identifiers, production user
@@ -147,6 +147,41 @@ check and media serving headers/ranges. CI runs `npm audit --omit=dev
 --audit-level=high`, and Dependabot opens weekly update PRs. Still missing:
 automated RLS/Storage tests in CI (the matrix was run by hand on a local
 database) and public budget exhaustion tests.
+
+### Email Hub review (2026-10-21, branch `claude/wizardly-maxwell-k00757`)
+
+A security review of the Email Hub branch (routes, services, both migrations
+and the screens) found one exploitable issue, fixed on the branch before any
+rollout.
+
+#### High: a forwarded Google consent link connected the colleague's mailbox to the sender (fixed in code)
+
+The OAuth return completed the connection on its own, trusting the state to
+say who it was for. The state says who *started*, not who consented: a staff
+member with `email_inbox.view` could start a connection, send the Google link
+to a colleague ("connect your mailbox here"), and if the colleague clicked
+Allow, the colleague's Gmail (read and send) became the sender's personal
+mailbox. Fix: the return (`GET /oauth/google/callback`) now only hands the
+browser to the dashboard (`/email/connect`), which completes through
+`POST /oauth/google/complete` with its own session; `em_take_state` consumes
+the state, refuses anyone but its starter before the code is exchanged, and
+audits the attempt (`email_mailbox.connect_refused`). As defence in depth a
+personal mailbox cannot be another staff member's sign-in address, and a
+shared mailbox cannot be created for one. Tests: `tests/email-api.test.js`
+(refusal never exchanges the code) and `supabase/tests/email_hub_mailboxes.sql`
+(refused, consumed, audited; a mutation removing the check fails the suite).
+
+Also tightened during the review: composer recipient suggestions now apply
+the same "personal mailbox owner still active" rule as reading; unsubscribe
+links signed before a token-key rotation keep working while
+`EMAIL_TOKEN_KEY_PREVIOUS` is set.
+
+Also tightened: an approver who also holds `email_campaigns.create` and was
+the last to edit a campaign can no longer approve it after a colleague
+submits it (`em_decide_campaign` now excludes the writer, the last editor and
+the submitter). Remaining, by design: an earlier editor whose wording was
+later edited again by someone else is not tracked; the approval still covers
+the exact content shown in the preview.
 
 ## Removal and cleanup recommendations
 

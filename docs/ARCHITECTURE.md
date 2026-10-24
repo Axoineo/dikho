@@ -1,6 +1,6 @@
 # Dikho Technical Architecture
 
-Last updated: 2026-10-04
+Last updated: 2026-10-21
 
 Dikho is a browser application backed by two cloud data planes: Supabase for
 business records and identity, and Cloudflare for the application API,
@@ -98,7 +98,11 @@ Public routes:
 - signed Supabase WhatsApp-OTP hook;
 - Turnstile-protected public form writes;
 - format-gated, budgeted GSTIN lookup;
-- ticket-protected WhatsApp media and public avatar reads.
+- ticket-protected WhatsApp media and public avatar reads;
+- Email Hub provider callbacks: the Google OAuth return (hands the browser
+  to the dashboard, which completes with its session), Gmail Pub/Sub push (Google-signed OIDC token), SES events through SNS
+  (message signature, certificate host, topic), signed unsubscribe links, and
+  ticket-protected message and campaign previews.
 
 Authenticated routes:
 
@@ -107,7 +111,9 @@ Authenticated routes:
 - corporate-gifting lead status;
 - WhatsApp conversations, replies and media uploads;
 - media-ticket issuance and reconciliation;
-- avatar upload.
+- avatar upload;
+- the Email Hub under `/api/email` (mailboxes, conversations, sending, drafts,
+  campaigns, templates, consent, analytics), off unless `EMAIL_HUB_ENABLED`.
 
 Every new route must be explicitly classified as public or authenticated. A
 mixed router should apply authentication at the individual handler.
@@ -154,6 +160,52 @@ issues short-lived HMAC media tickets. A ticket is not a Supabase session, but
 it grants access to the protected media route until expiry and must not be
 logged or shared.
 
+## Email Hub
+
+Design and trade-offs: [ADR 0009](decisions/0009-email-hub.md).
+
+```mermaid
+flowchart LR
+    B[Browser SPA]
+    A[API Worker /api/email]
+    PG[(Supabase em_* functions)]
+    G[Gmail API]
+    PS[Google Pub/Sub]
+    SES[Amazon SES v2]
+    SNS[Amazon SNS]
+
+    B -->|session| A
+    A -->|service role, p_actor| PG
+    A -->|per-mailbox OAuth token| G
+    PS -->|OIDC-signed push| A
+    A -->|SigV4| SES
+    SES --> SNS -->|signed notification| A
+```
+
+- **Correspondence stays in Gmail.** Dikho caches thread metadata and fetches
+  bodies and attachments on demand with `no-store`. Refresh tokens are
+  encrypted in the Worker before they reach the database.
+- **Two gates per mailbox:** the `email_inbox.view` permission and membership
+  of that mailbox ([Permissions](PERMISSIONS.md)).
+- **Message bodies render on the API origin** at `/api/email/render`, behind a
+  ten-minute ticket for one person and one message, with membership
+  re-checked. The page has its own policy: `sandbox` (opaque origin), no
+  network loads, one hash-pinned script that reports the height. HTML is
+  rebuilt from an allowlist first; remote images are blocked. Campaign and
+  template previews use the same path. The dashboard's own CSP never has to
+  allow inline styles or remote mail content.
+- **Mail written by a person** goes through their Gmail mailbox (recorded
+  before Gmail is called, sent once, a timeout reported as uncertain). **Mail
+  written by Dikho** (system email, approved campaigns) goes through Amazon
+  SES (Brevo only as a legacy fallback for system email).
+- **Campaigns** are approved by a second person against a fingerprint of the
+  exact content, sender, schedule and frozen recipient list; dispatch
+  re-checks it, consent and suppression per batch, inside a database-enforced
+  daily budget. Unsubscribe and SES events stay on even with the module off.
+- **No scheduler is assumed.** Sync is driven by Gmail push, visits and Sync
+  now; campaign batches by API traffic, the scheduled handler if cron ever
+  fires, and `POST /api/email/jobs/run` for an external scheduler.
+
 ## External integrations
 
 | Integration | Trust mechanism | Main risk control |
@@ -164,6 +216,10 @@ logged or shared.
 | GST provider | server-held API key | format/checksum gate, edge cache, rate brake, daily budget |
 | Meta sends | server-held access token | authentication, idempotency, batch/concurrency limits |
 | Alert email | server-held provider key | best-effort delivery and sanitized logging |
+| Google OAuth / Gmail | one-time hashed state + PKCE, completed only by the signed-in person who started it; encrypted refresh token | ID token claims and Workspace domain checked; no-store bodies; per-mailbox membership |
+| Gmail push (Pub/Sub) | Google OIDC JWT (RS256) | audience and service-account checks; push only triggers a sync, never carries content |
+| Amazon SES | SigV4 with a send-only IAM key | send switch off by default, retries off, timeouts reported as uncertain, daily cap |
+| SES events (SNS) | SNS message signature from the X.509 certificate | certificate host allowlist, topic match, freshness, dedupe by message id |
 
 ## Data ownership and authorization
 
@@ -192,6 +248,10 @@ part of the current architecture.
   send ceiling.
 - Campaign sends claim message rows atomically and constrain concurrency.
 - Webhook processing is idempotent and reconciliation repairs ordering races.
+- Email campaigns: a daily cap in the database (`EMAIL_DAILY_CAP`, required
+  to send), a per-campaign recipient limit, batches of 20 with five in
+  flight, and no automatic resend of an unconfirmed send. Gmail sync is sized
+  for the Workers Free subrequest limit.
 
 ## Security boundaries still being hardened
 
@@ -209,7 +269,9 @@ headers and security regression tests.
 - Supabase: Auth configuration, PostgreSQL migrations, Storage policies and the
   `device-check` Edge Function.
 - External dashboards: Meta templates/webhooks, Turnstile widget and API/mail
-  provider configuration.
+  provider configuration; for the Email Hub, a Google Cloud OAuth client (and
+  optionally a Pub/Sub topic), and an Amazon SES identity, configuration set,
+  SNS topic and send-only IAM user.
 
 Configuration names may be documented; credential values and private resource
 identifiers must not be committed.

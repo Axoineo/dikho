@@ -15,8 +15,10 @@ import cgLeads from './routes/cgLeads/index.js'
 import users from './routes/users/index.js'
 import me from './routes/me/index.js'
 import assist from './routes/assist/index.js'
+import email from './routes/email/index.js'
 import { maybeDispatchOnRequest } from './services/whatsapp/cgLeadConfirmation.js'
 import { maybeReconcileOnRequest } from './services/whatsapp/reconcile.js'
+import { maybeDispatchCampaignsOnRequest } from './services/email/campaigns.js'
 
 // Root Hono app for everything under /api. Kept separate from src/worker.js
 // so the SPA asset fallback never has to know about API internals.
@@ -52,6 +54,7 @@ export function createApiApp() {
   app.use('*', async (c, next) => {
     maybeDispatchOnRequest(c)   // corporate-gifting confirmation queue (30s)
     maybeReconcileOnRequest(c)  // parked WhatsApp delivery receipts (2 min)
+    maybeDispatchCampaignsOnRequest(c) // approved email campaign batches (30s; only when SES is ready)
     await next()
   })
 
@@ -95,6 +98,12 @@ export function createApiApp() {
   app.route('/users', users)
   app.route('/me', me)
   app.route('/assist', assist)
+
+  // Email Hub. Mixed: its provider callbacks (Google OAuth return, Gmail push)
+  // authenticate themselves and are registered before the router's own
+  // requireAuth, which covers every other /email route. The whole module
+  // answers 404 unless EMAIL_HUB_ENABLED=true. See routes/email/index.js.
+  app.route('/email', email)
 
   return app
 }
