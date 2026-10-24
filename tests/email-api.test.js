@@ -190,14 +190,14 @@ test('complete: a consent link finished by someone other than its starter connec
   rpc.em_store_connection = async () => { throw new Error('must not store') }
   const res = await complete({ state: 's'.repeat(43), code: '4/victim-code-xyz' })
   assert.equal(await outcomeOf(res), 'not_yours')
-  assert.ok(!calls.some((c) => c.url.includes('oauth2.googleapis.com')), 'the code is never exchanged')
+  assert.ok(!calls.some((c) => new URL(c.url).hostname === 'oauth2.googleapis.com'), 'the code is never exchanged')
 })
 
 test('complete: a replayed or expired state stops before Google is asked', async () => {
   rpc.em_take_state = async () => Response.json(null)
   const res = await complete({ state: 's'.repeat(43), code: '4/synthetic-code' })
   assert.equal(await outcomeOf(res), 'expired')
-  assert.ok(!calls.some((c) => c.url.includes('oauth2.googleapis.com')))
+  assert.ok(!calls.some((c) => new URL(c.url).hostname === 'oauth2.googleapis.com'))
   assert.equal(await outcomeOf(await complete({ state: 'x', code: '4/synthetic-code' })), 'invalid')
 })
 
