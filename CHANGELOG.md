@@ -14,6 +14,25 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- Email Hub (off unless `EMAIL_HUB_ENABLED=true`; screens only in builds with
+  `VITE_EMAIL_HUB=true`; migrations `20261021120000` and `20261021130000` not
+  yet applied). See ADR 0009 and `docs/runbooks/email-hub-rollout.md`.
+  - Connect Google Workspace mailboxes (personal and shared). A mailbox needs
+    the Email permission and membership of that mailbox; Owners and
+    developers get no automatic access. Mail stays in Gmail; Dikho keeps
+    conversation metadata only.
+  - Inbox, conversation, composer, drafts, labels, attachments, assignment,
+    internal notes and CRM links. Message content shown in an isolated page.
+  - Amazon SES as the sender for system email and campaigns (Brevo kept as a
+    fallback for system email only while configured), with delivery, bounce
+    and complaint events.
+  - Campaigns to people with recorded consent, approved by a second person
+    against the exact version; templates with versions; consent and
+    suppression lookup; delivery analytics without open or click tracking.
+  - New permissions `email_inbox.view`, `email_mailboxes.manage`,
+    `email_campaigns.view/create/approve`, `email_templates.manage`,
+    `email_consent.manage`.
+
 - WhatsApp inbox, close to WhatsApp itself, using what Meta's Cloud API
   offers businesses:
   - a menu on every message: quick reactions, Reply (quotes the message),
@@ -59,6 +78,9 @@ incident details or unreleased vulnerability exploitation instructions here.
   signatures and protected-media tickets.
 
 ### Changed
+
+- The staff welcome email is sent through the new email delivery service:
+  Amazon SES once it is switched on, otherwise Brevo as before.
 
 - WhatsApp inbox bubbles are WhatsApp-sized: one line of text is 29px tall
   instead of 54px, the time sits on the last line, and the thread uses a
