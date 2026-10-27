@@ -2,6 +2,8 @@ import { HTTPException } from 'hono/http-exception'
 import { callUserRpc, logDenied, requestContext } from '../../services/userAdmin.js'
 import { GmailError, GmailUncertainError, GoogleAuthError } from '../../services/email/google.js'
 import { TokenKeyError } from '../../services/email/crypto.js'
+import { providerOf, capabilitiesOf } from '../../services/email/providers.js'
+import { HostingerAuthError, HostingerError, HostingerUncertainError } from '../../services/email/hostinger.js'
 import { logError } from '../../utils/logger.js'
 
 // Helpers shared by the Email Hub routes.
@@ -36,11 +38,15 @@ export async function rpc(c, fn, args, audit) {
   }
 }
 
-/** What the browser may see of a mailbox: never the token or the cursor. */
+/**
+ * What the browser may see of a mailbox: never the token, the sync cursor or
+ * the provider's resource id. Adds what this mailbox can do, so unsupported
+ * controls are disabled with their reason.
+ */
 export function publicAccount(account) {
   if (!account) return null
-  const { token_enc: _token, history_id: _history, ...rest } = account
-  return rest
+  const { token_enc: _token, history_id: _history, provider_account_id: _resource, ...rest } = account
+  return { ...rest, provider: providerOf(account), ...capabilitiesOf(account) }
 }
 
 export function noStore(c) {
@@ -73,6 +79,29 @@ export async function withGmail(c, account, fn) {
     }
     if (err instanceof GmailUncertainError) throw err
     if (err instanceof GmailError) throw new HTTPException(err.status === 404 ? 404 : err.status === 429 ? 429 : 502, { message: err.message })
+    throw err
+  }
+}
+
+/**
+ * Runs Hostinger Mail API work and turns its failures into answers the
+ * person can act on. The token belongs to the server, not to the mailbox:
+ * a refused token is a configuration problem, not a reason to make each
+ * mailbox's owner reconnect.
+ */
+export async function withHostinger(c, fn) {
+  try {
+    return await fn()
+  } catch (err) {
+    if (err instanceof HostingerAuthError) {
+      logError('email.hostinger.token_refused', err.message)
+      throw new HTTPException(503, { message: 'Hostinger did not accept Dikho\'s API token. An administrator needs to check HOSTINGER_MAIL_API_TOKEN.' })
+    }
+    if (err instanceof HostingerUncertainError) throw err
+    if (err instanceof HostingerError) {
+      const status = [403, 404, 422, 429].includes(err.status) ? (err.status === 422 ? 400 : err.status === 403 ? 409 : err.status) : 502
+      throw new HTTPException(status, { message: err.message })
+    }
     throw err
   }
 }

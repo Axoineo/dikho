@@ -8,6 +8,7 @@ import { sanitizeHtml, htmlToText } from '../../services/email/sanitizeHtml.js'
 import { fromBase64url } from '../../services/email/crypto.js'
 import { inBackground, syncMailbox } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
+import { requireCapability } from '../../services/email/providers.js'
 import {
   actor, rpc, uuidParam, patternParam, withGmail, noStore, UUID, GMAIL_ID, ATTACHMENT_ID, DRAFT_ID,
 } from './shared.js'
@@ -158,6 +159,7 @@ compose.post('/accounts/:id/send', async (c) => {
     return ok(c, { status: begun.status, duplicate: true, message_id: begun.gmail_message_id ?? null })
   }
   const account = begun.account
+  const feature = draft.mode === 'forward' ? 'forward' : draft.mode === 'new' ? 'send' : 'reply'
 
   const finish = (status, extra = {}) => rpc(c, 'em_finish_send', {
     p_send_id: sendId, p_status: status, p_message_id: extra.messageId ?? null,
@@ -166,6 +168,9 @@ compose.post('/accounts/:id/send', async (c) => {
 
   let prepared
   try {
+    requireCapability(account, feature)
+    if (draft.forwardParts.length) requireCapability(account, 'attachments')
+    if (draft.fromAddress && draft.fromAddress !== account.email_address) requireCapability(account, 'send_as')
     prepared = await withGmail(c, account, () => prepare(c, account, draft))
   } catch (err) {
     await finish('failed', { error: 'could not prepare the message' })
@@ -199,6 +204,7 @@ compose.post('/accounts/:id/send', async (c) => {
 // ── Drafts (Gmail is where they live) ────────────────────────────────────────
 compose.get('/accounts/:id/drafts', async (c) => {
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'responder' })
+  requireCapability(account, 'drafts')
   const drafts = await withGmail(c, account, async () => {
     const list = await gmail(c.env, account, '/drafts', { query: 'maxResults=25' })
     const items = (list?.drafts ?? []).filter((d) => DRAFT_ID.test(d?.id ?? '') && GMAIL_ID.test(d?.message?.id ?? ''))
@@ -215,6 +221,7 @@ compose.get('/accounts/:id/drafts', async (c) => {
 
 compose.get('/accounts/:id/drafts/:draftId', async (c) => {
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'responder' })
+  requireCapability(account, 'drafts')
   const draftId = patternParam(c, 'draftId', DRAFT_ID, 'draft id')
   const data = await withGmail(c, account, () => gmail(c.env, account, `/drafts/${draftId}`, { query: 'format=full' }))
   const m = readMessage(data?.message)
@@ -229,6 +236,7 @@ compose.get('/accounts/:id/drafts/:draftId', async (c) => {
 async function saveDraft(c, draftId) {
   const id = uuidParam(c)
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: id, p_min_role: 'responder' })
+  requireCapability(account, 'drafts')
   const draft = await readDraft(c, { requireRecipient: false })
   if (draft.attachments.length || draft.forwardParts.length) {
     throw new HTTPException(400, { message: 'Attachments are added when the message is sent, not saved with the draft.' })
@@ -249,6 +257,7 @@ compose.put('/accounts/:id/drafts/:draftId', (c) => saveDraft(c, patternParam(c,
 
 compose.delete('/accounts/:id/drafts/:draftId', async (c) => {
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'responder' })
+  requireCapability(account, 'drafts')
   const draftId = patternParam(c, 'draftId', DRAFT_ID, 'draft id')
   await withGmail(c, account, () => gmail(c.env, account, `/drafts/${draftId}`, { method: 'DELETE' }))
   return ok(c, { deleted: true })

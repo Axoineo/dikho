@@ -9,6 +9,7 @@ import { inBackground } from '../../services/email/sync.js'
 import { fromBase64url } from '../../services/email/crypto.js'
 import { issueRenderTicket } from '../../services/email/renderTicket.js'
 import { logError } from '../../utils/logger.js'
+import { requireCapability } from '../../services/email/providers.js'
 import {
   actor, rpc, uuidParam, patternParam, requestContext, withGmail, publicAccount, noStore, GMAIL_ID, ATTACHMENT_ID,
 } from './shared.js'
@@ -22,6 +23,8 @@ const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 const FOLDERS = new Set(['inbox', 'sent', 'drafts', 'starred', 'archived', 'all', 'assigned'])
 const SYSTEM_LABELS = new Set(['INBOX', 'UNREAD', 'STARRED', 'IMPORTANT'])
 const USER_LABEL = /^Label_[0-9]{1,20}$/
+// What each Gmail-style label change means, for providers without labels.
+const LABEL_FEATURE = { UNREAD: 'mark_read', STARRED: 'star', INBOX: 'archive', IMPORTANT: 'labels' }
 
 threads.get('/threads', async (c) => {
   const q = c.req.query()
@@ -49,6 +52,7 @@ threads.get('/accounts/:id/search', async (c) => {
   const query = String(c.req.query('q') ?? '').trim()
   if (!query || query.length > 200) throw new HTTPException(400, { message: 'Enter up to 200 characters to search for.' })
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: id, p_min_role: 'viewer' })
+  requireCapability(account, 'search')
   const ids = await withGmail(c, account, async () => {
     const list = await gmail(c.env, account, '/threads', { query: new URLSearchParams({ q: query, maxResults: '25' }).toString() })
     const found = (list?.threads ?? []).map((t) => t?.id).filter((t) => GMAIL_ID.test(t ?? ''))
@@ -65,6 +69,7 @@ threads.get('/threads/:id', async (c) => {
   const id = uuidParam(c)
   const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: id, p_min_role: 'viewer' })
   const account = meta.account
+  requireCapability(account, 'read')
   const thread = await withGmail(c, account, async () => {
     try {
       return await gmail(c.env, account, `/threads/${meta.thread.gmail_thread_id}`, { query: 'format=full' })
@@ -140,6 +145,7 @@ threads.post('/threads/:id/labels', async (c) => {
 
   const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: uuidParam(c), p_min_role: 'responder' })
   const account = meta.account
+  for (const label of [...add, ...remove]) requireCapability(account, LABEL_FEATURE[label] ?? 'labels')
   const result = await withGmail(c, account, () => gmail(c.env, account, `/threads/${meta.thread.gmail_thread_id}/modify`, {
     method: 'POST', body: { addLabelIds: add, removeLabelIds: remove },
   }))
@@ -179,6 +185,7 @@ threads.get('/threads/:id/messages/:messageId/attachments/:attachmentId', async 
   const attachmentId = patternParam(c, 'attachmentId', ATTACHMENT_ID, 'attachment id')
   const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: id, p_min_role: 'viewer' })
   const account = meta.account
+  requireCapability(account, 'attachments')
   const data = await withGmail(c, account, () => gmail(c.env, account, `/messages/${messageId}/attachments/${attachmentId}`))
   if (typeof data?.data !== 'string' || (Number(data.size) || 0) > MAX_ATTACHMENT_BYTES) {
     throw new HTTPException(413, { message: 'This attachment is too large to download here. Open it in Gmail.' })

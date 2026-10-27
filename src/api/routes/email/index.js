@@ -14,6 +14,7 @@ import { verifySnsMessage, normalizeSesEvent, snsUrlAllowed } from '../../servic
 import { verifyUnsubscribe, dispatchCampaignBatch, buildCampaignMessage } from '../../services/email/campaigns.js'
 import { safeEqual } from '../../services/email/crypto.js'
 import { syncMailbox as syncOne } from '../../services/email/sync.js'
+import { can } from '../../services/email/providers.js'
 import { syncMailbox, inBackground } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
 import accounts from './accounts.js'
@@ -236,6 +237,7 @@ email.get('/render/:threadId/:messageId', async (c) => {
 
   try {
     const meta = await callUserRpc(c, 'em_open_thread', { p_actor: claim.userId, p_thread: threadId.toLowerCase(), p_min_role: 'viewer' })
+    if (!can(meta.account, 'read')) return refuse(409, 'This mailbox cannot show messages here yet.')
     const message = await gmail(c.env, meta.account, `/messages/${messageId}`, { query: 'format=full' })
     if (message?.threadId !== meta.thread.gmail_thread_id) return refuse(404, 'This message is not part of the conversation.')
     const m = readMessage(message)

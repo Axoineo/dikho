@@ -3,6 +3,7 @@ import { gmail, gmailBatchGet, GmailError, GoogleAuthError } from './google.js'
 import { TokenKeyError } from './crypto.js'
 import { METADATA_QUERY, summarizeThread } from './mime.js'
 import { pushConfigured, syncDays, syncMaxThreads } from './config.js'
+import { providerOf } from './providers.js'
 import { logError, logEvent } from '../../utils/logger.js'
 
 // Keeps the cached thread metadata in step with Gmail.
@@ -130,6 +131,10 @@ export async function syncMailbox(env, accountId) {
     return { ok: false }
   }
   if (!claim) return { skipped: true }
+  // Only Gmail is synced from here. em_sync_due never offers another
+  // provider; this guards direct calls. The short lease simply runs out,
+  // and nothing is recorded as synced.
+  if (providerOf(claim) !== 'google') return { skipped: true, provider: providerOf(claim) }
   const account = { id: claim.id, email_address: claim.email_address, token_enc: claim.token_enc }
   let full = Boolean(claim.needs_full_sync || !claim.history_id)
 
