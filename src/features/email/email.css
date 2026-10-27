@@ -143,7 +143,7 @@
 .em-list > li { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line-soft); }
 .em-list > li:first-child { border-top: 0; }
 .em-list-main { flex: 1; min-width: 0; }
-.em-list-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.em-list-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13.5px; font-weight: 600; }
 .em-list-sub { margin-top: 2px; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .em-list-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
@@ -335,6 +335,27 @@
 .em-dialog h2 { margin: 0 0 4px; font-size: 18px; }
 .em-dialog > p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
 .em-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* ── Mailbox providers, receiving and campaign senders (Settings) ─────────── */
+.em-provider-choice { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.em-provider-choice legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.em-form-inline .em-provider-choice label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--em-radius); background: var(--surface); cursor: pointer; color: var(--text); font-weight: 400; }
+.em-form-inline .em-provider-choice label.is-on { border-color: var(--brand-blue); box-shadow: 0 0 0 3px var(--focus-ring-soft); }
+.em-provider-choice input { margin: 3px 0 0; accent-color: var(--brand-blue); }
+.em-provider-choice strong { display: block; font-size: 13.5px; }
+.em-provider-choice small { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.em-health { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+button.em-pill { border: 0; cursor: pointer; }
+button.em-pill:focus-visible, .em-link-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring-soft); }
+.em-health-note { flex-basis: 100%; margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); white-space: normal; }
+.em-link-btn { border: 0; background: transparent; color: var(--brand-blue); font-size: 12.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
+.em-link-btn:hover { background: var(--inbox-control); }
+[data-theme="dark"] .em-link-btn { color: #8fc2f0; }
+.em-form-inline .em-check-label { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; font-size: 13px; }
+.em-footnote { margin: 4px 2px 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.em-footnote code { font-size: 12px; overflow-wrap: anywhere; }
+.em-rail-tag { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--inbox-chip); color: var(--brand-blue); }
+[data-theme="dark"] .em-rail-tag { color: #8fc2f0; }
 
 /* ── Forms (campaigns, templates, consent) ────────────────────────────────── */
 .em-field { display: grid; gap: 6px; min-width: 0; }

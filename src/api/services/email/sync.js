@@ -3,9 +3,12 @@ import { gmail, gmailBatchGet, GmailError, GoogleAuthError } from './google.js'
 import { TokenKeyError } from './crypto.js'
 import { METADATA_QUERY, summarizeThread } from './mime.js'
 import { pushConfigured, syncDays, syncMaxThreads } from './config.js'
+import { providerOf } from './providers.js'
+import { syncHostingerMailbox } from './hostingerMail.js'
 import { logError, logEvent } from '../../utils/logger.js'
 
-// Keeps the cached thread metadata in step with Gmail.
+// Keeps the cached thread metadata in step with Gmail. Hostinger mailboxes
+// are synced by hostingerMail.js under the same lease.
 //
 //   Full sync: the mailbox's current history id is read FIRST, then the newest
 //   threads (EMAIL_SYNC_DAYS / EMAIL_SYNC_MAX_THREADS) are listed and their
@@ -130,6 +133,9 @@ export async function syncMailbox(env, accountId) {
     return { ok: false }
   }
   if (!claim) return { skipped: true }
+  if (providerOf(claim) === 'hostinger') return syncHostingerMailbox(env, claim)
+  // An unknown provider is never synced; the short lease simply runs out.
+  if (providerOf(claim) !== 'google') return { skipped: true, provider: providerOf(claim) }
   const account = { id: claim.id, email_address: claim.email_address, token_enc: claim.token_enc }
   let full = Boolean(claim.needs_full_sync || !claim.history_id)
 

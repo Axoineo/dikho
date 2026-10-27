@@ -14,6 +14,9 @@ import { verifySnsMessage, normalizeSesEvent, snsUrlAllowed } from '../../servic
 import { verifyUnsubscribe, dispatchCampaignBatch, buildCampaignMessage } from '../../services/email/campaigns.js'
 import { safeEqual } from '../../services/email/crypto.js'
 import { syncMailbox as syncOne } from '../../services/email/sync.js'
+import { can, providerOf } from '../../services/email/providers.js'
+import { messageBody } from '../../services/email/hostingerMail.js'
+import { HostingerError, HostingerAuthError } from '../../services/email/hostinger.js'
 import { syncMailbox, inBackground } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
 import accounts from './accounts.js'
@@ -230,12 +233,20 @@ email.get('/render/:threadId/:messageId', async (c) => {
   const refuse = (status, text) => new Response(renderPage(`<p style="color:#5f6368">${text}</p>`), { status, headers })
   const threadId = c.req.param('threadId')
   const messageId = c.req.param('messageId')
-  if (!UUID.test(threadId) || !GMAIL_ID.test(messageId)) return refuse(400, 'This message link is not valid.')
+  if (!UUID.test(threadId) || !(GMAIL_ID.test(messageId) || UUID.test(messageId))) return refuse(400, 'This message link is not valid.')
   const claim = await verifyRenderTicket(c.env, c.req.query('t'), { threadId: threadId.toLowerCase(), messageId })
   if (!claim) return refuse(403, 'This preview has expired. Close and reopen the conversation.')
 
   try {
     const meta = await callUserRpc(c, 'em_open_thread', { p_actor: claim.userId, p_thread: threadId.toLowerCase(), p_min_role: 'viewer' })
+    if (!can(meta.account, 'read')) return refuse(409, 'This mailbox cannot show messages here yet.')
+    if (providerOf(meta.account) === 'hostinger') {
+      const ref = (meta.provider_messages ?? []).find((r) => r.id === messageId.toLowerCase())
+      if (!ref) return refuse(404, 'This message is not part of the conversation.')
+      const m = await messageBody(c.env, meta.account, ref)
+      return new Response(renderPage(m.html ? sanitizeHtml(m.html).html : textToHtml(m.text)), { headers })
+    }
+    if (!GMAIL_ID.test(messageId)) return refuse(400, 'This message link is not valid.')
     const message = await gmail(c.env, meta.account, `/messages/${messageId}`, { query: 'format=full' })
     if (message?.threadId !== meta.thread.gmail_thread_id) return refuse(404, 'This message is not part of the conversation.')
     const m = readMessage(message)
@@ -243,6 +254,7 @@ email.get('/render/:threadId/:messageId', async (c) => {
     return new Response(renderPage(body), { headers })
   } catch (err) {
     if (err?.fromRule || err?.status === 404) return refuse(404, 'This message is no longer available to you.')
+    if (err instanceof HostingerError || err instanceof HostingerAuthError) return refuse(502, 'The message could not be loaded from Hostinger. Try again.')
     if (!(err instanceof GmailError) && !(err instanceof GoogleAuthError)) logError('email.render.failed', err)
     return refuse(502, 'The message could not be loaded from Gmail. Try again.')
   }

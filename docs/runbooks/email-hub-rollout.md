@@ -1,6 +1,10 @@
 # Email Hub: rollout, pause and rollback
 
-Design: [ADR 0009](../decisions/0009-email-hub.md). Settings:
+Design: [ADR 0009](../decisions/0009-email-hub.md), amended by
+[ADR 0010](../decisions/0010-email-hub-providers.md). For Hostinger mailboxes
+and campaigns without SES, follow the
+[Email Hub setup guide](email-hub-setup-guide.md); the SES steps below are
+optional. Settings:
 [Configuration](../CONFIGURATION.md#api-worker-email-hub). Nothing here
 authorizes a production change: applying migrations, setting secrets,
 deploying, changing DNS and sending real email each need the system owner's

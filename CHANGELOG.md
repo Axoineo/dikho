@@ -14,6 +14,21 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- Email Hub 2.0 (ADR 0010; migration `20261027120000` not yet applied; owner
+  steps in `docs/runbooks/email-hub-setup-guide.md`).
+  - Hostinger mailboxes through the Hostinger Mail API, beside Google
+    Workspace ones: connect (one server-side token, mailboxes matched by
+    address), sync a metadata-only index, read, reply, forward, attachments,
+    read/unread and star. Unsupported actions (drafts, labels, aliases) are
+    hidden with the reason.
+  - Campaigns sent from a connected Gmail or Hostinger mailbox that its
+    administrators allowed for campaigns, with a per-mailbox daily limit on
+    top of the organization's, cooldown after a provider limit, and
+    automatic pause when the provider refuses the mailbox. Amazon SES is no
+    longer required; Brevo keeps sending system email.
+  - Each mailbox shows whether outside mail reaches it (its domain's MX
+    records), separately from whether it is connected.
+
 - Email Hub (off unless `EMAIL_HUB_ENABLED=true`; screens only in builds with
   `VITE_EMAIL_HUB=true`; migrations `20261021120000` and `20261021130000` not
   yet applied). See ADR 0009 and `docs/runbooks/email-hub-rollout.md`.

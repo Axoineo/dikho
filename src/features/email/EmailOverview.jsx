@@ -197,7 +197,7 @@ function MarketingCard({ data, canApprove }) {
             <div><dt>Scheduled or sending</dt><dd>{count('approved', 'sending', 'paused')}</dd></div>
           </dl>
           {awaiting > 0 && canApprove && <p className="em-help" style={{ marginTop: 8 }}>{awaiting} campaign{awaiting === 1 ? '' : 's'} need{awaiting === 1 ? 's' : ''} an approver who did not write {awaiting === 1 ? 'it' : 'them'}.</p>}
-          {!data.readiness?.ready && <p className="em-help" style={{ marginTop: 8 }}>Sending through Amazon SES is not switched on yet.</p>}
+          {!data.readiness?.ready && <p className="em-help" style={{ marginTop: 8 }}>Campaign sending is not switched on yet (needs {data.readiness?.missing?.join(', ') || 'server settings'}).</p>}
         </>
       )}
     </section>
@@ -236,9 +236,10 @@ function IntegrationsCard({ status }) {
   if (!status) return null
   const d = status.delivery ?? {}
   const rows = [
-    ['Gmail sign-in', status.gmail?.configured, status.gmail?.configured ? 'Mailboxes can be connected.' : 'Not configured on the server.'],
+    ['Google Workspace', status.gmail?.configured, status.gmail?.configured ? 'Gmail mailboxes can be connected.' : 'Not configured on the server.'],
+    ['Hostinger Email', status.hostinger?.configured, status.hostinger?.configured ? 'Hostinger mailboxes can be connected.' : 'Not configured on the server.'],
     ['Gmail push', status.gmail?.push, status.gmail?.push ? 'Changes arrive within seconds.' : 'Off: mailboxes refresh when Email is opened.'],
-    ['System email', Boolean(d.provider), d.provider === 'ses' ? 'Sent through Amazon SES.' : d.provider === 'brevo' ? 'Sent through Brevo (legacy) until SES is enabled.' : 'No sender is enabled. Amazon SES is not switched on yet.'],
+    ['System email', Boolean(d.provider), d.provider === 'ses' ? 'Sent through Amazon SES.' : d.provider === 'brevo' ? 'Welcome emails and alerts go through Brevo.' : 'No system email sender is configured.'],
   ]
   return (
     <section className="em-card" aria-labelledby="em-int-title">

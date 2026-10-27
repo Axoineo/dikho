@@ -140,6 +140,17 @@ same transaction. Design: [ADR 0009](decisions/0009-email-hub.md).
 | `email_templates`, `email_template_versions` | Templates and every saved version | |
 | `email_campaigns`, `email_campaign_recipients` | Campaigns, their snapshot and approval hashes, and the frozen recipient list with each outcome | |
 | `email_send_budget` | Campaign emails per UTC day | Addresses |
+| `email_provider_messages` | Hostinger mailboxes only: per message, folder, UID, Message-ID, In-Reply-To, date, subject, sender, recipients, attachment names and ids, read and flagged state; conversations are derived from it | Message bodies, attachment content |
+| `email_mailbox_budget` | Campaign emails per sender mailbox per UTC day | Addresses |
+
+Migration `20261027120000_email_hub_providers.sql` ([ADR 0010](decisions/0010-email-hub-providers.md))
+adds the last two tables, `email_accounts.provider` = `hostinger`,
+`provider_account_id` (the Hostinger resource id, taken only from Hostinger's
+`GET /me`), the per-mailbox campaign settings (`campaign_sender`,
+`campaign_daily_cap`, `campaign_cooldown_until`) and
+`email_campaigns.sender_account_id`. It changes no existing row; functions
+whose parameters grew default to their previous behaviour. Apply it before the
+API that uses it. Not yet applied.
 
 Removing a mailbox deletes its cached metadata, notes and links (cascade);
 disconnecting deletes only the token. Message content stays in Gmail.
@@ -148,7 +159,7 @@ that has started cannot be edited, only duplicated.
 
 `scripts/db/verify-local.sh` applies every migration to a throwaway local
 PostgreSQL with Supabase stand-ins and runs `supabase/tests/*.sql`, which
-include allow and deny cases for both email migrations
+include allow and deny cases for all three email migrations
 ([Testing](TESTING.md)).
 
 ### Finance invariants

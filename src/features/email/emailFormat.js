@@ -10,6 +10,8 @@ export const FOLDERS = [
   { key: 'all', label: 'All mail', icon: 'mail' },
 ]
 
+export const PROVIDER_LABELS = { google: 'Google Workspace', hostinger: 'Hostinger' }
+
 export const ROLE_LABELS = { viewer: 'Viewer', responder: 'Responder', manager: 'Manager', admin: 'Administrator' }
 export const ROLE_HELP = {
   viewer: 'Reads conversations.',
@@ -103,7 +105,8 @@ export function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`
 }
 
 export const addressList = (people) => (people ?? []).map((p) => (p.name ? `${p.name} <${p.email}>` : p.email)).join(', ')

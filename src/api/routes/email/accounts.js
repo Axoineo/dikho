@@ -11,11 +11,14 @@ import { sanitizeHtml } from '../../services/email/sanitizeHtml.js'
 import { deliveryStatus } from '../../services/email/delivery.js'
 import { logError, logEvent } from '../../utils/logger.js'
 import { callUserRpc } from '../../services/userAdmin.js'
-import { actor, rpc, uuidParam, requestContext, withGmail, publicAccount, noStore } from './shared.js'
+import { hostingerConfigured, listManagedMailboxes, mailboxQuota } from '../../services/email/hostinger.js'
+import { requireCapability, requireProvider } from '../../services/email/providers.js'
+import { mailRouting, inboundStatus } from '../../services/email/routing.js'
+import { actor, rpc, uuidParam, requestContext, withGmail, withHostinger, publicAccount, noStore } from './shared.js'
 
-// Mailboxes, their members, and connecting them to Google. Mounted behind
-// requireAuth. The em_* functions decide who may do what; these routes bound
-// input and talk to Google.
+// Mailboxes, their members, and connecting them to Google or Hostinger.
+// Mounted behind requireAuth. The em_* functions decide who may do what;
+// these routes bound input and talk to the providers.
 const accounts = new Hono()
 const MAX_BODY = 8 * 1024
 
@@ -23,6 +26,7 @@ const MAX_BODY = 8 * 1024
 accounts.get('/status', async (c) => {
   return ok(c, {
     gmail: { configured: await gmailConfigured(c.env), push: pushConfigured(c.env), workspace_domain: workspaceDomain(c.env) },
+    hostinger: { configured: hostingerConfigured(c.env) },
     delivery: deliveryStatus(c.env),
   })
 })
@@ -31,16 +35,113 @@ accounts.get('/accounts', async (c) => {
   const data = await rpc(c, 'em_list_accounts', { p_actor: actor(c) })
   // Keeps this person's mailboxes fresh without a scheduler (see sync.js).
   if (data?.mailboxes?.length) maybeSyncForUser(c, actor(c))
-  return ok(c, data)
+  return ok(c, {
+    ...data,
+    mailboxes: (data?.mailboxes ?? []).map(publicAccount),
+    shared_setup: (data?.shared_setup ?? []).map(publicAccount),
+  })
 })
 
 accounts.post('/accounts/shared', requirePermission('email_mailboxes.manage'), async (c) => {
   const body = await readBoundedJson(c, MAX_BODY)
-  const email = typeof body?.email_address === 'string' ? body.email_address.trim() : ''
+  const email = typeof body?.email_address === 'string' ? body.email_address.trim().toLowerCase() : ''
   const name = typeof body?.display_name === 'string' ? body.display_name.trim().slice(0, 120) : ''
+  const provider = body?.provider ?? 'google'
+  if (!['google', 'hostinger'].includes(provider)) throw new HTTPException(400, { message: 'Choose Google Workspace or Hostinger.' })
   if (!email || email.length > 254) throw new HTTPException(400, { message: 'Enter the shared mailbox\'s address.' })
-  return ok(c, await rpc(c, 'em_create_shared', { p_actor: actor(c), p_email: email, p_display_name: name || null, p_ctx: requestContext(c) },
-    { action: 'email.mailbox_create' }), 201)
+  if (provider === 'google') {
+    return ok(c, publicAccount(await rpc(c, 'em_create_shared', { p_actor: actor(c), p_email: email, p_display_name: name || null, p_ctx: requestContext(c) },
+      { action: 'email.mailbox_create' })), 201)
+  }
+
+  // Hostinger: checked against the token before anything is created, so a
+  // mailbox the token cannot reach never appears half set up.
+  const mailboxes = await hostingerMailboxes(c)
+  if (!mailboxes.some((m) => m.address === email)) {
+    throw new HTTPException(409, { message: 'Dikho\'s Hostinger API token does not cover this address. Choose one from the list, or ask an administrator to include it in the token.' })
+  }
+  const created = await rpc(c, 'em_create_shared', {
+    p_actor: actor(c), p_email: email, p_display_name: name || null, p_ctx: requestContext(c), p_provider: 'hostinger',
+  }, { action: 'email.mailbox_create' })
+  const connected = await rpc(c, 'em_connect_hostinger', {
+    p_actor: actor(c), p_account: created.id, p_mailboxes: mailboxes, p_display_name: null, p_ctx: requestContext(c),
+  }, { action: 'email.mailbox_connect' })
+  logEvent('email.hostinger.connected', { kind: 'shared' })
+  inBackground(c, syncMailbox(c.env, connected.id))
+  return ok(c, publicAccount(connected), 201)
+})
+
+// ── Hostinger ────────────────────────────────────────────────────────────────
+// One API token for the organization (Worker secret HOSTINGER_MAIL_API_TOKEN),
+// scoped in the Hostinger Panel to the mailboxes Dikho may use. Mailboxes are
+// matched by the address Hostinger reports for the token, never by an id the
+// browser sends.
+async function hostingerMailboxes(c) {
+  if (!hostingerConfigured(c.env)) {
+    throw new HTTPException(503, { message: 'Hostinger email is not set up for Dikho yet. Ask an administrator.' })
+  }
+  return withHostinger(c, () => listManagedMailboxes(c.env))
+}
+
+// Addresses the token covers, for choosing a shared mailbox. Addresses only:
+// no Hostinger ids, and no content.
+accounts.get('/hostinger/mailboxes', requirePermission('email_mailboxes.manage'), async (c) => {
+  const mailboxes = await hostingerMailboxes(c)
+  noStore(c)
+  return ok(c, { addresses: mailboxes.map((m) => m.address).sort() })
+})
+
+// Connects (or reconnects) a Hostinger mailbox. With account_id: that shared
+// mailbox, for its administrators. Without: the person's own mailbox, which
+// must be their Dikho sign-in address (the database checks both).
+accounts.post('/accounts/hostinger/connect', async (c) => {
+  const body = await readJsonOr(c, MAX_BODY, {})
+  const accountId = body?.account_id ?? null
+  if (accountId !== null && (typeof accountId !== 'string' || !/^[0-9a-f-]{36}$/i.test(accountId))) {
+    throw new HTTPException(400, { message: 'Invalid mailbox id' })
+  }
+  const mailboxes = await hostingerMailboxes(c)
+  const account = await rpc(c, 'em_connect_hostinger', {
+    p_actor: actor(c), p_account: accountId ? accountId.toLowerCase() : null, p_mailboxes: mailboxes,
+    p_display_name: null, p_ctx: requestContext(c),
+  }, { action: 'email.mailbox_connect' })
+  logEvent('email.hostinger.connected', { kind: account?.kind })
+  if (account?.id) inBackground(c, syncMailbox(c.env, account.id))
+  return ok(c, publicAccount(account))
+})
+
+// Allow or stop a mailbox sending campaigns, with its own daily limit. The
+// database lets only its owner or administrators do this, and audits it.
+accounts.put('/accounts/:id/campaign-sender', async (c) => {
+  const body = await readBoundedJson(c, MAX_BODY)
+  if (typeof body?.enabled !== 'boolean') throw new HTTPException(400, { message: 'Say whether this mailbox may send campaigns.' })
+  const cap = body.daily_cap === undefined || body.daily_cap === null ? null : Number(body.daily_cap)
+  if (body.enabled && !(Number.isInteger(cap) && cap >= 1 && cap <= 2000)) {
+    throw new HTTPException(400, { message: 'Set a daily campaign limit between 1 and 2000 for this mailbox.' })
+  }
+  return ok(c, publicAccount(await rpc(c, 'em_set_campaign_sender', {
+    p_actor: actor(c), p_account: uuidParam(c), p_enabled: body.enabled, p_daily_cap: cap, p_ctx: requestContext(c),
+  }, { action: 'email.campaign_sender' })))
+})
+
+// Whether outside mail reaches this mailbox's provider directly, from the
+// domain's public MX records. Separate from "connected": a connected mailbox
+// can send and read while its domain routes incoming mail elsewhere.
+accounts.get('/accounts/:id/routing', async (c) => {
+  const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'viewer' })
+  const routing = await mailRouting(account.email_address)
+  return ok(c, { ...routing, provider: account.provider ?? 'google', ...inboundStatus(account.provider ?? 'google', routing) })
+})
+
+// Storage use, where the provider reports it.
+accounts.get('/accounts/:id/quota', async (c) => {
+  const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'viewer' })
+  requireCapability(account, 'quota')
+  requireProvider(account, 'hostinger')
+  if (!account.provider_account_id) throw new HTTPException(409, { message: 'Connect this mailbox to Hostinger again.' })
+  const quota = await withHostinger(c, () => mailboxQuota(c.env, account.provider_account_id))
+  noStore(c)
+  return ok(c, { quota })
 })
 
 accounts.get('/accounts/:id/members', async (c) => {
@@ -194,6 +295,7 @@ accounts.delete('/accounts/:id', (c) => disconnect(c, true))
 accounts.post('/accounts/:id/sync', async (c) => {
   const id = uuidParam(c)
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: id, p_min_role: 'viewer' })
+  requireCapability(account, 'read')
   if (account.status !== 'connected') throw new HTTPException(409, { message: 'This mailbox needs to be reconnected first.' })
   const result = await syncMailbox(c.env, id)
   return ok(c, { synced: Boolean(result.ok), busy: Boolean(result.skipped) })
@@ -202,6 +304,7 @@ accounts.post('/accounts/:id/sync', async (c) => {
 // The mailbox's own labels (Gmail "user" labels), for filing conversations.
 accounts.get('/accounts/:id/labels', async (c) => {
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'viewer' })
+  requireCapability(account, 'labels')
   const data = await withGmail(c, account, () => gmail(c.env, account, '/labels'))
   const labels = (data?.labels ?? [])
     .filter((l) => l?.type === 'user' && /^Label_[0-9]{1,20}$/.test(l.id ?? '') && typeof l.name === 'string')
@@ -214,6 +317,7 @@ accounts.get('/accounts/:id/labels', async (c) => {
 // Addresses this mailbox may send as (Gmail "Send mail as"), with signatures.
 accounts.get('/accounts/:id/send-as', async (c) => {
   const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'responder' })
+  requireCapability(account, 'send_as')
   const data = await withGmail(c, account, () => gmail(c.env, account, '/settings/sendAs'))
   const identities = (data?.sendAs ?? [])
     .filter((s) => typeof s?.sendAsEmail === 'string' && (s.isPrimary || s.verificationStatus === 'accepted'))
