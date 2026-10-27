@@ -136,7 +136,9 @@ The module answers `404` unless `EMAIL_HUB_ENABLED=true`, except the
 unsubscribe link and the SES event webhook, which stay on so links already
 sent keep working and bounces keep being recorded. Each integration below
 reports ready or not ready by presence only; a missing setting switches that
-part off instead of half-working. Design: [ADR 0009](decisions/0009-email-hub.md).
+part off instead of half-working. Design: [ADR 0009](decisions/0009-email-hub.md),
+amended by [ADR 0010](decisions/0010-email-hub-providers.md) (Hostinger
+mailboxes; campaigns without SES). Owner steps: [setup guide](runbooks/email-hub-setup-guide.md).
 
 | Name | Class | Consumer / behavior |
 | --- | --- | --- |
@@ -152,12 +154,17 @@ part off instead of half-working. Design: [ADR 0009](decisions/0009-email-hub.md
 | `GOOGLE_PUBSUB_SERVICE_ACCOUNT` | Server setting | The push subscription's service account email; tokens from any other account are refused |
 | `EMAIL_SYNC_DAYS`, `EMAIL_SYNC_MAX_THREADS` | Resource settings | First-sync window (default 60 days, 1 to 365) and size (default 150 threads, 10 to 500), sized for the Workers Free subrequest limit |
 | `EMAIL_JOBS_SECRET` | Secret | Optional, at least 32 characters. Lets an external scheduler call `POST /api/email/jobs/run` (bearer token) to send the next campaign batch and refresh one due mailbox. Unset: the route refuses every call |
+| `HOSTINGER_MAIL_API_TOKEN` | Secret | Hostinger Mail API token (hPanel, Emails, Mailboxes, Agentic Mail, API access), limited to the mailboxes Dikho may use. Used only by the [Hostinger client](../src/api/services/email/hostinger.js); never stored in the database or sent to the browser. Unset: Hostinger mailboxes cannot connect and existing ones stop syncing and sending |
 
 ### Email delivery (system email and campaigns)
 
-[`delivery.js`](../src/api/services/email/delivery.js) sends mail written by
-Dikho itself. Amazon SES is the primary provider; Brevo is used only while it
-is configured and SES is not ready. Campaigns use SES only.
+[`delivery.js`](../src/api/services/email/delivery.js) sends system email
+written by Dikho itself (staff welcome): Brevo while it is configured, Amazon
+SES only once switched on. Campaigns are sent from a connected Gmail or
+Hostinger mailbox that its administrators allowed for campaigns, with its own
+daily limit set in Email settings ([`mailboxDelivery.js`](../src/api/services/email/mailboxDelivery.js));
+the SES path for campaigns remains and is used only while SES is on. The SES
+rows below are optional.
 
 | Name | Class | Consumer / behavior |
 | --- | --- | --- |
@@ -171,14 +178,16 @@ is configured and SES is not ready. Campaigns use SES only.
 | `EMAIL_SES_SEND_ENABLED` | Safety switch | `true` only after the identity, production access, IAM policy and events are verified. Anything else: SES is never called |
 | `AWS_SNS_TOPIC_ARN` | Server setting | The only SNS topic the [SES webhook](../src/api/routes/email/index.js) accepts (signature, certificate host and topic are all checked) |
 | `API_PUBLIC_URL` | Server setting | `https` origin of the API Worker, used to build unsubscribe links; campaigns do not send without it |
-| `EMAIL_DAILY_CAP` | Cost-control setting | Positive ceiling on campaign and test emails per UTC day, enforced in the database. Missing or invalid: campaigns do not send |
-| `EMAIL_CAMPAIGN_SENDERS` | Server setting | Comma-separated From addresses campaigns may use (each verified in SES); defaults to `EMAIL_FROM_ADDRESS` |
+| `EMAIL_DAILY_CAP` | Cost-control setting | Organization-wide ceiling on campaign and test emails per UTC day, enforced in the database on top of each sender mailbox's own limit. Missing or invalid: campaigns do not send |
+| `EMAIL_CAMPAIGN_SENDERS` | Server setting | SES path only: comma-separated From addresses (each verified in SES); defaults to `EMAIL_FROM_ADDRESS` |
 | `EMAIL_CAMPAIGN_MAX_RECIPIENTS` | Cost-control setting | Per-campaign recipient limit, default 5,000, at most 50,000 |
 | `EMAIL_FOOTER_ADDRESS` | Server setting | Optional postal address shown in the campaign footer |
 
 Campaign readiness is reported on the Campaigns page by name only (for example
-"Amazon SES sending"), never with a value. Approval works while sending is not
-ready; nothing is sent until every item is present.
+"an organization-wide daily limit (EMAIL_DAILY_CAP)"), never with a value.
+Approval works while sending is not ready; nothing is sent until every item is
+present and the campaign's sender mailbox is connected, allowed for campaigns
+and within its limit.
 
 ## Cloudflare bindings and scheduled work
 

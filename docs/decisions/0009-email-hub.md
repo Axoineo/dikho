@@ -1,6 +1,6 @@
 # 0009: Email Hub: Gmail as the mailbox, mailbox-level access, separate senders
 
-Status: Proposed
+Status: Proposed. Decisions 1 and 6 amended by [ADR 0010](0010-email-hub-providers.md) (Hostinger mailboxes; campaigns from connected mailboxes, SES optional).
 Date: 2026-10-21
 
 ## Context
