@@ -94,8 +94,11 @@ export function indexEntry(m) {
 async function listFolder(env, account, folder, max) {
   const messages = []
   let total = 0
-  for (let page = 1; messages.length < max && page <= 3; page++) {
-    const perPage = Math.min(100, max - messages.length)
+  let reachedEnd = false
+  // One page size throughout: Hostinger pages by page number, so changing
+  // perPage between pages would skip or repeat messages.
+  const perPage = Math.min(100, max)
+  for (let page = 1; messages.length < max && page <= 5; page++) {
     const result = await hostinger(env, `${folderPath(account, folder)}/messages`, {
       query: new URLSearchParams({ page: String(page), perPage: String(perPage), sort: '-uid' }).toString(),
     })
@@ -103,14 +106,18 @@ async function listFolder(env, account, folder, max) {
     if (!data) throw new HostingerError(502, 'Hostinger returned an unexpected answer.')
     total = Number(result?.pagination?.total) || 0
     for (const m of data) {
+      if (messages.length >= max) break
       const entry = indexEntry(m)
       if (entry) messages.push(entry)
     }
-    if (data.length < perPage || page >= (Number(result?.pagination?.totalPages) || 1)) break
+    if (data.length < perPage || page >= (Number(result?.pagination?.totalPages) || 1)) {
+      reachedEnd = messages.length < max
+      break
+    }
   }
   // Everything listed: the whole folder is known, so anything else Dikho
   // holds for it is gone. Otherwise only the listed range is authoritative.
-  const complete = messages.length >= total
+  const complete = reachedEnd && (total === 0 || messages.length >= total)
   const minUid = messages.length ? (complete ? 1 : Math.min(...messages.map((m) => m.uid))) : (total === 0 ? null : undefined)
   return { messages, minUid }
 }

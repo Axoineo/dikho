@@ -576,3 +576,28 @@ test('routing: direct, none, mixed and a failed lookup are told apart, never gue
   d = await check(async () => { throw new TypeError('offline') })
   assert.equal(d.inbound, 'unknown')
 })
+
+test('sync: pages keep one page size, stop at the window, and only the listed range is authoritative', async () => {
+  rpc.em_claim_sync = async () => Response.json({ id: HOST_BOX, provider: 'hostinger', provider_account_id: 'MBX_contact_1' })
+  let synced
+  rpc.em_hostinger_sync = async (a) => { synced = a; return Response.json({ added: 0, threads: 0 }) }
+  rpc.em_finish_sync = async () => Response.json(null)
+  const asked = []
+  const inbox = Array.from({ length: 250 }, (_, i) => 250 - i) // uids 250..1, newest first
+  hostingerHandler = async (url) => {
+    if (url.includes('/folders?')) return Response.json({ data: [{ path: 'INBOX', name: 'INBOX', specialUse: null }], pagination: { total: 1, totalPages: 1 } })
+    const q = new URL(url).searchParams
+    const page = Number(q.get('page'))
+    const perPage = Number(q.get('perPage'))
+    asked.push([page, perPage])
+    const data = inbox.slice((page - 1) * perPage, page * perPage).map((uid) => ({ uid, date: '2026-10-21T09:00:00Z', flags: [], unseen: false, subject: 's', from: {}, to: [], cc: [], bcc: [], messageId: `<m${uid}@x>`, inReplyTo: null, attachments: [] }))
+    return Response.json({ data, pagination: { page, perPage, total: 250, totalPages: Math.ceil(250 / perPage) } })
+  }
+  await syncMailbox({ ...env, EMAIL_SYNC_MAX_THREADS: '150' }, HOST_BOX)
+  assert.deepEqual(asked, [[1, 100], [2, 100]], 'the same page size on every page')
+  const uids = synced.p_folders[0].messages.map((m) => m.uid)
+  assert.equal(uids.length, 150)
+  assert.equal(new Set(uids).size, 150, 'no message twice')
+  assert.deepEqual([uids[0], uids.at(-1)], [250, 101], 'the newest 150, in order')
+  assert.equal(synced.p_folders[0].min_uid, 101, 'older messages are left alone')
+})

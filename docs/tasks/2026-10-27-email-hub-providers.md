@@ -123,8 +123,8 @@ phase table and "Verification" below.
 
 | Check | Result | Evidence/notes |
 | --- | --- | --- |
-| `npm run check` | pass | lint 0 errors, 25 warnings (as before); 227/227 tests; build; secret scan |
-| New Node tests | pass | `tests/email-providers.test.js` (30), `tests/email-campaign-mailbox.test.js` (13), readiness test rewritten in `tests/email-delivery.test.js` |
+| `npm run check` | pass | lint 0 errors, 25 warnings (as before); 228/228 tests; build; secret scan |
+| New Node tests | pass | `tests/email-providers.test.js` (31), `tests/email-campaign-mailbox.test.js` (13), readiness test rewritten in `tests/email-delivery.test.js` |
 | `scripts/db/verify-local.sh` on PostgreSQL 17 | pass | all 27 migrations; `email_hub_mailboxes.sql`, `email_hub_campaigns.sql`, new `email_hub_providers.sql` |
 | Migration re-applied | pass | idempotent; no duplicate function overloads; no `em_*` grants to anon/authenticated/public; every security-definer `em_*` pins `search_path`; RLS on both new tables |
 | Build with `VITE_EMAIL_HUB=true` | pass | Email routes present; no Hostinger token name or API host in the browser bundle |
