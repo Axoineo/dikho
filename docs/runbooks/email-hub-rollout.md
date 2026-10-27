@@ -54,6 +54,65 @@ approval at the time.
 7. **First campaign.** Record consent for a small list, submit, approve by a
    second person, and watch it send within the daily limit.
 
+## Switch on from the command line
+
+For an operator or agent with a Cloudflare API token (template "Edit
+Cloudflare Workers") in `CLOUDFLARE_API_TOKEN` and network access to
+`api.cloudflare.com`, the backend's `workers.dev` address and the dashboard.
+Never print the token or any secret value; read secret names only.
+
+State on 2026-10-27: both Supabase migrations are applied in production; the
+API Worker `dikho-api` still runs code from before the Email Hub; the Pages
+build has no `VITE_EMAIL_HUB`; SES production access is pending, so
+`EMAIL_SES_SEND_ENABLED` stays unset.
+
+1. **Check out and check `main`.** A clean checkout of `origin/main`, then
+   `npm ci` and `npm run check`. Stop if anything fails.
+2. **Confirm access.** `npx wrangler whoami` shows the account that owns
+   `dikho-api`; `npx wrangler deployments list -c wrangler.api.jsonc` lists
+   its history.
+3. **Secrets (names only).** `npx wrangler secret list -c wrangler.api.jsonc`.
+   - `printf true | npx wrangler secret put EMAIL_HUB_ENABLED -c wrangler.api.jsonc`
+     (a secret, so no deploy can drop it).
+   - Only if `EMAIL_TOKEN_KEY` is not listed:
+     `openssl rand -base64 32 | tr -d '\n' | npx wrangler secret put EMAIL_TOKEN_KEY -c wrangler.api.jsonc`.
+     If it is listed, leave it: replacing it breaks connected mailboxes and
+     unsubscribe links already sent.
+4. **Deploy the API.** `WRANGLER_SEND_METRICS=false npx wrangler deploy -c
+   wrangler.api.jsonc --keep-vars`. `--keep-vars` keeps any variables set in
+   the dashboard that the configuration file does not list.
+5. **Verify the API** at `https://dikho-api.fineeurox.workers.dev`:
+   `/api/health` answers 200; `/api/email/status` without a session answers
+   401 (404 means the module is still off); `/api/email/unsubscribe` with no
+   parameters answers 400 with the "not valid" page.
+6. **Turn on the menu (Pages project `dikho`).** With the token as a bearer
+   header against `https://api.cloudflare.com/client/v4/accounts/<account>/pages/projects/dikho`:
+   - `GET` it and note the *names* under
+     `deployment_configs.production.env_vars`.
+   - `PATCH` it with
+     `{"deployment_configs":{"production":{"env_vars":{"VITE_EMAIL_HUB":{"type":"plain_text","value":"true"}}}}}`.
+   - `GET` again: every earlier name must still be there, plus
+     `VITE_EMAIL_HUB`. If a name is missing, stop and report it (secret
+     values cannot be read back to restore them).
+   - Start a production build: `POST .../projects/dikho/deployments` with the
+     form field `branch=main`, then poll the returned deployment until its
+     latest stage succeeds.
+   - If the token has no Pages permission (403), the owner adds
+     `VITE_EMAIL_HUB` = `true` under the project's Settings, Variables and
+     secrets (Production), then retries the latest production deployment.
+7. **Verify the dashboard.** The entry script that `https://manage.dikho.in`
+   loads (`<script type="module" src="/assets/index-….js">`) contains
+   `/email/inbox/:threadId`; Email routes are only built with the switch on.
+   Then the owner reloads the page: Email appears for anyone holding an email
+   permission. (A local build only matches production when `VITE_SUPABASE_URL`
+   and the other `VITE_` settings are set; without them the bundler drops the
+   app shell.)
+
+Undo: `npx wrangler secret delete EMAIL_HUB_ENABLED -c wrangler.api.jsonc`
+(module off; unsubscribe and SES events stay on), or `npx wrangler rollback`;
+on Pages, delete `VITE_EMAIL_HUB` (set it to `null` in the same `PATCH`) and
+rebuild. Afterwards the owner deletes the API token, or lets it expire.
+
 ## Pause
 
 | Need | Action | Effect |
