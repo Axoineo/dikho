@@ -145,6 +145,9 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
   const [accountId, setAccountId] = useState(initialAccount ?? writable[0]?.id ?? null)
   const account = writable.find((m) => m.id === accountId) ?? null
   const own = account?.email_address
+  // What the chosen mailbox's provider supports (older answers: Gmail, all).
+  const sendAsOk = account?.capabilities?.send_as !== false
+  const draftsOk = account?.capabilities?.drafts !== false
 
   // Only when the composer opens; later edits are the person's.
   const [initialRecipients] = useState(() => (source && (mode === 'reply' || mode === 'reply_all') ? replyRecipients(source, mode, own) : { to: [], cc: [] }))
@@ -194,7 +197,7 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
 
   // Addresses this mailbox may send as, with their signatures.
   useEffect(() => {
-    if (!accountId) return undefined
+    if (!accountId || !sendAsOk) return undefined
     let alive = true
     emailApi.sendAs(accountId).then((r) => {
       if (!alive) return
@@ -202,8 +205,10 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
       setFrom((r.identities.find((i) => i.is_default) ?? r.identities.find((i) => i.is_primary))?.email ?? '')
     }, () => { if (alive) setIdentities([]) })
     return () => { alive = false }
-  }, [accountId])
-  const identity = identities.find((i) => i.email === from)
+  }, [accountId, sendAsOk])
+  // A provider without send-as sends only as the mailbox itself.
+  const senderIdentities = sendAsOk ? identities : []
+  const identity = senderIdentities.find((i) => i.email === from)
 
   const totalBytes = files.reduce((n, f) => n + f.size, 0) + forwarded.reduce((n, a) => n + (a.size || 0), 0)
   const invalid = [...to, ...cc, ...bcc].filter((p) => !EMAIL.test(p.email))
@@ -216,7 +221,7 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
     form.append('mode', mode)
     if (thread?.id && mode !== 'new') form.append('thread_id', thread.id)
     if (source?.id && mode !== 'new') form.append('source_message_id', source.id)
-    if (from) form.append('from', from)
+    if (from && sendAsOk) form.append('from', from)
     form.append('to', join(to))
     form.append('cc', join(cc))
     form.append('bcc', join(bcc))
@@ -229,11 +234,11 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
       if (forwarded.length) form.append('forward_attachments', JSON.stringify(forwarded.map((a) => ({ id: a.id, filename: a.filename, mime_type: a.mime_type }))))
     }
     return form
-  }, [mode, thread, source, from, to, cc, bcc, subject, sendId, draftId, files, forwarded])
+  }, [mode, thread, source, from, sendAsOk, to, cc, bcc, subject, sendId, draftId, files, forwarded])
 
   // Autosave to Gmail drafts a moment after typing stops.
   const saveDraft = useCallback(async () => {
-    if (!accountId || sending || !hasContent()) return
+    if (!accountId || sending || !hasContent() || !draftsOk) return
     setSaving(true)
     try {
       const r = await emailApi.saveDraft(accountId, buildForm(false), draftId)
@@ -245,7 +250,7 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
     } finally {
       setSaving(false)
     }
-  }, [accountId, sending, buildForm, draftId, hasContent])
+  }, [accountId, sending, buildForm, draftId, hasContent, draftsOk])
 
   useEffect(() => {
     if (!dirty) return undefined
@@ -301,7 +306,10 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
   }
 
   function requestClose() {
-    if (dirty && hasContent()) { saveDraft(); onClose() } else onClose()
+    if (!dirty || !hasContent()) onClose()
+    else if (draftsOk) { saveDraft(); onClose() }
+    // Nowhere to keep it: ask before throwing the message away.
+    else setConfirmDiscard(true)
   }
 
   // ── Editor ─────────────────────────────────────────────────────────────────
@@ -364,13 +372,13 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
     >
       <div className="em-compose-head">
         <strong>{title}</strong>
-        <button type="button" className="em-icon-btn" onClick={requestClose} aria-label="Close and keep as draft" title="Close (kept as draft)">
+        <button type="button" className="em-icon-btn" onClick={requestClose} aria-label={draftsOk ? 'Close and keep as draft' : 'Close'} title={draftsOk ? 'Close (kept as draft)' : 'Close (this mailbox cannot keep drafts)'}>
           <Icon name="close" size={17} />
         </button>
       </div>
 
       <div className="em-compose-fields" onInput={touch}>
-        {(writable.length > 1 || identities.length > 1) && (
+        {(writable.length > 1 || senderIdentities.length > 1) && (
           <div className="em-field-row">
             <label htmlFor="em-from">From</label>
             {mode === 'new' && writable.length > 1 ? (
@@ -379,7 +387,7 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
               </select>
             ) : (
               <select id="em-from" value={from} onChange={(e) => { setFrom(e.target.value); touch() }}>
-                {(identities.length ? identities : [{ email: own }]).map((i) => <option key={i.email} value={i.email}>{i.display_name ? `${i.display_name} <${i.email}>` : i.email}</option>)}
+                {(senderIdentities.length ? senderIdentities : [{ email: own }]).map((i) => <option key={i.email} value={i.email}>{i.display_name ? `${i.display_name} <${i.email}>` : i.email}</option>)}
               </select>
             )}
           </div>
@@ -471,7 +479,7 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
           <Icon name="paperclip" size={17} />
         </button>
         <span className="em-status" aria-live="polite">
-          {saving ? 'Saving draft…' : savedAt ? `Draft saved ${savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
+          {!draftsOk ? 'Drafts are not saved for this mailbox' : saving ? 'Saving draft…' : savedAt ? `Draft saved ${savedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
           {(files.length > 0 || forwarded.length > 0) && draftId ? ' · attachments are added when you send' : ''}
           {totalBytes > 0 ? ` · ${formatSize(totalBytes)}` : ''}
         </span>

@@ -107,7 +107,7 @@ export default function EmailConsent() {
             <li><Icon name="check" size={15} /><span>Campaigns go only to addresses marked <strong>agreed</strong>, with how they agreed on record.</span></li>
             <li><Icon name="shield" size={15} /><span>It is checked when a campaign is submitted and again just before each email is sent.</span></li>
             <li><Icon name="close" size={15} /><span>Every campaign email has an unsubscribe link (and one-click unsubscribe in Gmail and Outlook). It takes effect immediately.</span></li>
-            <li><Icon name="alert" size={15} /><span>Spam complaints unsubscribe the address; permanent bounces suppress it. Both come from Amazon SES automatically.</span></li>
+            <li><Icon name="alert" size={15} /><span>Unsubscribe links work for every campaign. Bounces and spam complaints are recorded automatically only for mail sent through Amazon SES; Gmail and Hostinger do not report them to Dikho, so suppress an address here when a bounce arrives in the sending mailbox.</span></li>
             <li><Icon name="note" size={15} /><span>Every change is kept in the audit log with who made it.</span></li>
           </ul>
         </aside>

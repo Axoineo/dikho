@@ -35,6 +35,7 @@ const hostAccount = (over = {}) => ({
 let calls
 let rpc
 let hostingerHandler
+let dnsHandler
 let access
 let logs
 let pending
@@ -56,6 +57,7 @@ beforeEach((t) => {
   rpc = {}
   logs = []
   hostingerHandler = me([{ resourceId: 'MBX_contact_1', address: 'Contact@Example.invalid' }, { resourceId: 'MBX_sales_2', address: 'sales@example.invalid' }])
+  dnsHandler = async () => Response.json({ Status: 0, Answer: [{ type: 15, data: '1 smtp.google.com.' }] })
   access = { status: 'active', user_id: USER, email: 'sam@example.invalid', permissions: { 'email_inbox.view': 'all', 'email_mailboxes.manage': 'all' } }
   t.mock.method(console, 'log', (...a) => logs.push(a.join(' ')))
   t.mock.method(console, 'error', (...a) => logs.push(a.join(' ')))
@@ -70,6 +72,7 @@ beforeEach((t) => {
       return handler(JSON.parse(options.body))
     }
     if (url.startsWith('https://api.mail.hostinger.com/')) return hostingerHandler(url, options)
+    if (url.startsWith('https://cloudflare-dns.com/dns-query')) return dnsHandler(url, options)
     throw new Error(`unexpected request ${url}`)
   })
 })
@@ -537,4 +540,39 @@ test('sync: a token that no longer covers the mailbox asks for reconnection; a r
   assert.equal((await syncMailbox(env, HOST_BOX)).ok, false)
   assert.equal(marked, null)
   assert.match(finished.p_error, /HOSTINGER_MAIL_API_TOKEN/)
+})
+
+// ── Inbound routing (read-only DNS) ──────────────────────────────────────────
+test('routing: a Hostinger mailbox on a domain whose MX is Google is connected but does not receive directly', async () => {
+  rpc.em_access = async () => Response.json(hostAccount())
+  let asked
+  dnsHandler = async (url, options) => { asked = { url, accept: options.headers.Accept }; return Response.json({ Status: 0, Answer: [{ type: 15, data: '1 SMTP.GOOGLE.COM.' }] }) }
+  const res = await request(`/accounts/${HOST_BOX}/routing`, authed())
+  const body = (await res.json()).data
+  assert.equal(res.status, 200)
+  assert.equal(asked.url, 'https://cloudflare-dns.com/dns-query?name=example.invalid&type=MX')
+  assert.equal(asked.accept, 'application/dns-json')
+  assert.deepEqual(body.mx, [{ preference: 1, host: 'smtp.google.com' }])
+  assert.equal(body.routes_to, 'google')
+  assert.equal(body.inbound, 'elsewhere')
+  assert.match(body.note, /split delivery/)
+})
+
+test('routing: direct, none, mixed and a failed lookup are told apart, never guessed', async () => {
+  rpc.em_access = async () => Response.json(hostAccount())
+  const check = async (answer) => {
+    dnsHandler = answer
+    return (await (await request(`/accounts/${HOST_BOX}/routing`, authed())).json()).data
+  }
+  let d = await check(async () => Response.json({ Status: 0, Answer: [{ type: 15, data: '10 mx2.hostinger.com.' }, { type: 15, data: '5 mx1.hostinger.com.' }] }))
+  assert.equal(d.inbound, 'direct')
+  assert.deepEqual(d.mx.map((m) => m.host), ['mx1.hostinger.com', 'mx2.hostinger.com'])
+  d = await check(async () => Response.json({ Status: 0 }))
+  assert.equal(d.inbound, 'none')
+  d = await check(async () => Response.json({ Status: 0, Answer: [{ type: 15, data: '1 smtp.google.com.' }, { type: 15, data: '5 mx1.hostinger.com.' }] }))
+  assert.equal(d.routes_to, 'mixed')
+  d = await check(async () => Response.json({ Status: 2 }))
+  assert.equal(d.inbound, 'unknown')
+  d = await check(async () => { throw new TypeError('offline') })
+  assert.equal(d.inbound, 'unknown')
 })

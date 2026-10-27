@@ -92,8 +92,10 @@ export default function EmailInbox() {
     return () => clearInterval(timer)
   }, [load, reloadAccounts, list.gmail])
 
+  // Searching the provider itself (beyond what Dikho has synced) is Gmail only.
+  const providerSearch = Boolean(mailboxId) && mailbox?.capabilities?.search !== false
   async function searchGmail() {
-    if (!mailboxId || !search) return
+    if (!providerSearch || !search) return
     setList((l) => ({ ...l, loading: true, error: '' }))
     try {
       const r = await emailApi.search(mailboxId, search)
@@ -182,6 +184,7 @@ export default function EmailInbox() {
             onClick={() => setParam({ mailbox: m.id })} title={m.email_address}>
             <span className={`em-dot ${m.status === 'connected' ? (m.last_sync_error ? 'is-warn' : 'is-ok') : 'is-danger'}`} />
             <span className="em-rail-label">{m.display_name || m.email_address}</span>
+            {m.provider === 'hostinger' && <span className="em-rail-tag" title="Hostinger mailbox">H</span>}
             {m.unread_count > 0 && <span className="em-count">{m.unread_count}</span>}
           </button>
         ))}
@@ -269,10 +272,10 @@ export default function EmailInbox() {
               </button>
             </li>
           ))}
-          {(list.hasMore || (search && mailboxId && !list.gmail && !list.loading)) && (
+          {(list.hasMore || (search && providerSearch && !list.gmail && !list.loading)) && (
             <li className="em-more">
               {list.hasMore && <button type="button" className="em-btn" disabled={list.loading} onClick={() => load({ more: true })}>{list.loading ? 'Loading…' : 'Load more'}</button>}
-              {search && mailboxId && !list.gmail && !list.loading && (
+              {search && providerSearch && !list.gmail && !list.loading && (
                 <button type="button" className="em-btn" style={{ marginTop: 8 }} onClick={searchGmail}><Icon name="search" size={15} /> Search all of Gmail</button>
               )}
             </li>

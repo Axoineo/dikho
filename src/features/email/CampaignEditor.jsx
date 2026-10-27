@@ -8,7 +8,7 @@ import EmailFrame from './EmailFrame'
 import ContentEditor from './ContentEditor'
 import AudiencePicker from './AudiencePicker'
 import {
-  CAMPAIGN_EVENTS, CAMPAIGN_STATUS, EMPTY_AUDIENCE, campaignCounts, formatCount, fullTime, relativeTime, toLocalInput,
+  CAMPAIGN_EVENTS, CAMPAIGN_STATUS, EMPTY_AUDIENCE, PROVIDER_LABELS, campaignCounts, formatCount, fullTime, relativeTime, toLocalInput,
 } from './emailFormat'
 
 // One campaign from draft to sent. The steps are only a way to read it; the
@@ -29,10 +29,14 @@ const SAMPLE = { first_name: 'Asha', name: 'Asha Verma', company: 'Example Indus
 const sample = (text) => String(text ?? '').replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (whole, key) => SAMPLE[key] ?? whole)
 const WITHDRAWS = new Set(['pending_approval', 'approved', 'paused'])
 
-function formFrom(c, senders) {
+function formFrom(c, meta) {
+  // New campaigns start from the first mailbox this person may send from;
+  // the SES path is offered only while an administrator has it switched on.
+  const firstMailbox = meta?.sender_mailboxes?.[0] ?? null
   return {
     name: c?.name ?? '',
-    from_email: c?.from_email || senders?.[0] || '',
+    sender_account_id: c ? (c.sender_account_id ?? null) : firstMailbox?.id ?? null,
+    from_email: c?.from_email || firstMailbox?.email_address || meta?.senders?.[0] || '',
     from_name: c?.from_name ?? '',
     reply_to: c?.reply_to ?? '',
     send_at: toLocalInput(c?.send_at),
@@ -45,7 +49,9 @@ function formFrom(c, senders) {
 function fieldsFrom(form) {
   return {
     name: form.name.trim(),
-    from_email: form.from_email,
+    sender_account_id: form.sender_account_id,
+    // With a sender mailbox the server uses that mailbox's own address.
+    ...(form.sender_account_id ? {} : { from_email: form.from_email }),
     from_name: form.from_name.trim(),
     reply_to: form.reply_to.trim() || null,
     send_at: form.send_at ? new Date(form.send_at).toISOString() : null,
@@ -62,7 +68,7 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
   const { access, can } = useAccess()
   const isNew = id === 'new'
   const [campaign, setCampaign] = useState(null)
-  const [form, setForm] = useState(() => (isNew ? formFrom(null, meta?.senders) : null))
+  const [form, setForm] = useState(() => (isNew ? formFrom(null, meta) : null))
   const [dirty, setDirty] = useState(false)
   const [step, setStep] = useState('details')
   const [error, setError] = useState('')
@@ -73,6 +79,7 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
   const [audiencePreview, setAudiencePreview] = useState(null)
   const [templates, setTemplates] = useState(null)
   const senders = useMemo(() => meta?.senders ?? [], [meta])
+  const senderMailboxes = useMemo(() => meta?.sender_mailboxes ?? [], [meta])
 
   const load = useCallback(async () => {
     if (isNew) return
@@ -202,12 +209,16 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
     return <div className="em-page em-campaign"><div className="em-skeleton" style={{ height: 320 }} aria-hidden="true" /></div>
   }
 
-  const verifiedSender = senders.includes(form.from_email)
+  const senderMailbox = senderMailboxes.find((m) => m.id === form.sender_account_id) ?? null
+  const verifiedSender = form.sender_account_id ? Boolean(senderMailbox) : senders.includes(form.from_email)
+  const hostingerSender = (senderMailbox?.provider ?? campaign?.sender_provider) === 'hostinger' && Boolean(form.sender_account_id)
+  const fromShown = senderMailbox?.email_address ?? form.from_email
   const scheduleOk = !form.send_at || new Date(form.send_at).getTime() > Date.now()
   const eligible = status === 'draft' || status === 'rejected' ? audiencePreview?.eligible : campaign?.recipient_count
   const checks = [
     { ok: Boolean(form.name.trim()), label: 'Named', step: 'details' },
-    { ok: verifiedSender, label: verifiedSender ? `From ${form.from_email}` : 'Choose a verified sender', step: 'details' },
+    { ok: verifiedSender, label: verifiedSender ? `From ${fromShown}` : 'Choose a sending mailbox', step: 'details' },
+    ...(hostingerSender && form.reply_to.trim() ? [{ ok: false, label: 'Remove the reply-to address (Hostinger cannot set one)', step: 'details' }] : []),
     { ok: form.audience.sources.length > 0 && (eligible ?? 1) > 0, label: eligible != null ? `${formatCount(eligible)} recipient${eligible === 1 ? '' : 's'} with consent` : 'Choose an audience', step: 'audience' },
     { ok: Boolean(form.content.subject.trim() && form.content.html.trim()), label: 'Subject and message written', step: 'content' },
     { ok: scheduleOk, label: form.send_at ? (scheduleOk ? `Scheduled for ${fullTime(new Date(form.send_at).toISOString())}` : 'The scheduled time has passed') : 'Sends as soon as it is approved', step: 'details' },
@@ -276,16 +287,34 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
                 onChange={(e) => update({ name: e.target.value })} placeholder="October outdoor offer" />
             </div>
             <div className="em-field">
-              <label htmlFor="em-from">From address</label>
-              {senders.length ? (
-                <select id="em-from" className="em-select" value={form.from_email} disabled={!editable} onChange={(e) => update({ from_email: e.target.value })}>
-                  {!verifiedSender && <option value={form.from_email}>{form.from_email || 'Choose…'}</option>}
-                  {senders.map((s) => <option key={s} value={s}>{s}</option>)}
+              <label htmlFor="em-from">Send from</label>
+              {senderMailboxes.length || senders.length ? (
+                <select id="em-from" className="em-select" disabled={!editable}
+                  value={form.sender_account_id ? `mb:${form.sender_account_id}` : form.from_email ? `ses:${form.from_email}` : ''}
+                  onChange={(e) => {
+                    const [kind, value] = [e.target.value.slice(0, 3), e.target.value.slice(4)]
+                    const mb = senderMailboxes.find((m) => m.id === value)
+                    update(kind === 'mb:'
+                      ? { sender_account_id: value, from_email: mb?.email_address ?? '', ...(mb?.provider === 'hostinger' ? { reply_to: '' } : {}) }
+                      : { sender_account_id: null, from_email: value })
+                  }}>
+                  {!verifiedSender && <option value={form.sender_account_id ? `mb:${form.sender_account_id}` : `ses:${form.from_email}`}>{fromShown ? `${fromShown} (not available to you)` : 'Choose…'}</option>}
+                  {senderMailboxes.map((m) => (
+                    <option key={m.id} value={`mb:${m.id}`}>
+                      {m.email_address} · {PROVIDER_LABELS[m.provider] ?? m.provider} · {formatCount(m.sent_today)} of {formatCount(m.daily_cap)} today
+                    </option>
+                  ))}
+                  {senders.map((a) => <option key={a} value={`ses:${a}`}>{a} · Amazon SES</option>)}
                 </select>
               ) : (
-                <input id="em-from" className="em-input" value={form.from_email} disabled placeholder="No verified sender is set up" />
+                <input id="em-from" className="em-input" value={fromShown} disabled placeholder="No mailbox is allowed to send campaigns yet" />
               )}
-              <p className="em-help">Only addresses verified in Amazon SES and allowed by an administrator.</p>
+              <p className="em-help">
+                {senderMailboxes.length || senders.length
+                  ? 'Only connected mailboxes you can send from, that an administrator has allowed for campaigns. Each has its own daily limit.'
+                  : 'Ask a mailbox\'s administrator to allow it for campaigns in Email settings, with a daily limit.'}
+                {senderMailbox?.cooldown_until ? ` The provider limited this mailbox recently; it rests until ${fullTime(senderMailbox.cooldown_until)}.` : ''}
+              </p>
             </div>
             <div className="em-field">
               <label htmlFor="em-from-name">Sender name</label>
@@ -294,14 +323,18 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
             </div>
             <div className="em-field">
               <label htmlFor="em-reply">Replies go to <span className="em-optional">optional</span></label>
-              <input id="em-reply" type="email" className="em-input" value={form.reply_to} maxLength={254} disabled={!editable}
-                onChange={(e) => update({ reply_to: e.target.value })} placeholder="sales@yourcompany.com" />
+              <input id="em-reply" type="email" className="em-input" value={form.reply_to} maxLength={254} disabled={!editable || (hostingerSender && !form.reply_to)}
+                onChange={(e) => update({ reply_to: e.target.value })} placeholder={hostingerSender ? 'Replies go to the sending mailbox' : 'sales@yourcompany.com'} />
+              {hostingerSender && <p className="em-help">Hostinger cannot set a separate reply-to address: replies go to the sending mailbox.</p>}
             </div>
             <div className="em-field">
               <label htmlFor="em-send-at">Send time <span className="em-optional">optional</span></label>
               <input id="em-send-at" type="datetime-local" className="em-input" value={form.send_at} disabled={!editable}
                 onChange={(e) => update({ send_at: e.target.value })} />
-              <p className="em-help">{form.send_at ? 'Sending starts at this time, once approved.' : 'Empty: sending starts soon after approval.'} It goes out in batches within the daily limit.</p>
+              <p className="em-help">
+                {form.send_at ? 'Sending starts at or after this time, once approved.' : 'Empty: sending starts after approval.'} It goes out in batches within the daily limits.
+                {meta?.readiness && !meta.readiness.scheduler && ' No unattended scheduler is set up, so batches go out while someone is using Dikho, or when someone presses Send next batch.'}
+              </p>
             </div>
           </div>
         </section>
@@ -334,7 +367,7 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
               {campaign?.preview_path && !dirty && <button type="button" className="em-btn" onClick={load}><Icon name="sync" size={15} /> Refresh</button>}
             </div>
             <div className="em-inbox-mock">
-              <div><span>From</span>{form.from_name || 'Dikho'} &lt;{form.from_email || 'not chosen'}&gt;</div>
+              <div><span>From</span>{form.from_name || 'Dikho'} &lt;{fromShown || 'not chosen'}&gt;</div>
               <div><span>Subject</span><strong>{sample(form.content.subject) || '(no subject)'}</strong></div>
               {form.content.preheader && <div><span>Preview</span>{sample(form.content.preheader)}</div>}
             </div>
@@ -393,6 +426,28 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
       )}
       {dialog?.kind === 'reject' && <RejectDialog onClose={() => setDialog(null)} onReject={dialog.run} />}
     </div>
+  )
+}
+
+// Runs one bounded batch now, for when no unattended scheduler is set up.
+// The server re-checks approval, consent and every daily limit as usual.
+function SendNextBatch({ act }) {
+  const [busy, setBusy] = useState(false)
+  async function run() {
+    setBusy(true)
+    try {
+      await act(async () => {
+        const r = await emailApi.dispatchCampaigns()
+        return r
+      }, 'Batch processed. The counts update in a moment.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button type="button" className="em-btn" onClick={run} disabled={busy}>
+      <Icon name="send" size={15} /> {busy ? 'Sending…' : 'Send next batch now'}
+    </button>
   )
 }
 
@@ -491,12 +546,14 @@ function ActionsCard({ campaign, status, editable, canCreate, ready, dirty, wrot
         <div className="em-stack">
           <p className="em-help" style={{ margin: 0 }}>
             Approved by {campaign.approved_by_name ?? 'an approver'} {relativeTime(campaign.approved_at)}.{' '}
-            {campaign.send_at && new Date(campaign.send_at) > new Date() ? `Sending starts ${fullTime(campaign.send_at)}.` : 'Sending starts within a few minutes, in batches within the daily limit.'}
+            {campaign.send_at && new Date(campaign.send_at) > new Date() ? `Sending starts at or after ${fullTime(campaign.send_at)}.` : 'Sending has been released, in batches within the daily limits.'}
+            {meta?.readiness && !meta.readiness.scheduler && ' Batches go out while someone is using Dikho, or with Send next batch.'}
           </p>
-          {!meta?.readiness?.ready && <Banner tone="warn" title="Sending is not switched on">It waits until an administrator finishes the Amazon SES setup.</Banner>}
+          {!meta?.readiness?.ready && <Banner tone="warn" title="Sending is not switched on">It waits until an administrator sets {meta?.readiness?.missing?.join(', ') || 'the sending settings'} on the server.</Banner>}
         </div>
       )}
       {status === 'sending' && <p className="em-help" style={{ margin: 0 }}>Sending in batches. {formatCount(counts.queued)} still to go.</p>}
+      {['approved', 'sending'].includes(status) && (canCreate || campaign.can_approve) && meta?.readiness?.ready && <SendNextBatch act={act} />}
       {status === 'paused' && <p className="em-help" style={{ margin: 0 }}>Paused. Nothing more is sent until it is resumed.</p>}
       {status === 'sent' && <p className="em-help" style={{ margin: 0 }}>Finished {relativeTime(campaign.finished_at)}.</p>}
       {status === 'cancelled' && <p className="em-help" style={{ margin: 0 }}>Cancelled {relativeTime(campaign.finished_at)}. Anything already sent stays recorded.</p>}
@@ -531,7 +588,7 @@ function ProgressCard({ campaign, counts }) {
   ].filter(([, n], i) => i < 2 || n > 0)
   return (
     <section className="em-card" aria-labelledby="em-progress-title">
-      <div className="em-card-head"><div><h2 id="em-progress-title">Delivery</h2><p>From Amazon SES. Opens and clicks are not tracked.</p></div></div>
+      <div className="em-card-head"><div><h2 id="em-progress-title">Delivery</h2><p>Sent means the mail provider accepted the message, which is not proof it arrived. Opens and clicks are not tracked.</p></div></div>
       <div className="em-meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Share sent">
         <span style={{ width: `${pct}%` }} />
       </div>
@@ -539,7 +596,7 @@ function ProgressCard({ campaign, counts }) {
       <dl className="em-breakdown">
         {rows.map(([label, n]) => <div key={label}><dt>{label}</dt><dd>{formatCount(n)}</dd></div>)}
       </dl>
-      {counts.uncertain > 0 && <p className="em-help">Unconfirmed: SES did not answer in time. They are not sent again, to avoid duplicates.</p>}
+      {counts.uncertain > 0 && <p className="em-help">Unconfirmed: the mail provider did not answer in time, so these may or may not have gone out. They are not sent again, to avoid duplicates.</p>}
     </section>
   )
 }

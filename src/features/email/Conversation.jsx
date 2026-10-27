@@ -3,7 +3,7 @@ import { Icon } from '../../components/Icon'
 import { emailApi } from './emailApi'
 import EmailFrame from './EmailFrame'
 import { Banner, EmptyState } from './emailUi'
-import { WORKFLOW, addressList, atLeast, formatSize, fullTime, initials, listTime, personName } from './emailFormat'
+import { PROVIDER_LABELS, WORKFLOW, addressList, atLeast, formatSize, fullTime, initials, listTime, personName } from './emailFormat'
 
 // One conversation. Message content is fetched live from Gmail each time it
 // is opened (the API stores none of it) and shown through EmailFrame.
@@ -53,7 +53,7 @@ export default function Conversation({
         return new Set(d.messages.filter((m) => m.unread || m.draft || m === last).map((m) => m.id))
       })
       // Opening marks it read, as Gmail does, for people who may change it.
-      if (d.thread.unread && atLeast(d.account.role, 'responder')) {
+      if (d.thread.unread && atLeast(d.account.role, 'responder') && d.account.capabilities?.mark_read !== false) {
         emailApi.labelThread(threadId, [], ['UNREAD']).then((r) => onPatch(threadId, { unread: r.unread, label_ids: r.label_ids }), () => {})
       }
     } catch (err) {
@@ -62,9 +62,10 @@ export default function Conversation({
   }, [threadId, onPatch])
 
   useEffect(() => { load() }, [load])
+  const labelsOk = data?.account?.capabilities?.labels !== false
   useEffect(() => {
-    if (data?.account?.id) mailboxLabels(data.account.id).then(setLabels)
-  }, [data?.account?.id])
+    if (data?.account?.id && labelsOk) mailboxLabels(data.account.id).then(setLabels)
+  }, [data?.account?.id, labelsOk])
   useEffect(() => {
     if (inlineComposer) composerAnchor.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [inlineComposer])
@@ -74,6 +75,9 @@ export default function Conversation({
   const canAct = atLeast(role, 'responder')
   const canAssign = atLeast(role, 'manager')
   const labelIds = useMemo(() => new Set(thread?.label_ids ?? []), [thread])
+  // What this mailbox's provider supports. Older API answers carry no
+  // capabilities and are Gmail, which supports everything shown here.
+  const can = (feature) => data?.account?.capabilities?.[feature] !== false
   const lastMessage = data?.messages?.filter((m) => !m.draft).at(-1)
 
   async function changeLabels(add, remove, patchList) {
@@ -102,14 +106,14 @@ export default function Conversation({
   }
 
   const archive = async () => {
-    if (!labelIds.has('INBOX')) return
+    if (!labelIds.has('INBOX') || !can('archive')) return
     if (await changeLabels([], ['INBOX'])) { toast('Archived.'); onRemoveFromList(threadId) }
   }
-  const toggleStar = () => changeLabels(thread.starred ? [] : ['STARRED'], thread.starred ? ['STARRED'] : [])
+  const toggleStar = () => (can('star') ? changeLabels(thread.starred ? [] : ['STARRED'], thread.starred ? ['STARRED'] : []) : null)
   const markUnread = async () => { if (await changeLabels(['UNREAD'], [])) onBack() }
 
   const reply = (mode, source = lastMessage) => {
-    if (!source || !canAct) return
+    if (!source || !canAct || !can(mode === 'forward' ? 'forward' : 'reply')) return
     onCompose({ mode, thread, source, accountId: data.account.id })
   }
 
@@ -164,12 +168,16 @@ export default function Conversation({
             <button type="button" className="em-icon-btn em-back" onClick={onBack} aria-label="Back to list"><Icon name="back" size={18} /></button>
             {canAct && (
               <>
-                {labelIds.has('INBOX')
+                {can('archive') && (labelIds.has('INBOX')
                   ? <button type="button" className="em-icon-btn" onClick={archive} disabled={busy} aria-label="Archive" title="Archive (e)"><Icon name="archive" size={18} /></button>
-                  : <button type="button" className="em-icon-btn" onClick={() => changeLabels(['INBOX'], [])} disabled={busy} aria-label="Move to inbox" title="Move to inbox"><Icon name="inbox" size={18} /></button>}
-                <button type="button" className="em-icon-btn" onClick={markUnread} disabled={busy} aria-label="Mark as unread" title="Mark as unread"><Icon name="unread" size={18} /></button>
-                <button type="button" className={`em-icon-btn${thread.starred ? ' is-star' : ''}`} onClick={toggleStar} disabled={busy}
-                  aria-pressed={thread.starred} aria-label={thread.starred ? 'Unstar' : 'Star'} title="Star (s)"><Icon name="star" size={18} /></button>
+                  : <button type="button" className="em-icon-btn" onClick={() => changeLabels(['INBOX'], [])} disabled={busy} aria-label="Move to inbox" title="Move to inbox"><Icon name="inbox" size={18} /></button>)}
+                {can('mark_read') && (
+                  <button type="button" className="em-icon-btn" onClick={markUnread} disabled={busy} aria-label="Mark as unread" title="Mark as unread"><Icon name="unread" size={18} /></button>
+                )}
+                {can('star') && (
+                  <button type="button" className={`em-icon-btn${thread.starred ? ' is-star' : ''}`} onClick={toggleStar} disabled={busy}
+                    aria-pressed={thread.starred} aria-label={thread.starred ? 'Unstar' : 'Star'} title="Star (s)"><Icon name="star" size={18} /></button>
+                )}
                 {labels.length > 0 && (
                   <span style={{ position: 'relative' }}>
                     <button type="button" className="em-icon-btn" onClick={() => setLabelMenu((v) => !v)} aria-expanded={labelMenu} aria-label="Labels" title="Labels"><Icon name="filter" size={18} /></button>
@@ -198,6 +206,7 @@ export default function Conversation({
           <h2 className="em-subject">{thread.subject || '(no subject)'}</h2>
           <div className="em-convo-meta">
             <span className="em-pill">{data.account.display_name || data.account.email_address}</span>
+            {data.account.provider && <span className="em-pill is-brand">{PROVIDER_LABELS[data.account.provider] ?? data.account.provider}</span>}
             {userLabels.map((l) => <span key={l.id} className="em-pill is-brand">{l.name}</span>)}
             <label className="em-visually-hidden" htmlFor="em-status">Status</label>
             <select id="em-status" value={thread.workflow_status} disabled={!canAct} onChange={(e) => updateWorkflow({ workflow_status: e.target.value })}>
@@ -215,18 +224,21 @@ export default function Conversation({
 
         <div className="em-convo-body">
           {!canAct && <Banner tone="">You can read this mailbox. Replying and filing need responder access.</Banner>}
-          {data.messages.length === 0 && <EmptyState icon="mail" title="This conversation is empty in Gmail" />}
+          {data.messages.length === 0 && <EmptyState icon="mail" title={`This conversation is empty in ${PROVIDER_LABELS[data.account.provider] ?? 'Gmail'}`} />}
+          {data.omitted > 0 && (
+            <Banner tone="">{data.omitted} earlier message{data.omitted === 1 ? ' is' : 's are'} not shown here. Open the mailbox in Hostinger Webmail for the full history.</Banner>
+          )}
           {data.messages.map((m) => (
-            <Message key={m.id} m={m} threadId={threadId} open={expanded.has(m.id)} canAct={canAct}
+            <Message key={m.id} m={m} threadId={threadId} open={expanded.has(m.id)} canAct={canAct && can('reply')}
               onToggle={() => setExpanded((s) => { const n = new Set(s); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return n })}
               onReply={(mode) => reply(mode, m)} onContinueDraft={() => continueDraft(m)} toast={toast} />
           ))}
           <div ref={composerAnchor}>{inlineComposer}</div>
           {!inlineComposer && canAct && lastMessage && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" className="em-btn" onClick={() => reply('reply')}><Icon name="reply" size={15} /> Reply</button>
-              <button type="button" className="em-btn" onClick={() => reply('reply_all')}><Icon name="replyAll" size={15} /> Reply all</button>
-              <button type="button" className="em-btn" onClick={() => reply('forward')}><Icon name="forward" size={15} /> Forward</button>
+              {can('reply') && <button type="button" className="em-btn" onClick={() => reply('reply')}><Icon name="reply" size={15} /> Reply</button>}
+              {can('reply') && <button type="button" className="em-btn" onClick={() => reply('reply_all')}><Icon name="replyAll" size={15} /> Reply all</button>}
+              {can('forward') && <button type="button" className="em-btn" onClick={() => reply('forward')}><Icon name="forward" size={15} /> Forward</button>}
             </div>
           )}
           <Notes threadId={threadId} notes={data.notes} canAdd={canAct}

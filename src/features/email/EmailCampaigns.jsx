@@ -37,7 +37,7 @@ export default function EmailCampaigns() {
   }, [])
   useEffect(() => { reload() }, [reload])
 
-  const meta = useMemo(() => (data ? { readiness: data.readiness, senders: data.senders, variables: data.variables, max: data.max_recipients } : null), [data])
+  const meta = useMemo(() => (data ? { readiness: data.readiness, senders: data.senders, sender_mailboxes: data.sender_mailboxes ?? [], variables: data.variables, max: data.max_recipients } : null), [data])
   const campaigns = useMemo(() => data?.campaigns ?? [], [data])
   const awaiting = campaigns.filter((c) => c.status === 'pending_approval').length
   const shown = useMemo(() => {
@@ -95,7 +95,7 @@ export default function EmailCampaigns() {
           {shown.length === 0 ? (
             <EmptyState icon="send" title={campaigns.length ? 'Nothing here' : 'No campaigns yet'}
               action={!campaigns.length && canCreate ? <button type="button" className="em-btn em-btn-primary" onClick={() => navigate('/email/campaigns/new')}>Write the first one</button> : null}>
-              {campaigns.length ? 'No campaign matches this filter.' : 'A campaign is written, checked against consent, approved by someone else, then sent through Amazon SES.'}
+              {campaigns.length ? 'No campaign matches this filter.' : 'A campaign is written, checked against consent, approved by someone else, then sent from a connected mailbox within its daily limit.'}
             </EmptyState>
           ) : (
             <ul className="em-camp-list">

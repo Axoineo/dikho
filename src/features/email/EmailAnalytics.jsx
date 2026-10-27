@@ -61,7 +61,7 @@ export default function EmailAnalytics() {
         <div>
           <span className="page-kicker">EMAIL</span>
           <h1>Email analytics</h1>
-          <p>Delivery and consent, from Amazon SES and Dikho's own records.</p>
+          <p>Sending and consent from Dikho's own records. Delivery events exist only for mail sent through Amazon SES.</p>
         </div>
         <div className="em-chips" role="tablist" aria-label="Period">
           {PERIODS.map((d) => (
@@ -120,9 +120,9 @@ export default function EmailAnalytics() {
           </div>
 
           <section className="em-card" aria-labelledby="em-ses-title">
-            <div className="em-card-head"><div><h2 id="em-ses-title">All email through Amazon SES</h2><p>Campaigns, tests and system email (such as staff welcome messages).</p></div></div>
+            <div className="em-card-head"><div><h2 id="em-ses-title">Email through Amazon SES (optional)</h2><p>Delivery, bounce and complaint events for mail sent through SES. Gmail and Hostinger mailboxes report only whether they accepted a message.</p></div></div>
             {Object.keys(events).length === 0 ? (
-              <p className="em-help">No delivery events received in this period. They arrive once SES event publishing to Dikho is set up.</p>
+              <p className="em-help">No delivery events in this period. They exist only for mail sent through Amazon SES, which is optional and currently not used for campaigns.</p>
             ) : (
               <table className="em-table">
                 <thead><tr><th scope="col">Event</th><th scope="col" className="em-num">Count</th><th scope="col" className="em-num">Share of accepted</th></tr></thead>

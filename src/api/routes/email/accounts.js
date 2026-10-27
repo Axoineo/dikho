@@ -13,6 +13,7 @@ import { logError, logEvent } from '../../utils/logger.js'
 import { callUserRpc } from '../../services/userAdmin.js'
 import { hostingerConfigured, listManagedMailboxes, mailboxQuota } from '../../services/email/hostinger.js'
 import { requireCapability, requireProvider } from '../../services/email/providers.js'
+import { mailRouting, inboundStatus } from '../../services/email/routing.js'
 import { actor, rpc, uuidParam, requestContext, withGmail, withHostinger, publicAccount, noStore } from './shared.js'
 
 // Mailboxes, their members, and connecting them to Google or Hostinger.
@@ -121,6 +122,15 @@ accounts.put('/accounts/:id/campaign-sender', async (c) => {
   return ok(c, publicAccount(await rpc(c, 'em_set_campaign_sender', {
     p_actor: actor(c), p_account: uuidParam(c), p_enabled: body.enabled, p_daily_cap: cap, p_ctx: requestContext(c),
   }, { action: 'email.campaign_sender' })))
+})
+
+// Whether outside mail reaches this mailbox's provider directly, from the
+// domain's public MX records. Separate from "connected": a connected mailbox
+// can send and read while its domain routes incoming mail elsewhere.
+accounts.get('/accounts/:id/routing', async (c) => {
+  const account = await rpc(c, 'em_access', { p_actor: actor(c), p_account: uuidParam(c), p_min_role: 'viewer' })
+  const routing = await mailRouting(account.email_address)
+  return ok(c, { ...routing, provider: account.provider ?? 'google', ...inboundStatus(account.provider ?? 'google', routing) })
 })
 
 // Storage use, where the provider reports it.
