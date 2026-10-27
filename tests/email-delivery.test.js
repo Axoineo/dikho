@@ -311,13 +311,25 @@ test('dispatch: one batch, results recorded as sent, retry, uncertain or failed'
   assert.equal(calls.filter((c) => c.url.includes('amazonaws')).length, 0)
 })
 
-test('dispatch does nothing until SES, a sender, a cap and the unsubscribe address are all set', async () => {
-  for (const missing of ['EMAIL_SES_SEND_ENABLED', 'EMAIL_DAILY_CAP', 'API_PUBLIC_URL', 'EMAIL_CAMPAIGN_SENDERS']) {
-    const partial = { ...env, [missing]: '', ...(missing === 'EMAIL_CAMPAIGN_SENDERS' ? { EMAIL_FROM_ADDRESS: '' } : {}) }
+test('dispatch does nothing until a daily cap, the unsubscribe address and the key are set', async () => {
+  for (const missing of ['EMAIL_DAILY_CAP', 'API_PUBLIC_URL', 'EMAIL_TOKEN_KEY']) {
+    const partial = { ...env, [missing]: '' }
     assert.equal(campaignReadiness(partial).ready, false, missing)
     assert.deepEqual(await dispatchCampaignBatch(partial), { skipped: 'not_ready' })
   }
   assert.equal(calls.length, 0)
+})
+
+test('without SES, dispatch claims only campaigns that have a sender mailbox', async () => {
+  const claims = []
+  handlers.rpc.em_claim_campaign_batch = async (args) => { claims.push(args); return Response.json(null) }
+  const noSes = { ...env, EMAIL_SES_SEND_ENABLED: '' }
+  assert.equal(campaignReadiness(noSes).ready, true)
+  assert.equal(campaignReadiness(noSes).ses, false)
+  assert.deepEqual(await dispatchCampaignBatch(noSes), { idle: true })
+  assert.deepEqual(await dispatchCampaignBatch(env), { idle: true })
+  assert.deepEqual(claims.map((a) => a.p_allow_ses), [false, true])
+  assert.equal(calls.filter((c) => c.url.includes('amazonaws')).length, 0)
 })
 
 test('jobs endpoint exists only with a strong secret, and needs it', async () => {

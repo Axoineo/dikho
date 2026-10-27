@@ -8,13 +8,17 @@ import { sanitizeHtml, htmlToText } from '../../services/email/sanitizeHtml.js'
 import { fromBase64url } from '../../services/email/crypto.js'
 import { inBackground, syncMailbox } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
-import { requireCapability } from '../../services/email/providers.js'
+import { requireCapability, providerOf } from '../../services/email/providers.js'
+import { sendRequest, sendMessage, downloadAttachment } from '../../services/email/hostingerMail.js'
+import { HostingerUncertainError } from '../../services/email/hostinger.js'
 import {
-  actor, rpc, uuidParam, patternParam, withGmail, noStore, UUID, GMAIL_ID, ATTACHMENT_ID, DRAFT_ID,
+  actor, rpc, uuidParam, patternParam, withGmail, withHostinger, noStore, UUID, GMAIL_ID, ATTACHMENT_ID, DRAFT_ID,
+  PROVIDER_ATTACHMENT_ID,
 } from './shared.js'
 
 // Writing mail from a connected mailbox: send (new, reply, reply all,
-// forward) and Gmail drafts. Mounted behind requireAuth; responders and above.
+// forward) through Gmail or Hostinger, and Gmail drafts. Mounted behind
+// requireAuth; responders and above.
 //
 // A send is attempted once. The browser makes one id per message (send_id);
 // em_begin_send records it before Gmail is called, so a double click or a
@@ -62,7 +66,7 @@ async function readDraft(c, { requireRecipient }) {
   const threadId = field(form, 'thread_id')
   if (threadId && !UUID.test(threadId)) throw new HTTPException(400, { message: 'Invalid conversation id' })
   const sourceMessage = field(form, 'source_message_id')
-  if (sourceMessage && !GMAIL_ID.test(sourceMessage)) throw new HTTPException(400, { message: 'Invalid message id' })
+  if (sourceMessage && !GMAIL_ID.test(sourceMessage) && !UUID.test(sourceMessage)) throw new HTTPException(400, { message: 'Invalid message id' })
   if (mode !== 'new' && (!threadId || !sourceMessage)) throw new HTTPException(400, { message: 'Replies and forwards need the original message.' })
 
   const fromAddress = (field(form, 'from') ?? '').trim().toLowerCase() || null
@@ -73,7 +77,7 @@ async function readDraft(c, { requireRecipient }) {
   if (forwardRaw) {
     try { forwardParts = JSON.parse(forwardRaw) } catch { forwardParts = null }
     if (!Array.isArray(forwardParts) || forwardParts.length > MAX_FILES
-        || !forwardParts.every((p) => ATTACHMENT_ID.test(p?.id ?? '') && typeof p?.filename === 'string')) {
+        || !forwardParts.every((p) => (ATTACHMENT_ID.test(p?.id ?? '') || PROVIDER_ATTACHMENT_ID.test(p?.id ?? '')) && typeof p?.filename === 'string')) {
       throw new HTTPException(400, { message: 'Invalid forwarded attachments' })
     }
   }
@@ -102,6 +106,9 @@ async function prepare(c, account, draft) {
   let inReplyTo = null
   let references = null
 
+  if ((draft.sourceMessage && !GMAIL_ID.test(draft.sourceMessage)) || draft.forwardParts.some((p) => !ATTACHMENT_ID.test(p.id))) {
+    throw new HTTPException(400, { message: 'Invalid message id' })
+  }
   if (draft.threadId) {
     const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: draft.threadId, p_min_role: 'responder' })
     if (meta.thread.account_id !== account.id) throw new HTTPException(400, { message: 'That conversation belongs to another mailbox.' })
@@ -147,6 +154,54 @@ async function prepare(c, account, draft) {
   return { raw, gmailThreadId }
 }
 
+// Everything Hostinger needs before the send: the original message (by its
+// index id, within this conversation) and any forwarded attachments.
+// Hostinger adds In-Reply-To and References from the original itself.
+async function prepareHostinger(c, account, draft) {
+  let source = null
+  if (draft.threadId) {
+    const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: draft.threadId, p_min_role: 'responder' })
+    if (meta.thread.account_id !== account.id) throw new HTTPException(400, { message: 'That conversation belongs to another mailbox.' })
+    source = (meta.provider_messages ?? []).find((r) => r.id === String(draft.sourceMessage).toLowerCase()) ?? null
+    if (!source) throw new HTTPException(400, { message: 'That message is not part of this conversation.' })
+  }
+  const attachments = [...draft.attachments]
+  for (const part of draft.forwardParts) {
+    const attachment = source?.attachments?.find((a) => a.id === part.id)
+    if (!attachment) throw new HTTPException(400, { message: 'Invalid forwarded attachments' })
+    const bytes = await downloadAttachment(c.env, account, source, attachment)
+    if (!bytes) throw new HTTPException(413, { message: 'Attachments add up to more than 15 MB.' })
+    attachments.push({ filename: cleanFilename(part.filename), mimeType: attachment.content_type, bytes })
+  }
+  return sendRequest(account, draft, { source, attachments })
+}
+
+async function sendThroughHostinger(c, account, draft, finish) {
+  let body
+  try {
+    body = await withHostinger(c, () => prepareHostinger(c, account, draft))
+  } catch (err) {
+    await finish('failed', { error: 'could not prepare the message' })
+    throw err
+  }
+  try {
+    await withHostinger(c, () => sendMessage(c.env, account, body))
+  } catch (err) {
+    if (err instanceof HostingerUncertainError) {
+      await finish('uncertain', { error: err.message })
+      logEvent('email.send.uncertain', { provider: 'hostinger', status: err.status })
+      throw new HTTPException(502, { message: 'Hostinger did not confirm whether the message was sent. Check the Sent folder before sending it again.' })
+    }
+    await finish('failed', { error: err?.message ?? 'send refused' })
+    throw err
+  }
+  // Hostinger answers 204 with no message id; the Sent copy arrives with the next sync.
+  await finish('sent', {})
+  logEvent('email.send.sent', { provider: 'hostinger', mode: draft.mode, recipients: draft.to.length + draft.cc.length + draft.bcc.length, attachments: draft.attachments.length + draft.forwardParts.length })
+  inBackground(c, syncMailbox(c.env, account.id))
+  return ok(c, { status: 'sent', message_id: null, gmail_thread_id: null })
+}
+
 compose.post('/accounts/:id/send', async (c) => {
   const id = uuidParam(c)
   const draft = await readDraft(c, { requireRecipient: true })
@@ -166,11 +221,18 @@ compose.post('/accounts/:id/send', async (c) => {
     p_thread_id: extra.threadId ?? null, p_error: extra.error ?? null,
   }).catch((err) => logError('email.send.record_failed', err))
 
-  let prepared
   try {
     requireCapability(account, feature)
     if (draft.forwardParts.length) requireCapability(account, 'attachments')
     if (draft.fromAddress && draft.fromAddress !== account.email_address) requireCapability(account, 'send_as')
+  } catch (err) {
+    await finish('failed', { error: 'not supported by this mailbox' })
+    throw err
+  }
+  if (providerOf(account) === 'hostinger') return sendThroughHostinger(c, account, draft, finish)
+
+  let prepared
+  try {
     prepared = await withGmail(c, account, () => prepare(c, account, draft))
   } catch (err) {
     await finish('failed', { error: 'could not prepare the message' })

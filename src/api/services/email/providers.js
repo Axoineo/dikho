@@ -39,19 +39,12 @@ const UNSUPPORTED = {
     quota: 'Gmail does not report mailbox storage through its API.',
   },
   hostinger: {
-    read: NOT_YET,
-    search: NOT_YET,
-    send: NOT_YET,
-    reply: NOT_YET,
-    forward: NOT_YET,
+    search: 'Search covers the conversations Dikho has synced. Searching older Hostinger mail is not available yet.',
     drafts: 'Hostinger\'s Mail API cannot save drafts. Write the message and send it, or use Hostinger Webmail for drafts.',
     labels: 'Hostinger mailboxes have folders, not labels.',
-    star: NOT_YET,
-    mark_read: NOT_YET,
     archive: NOT_YET,
-    attachments: NOT_YET,
     send_as: 'Hostinger sends only as the mailbox address itself.',
-    push: NOT_YET,
+    push: 'New Hostinger mail appears when the Email Hub syncs (on use, or with "Sync now").',
   },
 }
 

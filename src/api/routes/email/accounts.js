@@ -66,6 +66,7 @@ accounts.post('/accounts/shared', requirePermission('email_mailboxes.manage'), a
     p_actor: actor(c), p_account: created.id, p_mailboxes: mailboxes, p_display_name: null, p_ctx: requestContext(c),
   }, { action: 'email.mailbox_connect' })
   logEvent('email.hostinger.connected', { kind: 'shared' })
+  inBackground(c, syncMailbox(c.env, connected.id))
   return ok(c, publicAccount(connected), 201)
 })
 
@@ -104,7 +105,22 @@ accounts.post('/accounts/hostinger/connect', async (c) => {
     p_display_name: null, p_ctx: requestContext(c),
   }, { action: 'email.mailbox_connect' })
   logEvent('email.hostinger.connected', { kind: account?.kind })
+  if (account?.id) inBackground(c, syncMailbox(c.env, account.id))
   return ok(c, publicAccount(account))
+})
+
+// Allow or stop a mailbox sending campaigns, with its own daily limit. The
+// database lets only its owner or administrators do this, and audits it.
+accounts.put('/accounts/:id/campaign-sender', async (c) => {
+  const body = await readBoundedJson(c, MAX_BODY)
+  if (typeof body?.enabled !== 'boolean') throw new HTTPException(400, { message: 'Say whether this mailbox may send campaigns.' })
+  const cap = body.daily_cap === undefined || body.daily_cap === null ? null : Number(body.daily_cap)
+  if (body.enabled && !(Number.isInteger(cap) && cap >= 1 && cap <= 2000)) {
+    throw new HTTPException(400, { message: 'Set a daily campaign limit between 1 and 2000 for this mailbox.' })
+  }
+  return ok(c, publicAccount(await rpc(c, 'em_set_campaign_sender', {
+    p_actor: actor(c), p_account: uuidParam(c), p_enabled: body.enabled, p_daily_cap: cap, p_ctx: requestContext(c),
+  }, { action: 'email.campaign_sender' })))
 })
 
 // Storage use, where the provider reports it.

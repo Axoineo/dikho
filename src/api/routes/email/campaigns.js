@@ -8,8 +8,9 @@ import { sendEmail } from '../../services/email/delivery.js'
 import { isEmail } from '../../services/email/mime.js'
 import {
   CAMPAIGN_VARIABLES, TRANSACTIONAL_VARIABLES, unknownVariables, allowedSenders, campaignReadiness, maxRecipients, dailyCap,
-  buildCampaignMessage,
+  buildCampaignMessage, dispatchCampaignBatch,
 } from '../../services/email/campaigns.js'
+import { sendThroughMailbox } from '../../services/email/mailboxDelivery.js'
 import { issueRenderTicket } from '../../services/email/renderTicket.js'
 import { actor, rpc, uuidParam, requestContext, noStore } from './shared.js'
 
@@ -42,6 +43,11 @@ function cleanContent(body, allowed) {
     out.from_email = from
   }
   if ('reply_to' in body) out.reply_to = body.reply_to ? String(body.reply_to).trim().toLowerCase().slice(0, 254) : null
+  if ('sender_account_id' in body) {
+    const id = body.sender_account_id
+    if (id !== null && (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id))) throw new HTTPException(400, { message: 'Choose a sending mailbox.' })
+    out.sender_account_id = id ? id.toLowerCase() : null
+  }
   if ('html' in body) {
     if (typeof body.html !== 'string' || body.html.length > 500_000) throw new HTTPException(413, { message: 'The content is too long.' })
     out.html = sanitizeHtml(body.html, { keepStyles: true, maxLength: 500_000 }).html
@@ -98,10 +104,14 @@ async function campaignFields(c) {
 // ── Campaigns ────────────────────────────────────────────────────────────────
 marketing.get('/campaigns', async (c) => {
   noStore(c)
+  const readiness = campaignReadiness(c.env)
   return ok(c, {
     campaigns: await rpc(c, 'em_list_campaigns', { p_actor: actor(c) }),
-    readiness: campaignReadiness(c.env),
-    senders: allowedSenders(c.env),
+    readiness,
+    // Connected mailboxes this person may send campaigns from, with today's use.
+    sender_mailboxes: await rpc(c, 'em_campaign_senders', { p_actor: actor(c) }),
+    // SES From addresses, only while the SES path is on.
+    senders: readiness.ses ? allowedSenders(c.env) : [],
     variables: CAMPAIGN_VARIABLES,
     max_recipients: maxRecipients(c.env),
   })
@@ -124,7 +134,14 @@ marketing.put('/campaigns/:id', requirePermission('email_campaigns.create'), asy
 marketing.post('/campaigns/:id/submit', requirePermission('email_campaigns.create'), async (c) => {
   const id = uuidParam(c)
   const current = await rpc(c, 'em_get_campaign', { p_actor: actor(c), p_campaign: id })
-  if (!allowedSenders(c.env).includes(current.from_email)) {
+  if (current.sender_account_id) {
+    // The database re-checks the mailbox and the submitter's role in it.
+    if (current.sender_provider === 'hostinger' && current.reply_to) {
+      throw new HTTPException(400, { message: 'Hostinger cannot set a separate reply-to address. Remove it: replies go to the sending mailbox.' })
+    }
+  } else if (!campaignReadiness(c.env).ses) {
+    throw new HTTPException(400, { message: 'Choose a connected mailbox to send this campaign from.' })
+  } else if (!allowedSenders(c.env).includes(current.from_email)) {
     throw new HTTPException(400, { message: 'Choose one of the verified sender addresses before submitting.' })
   }
   return ok(c, await rpc(c, 'em_submit_campaign', { p_actor: actor(c), p_campaign: id, p_max: maxRecipients(c.env), p_ctx: requestContext(c) },
@@ -154,8 +171,9 @@ marketing.post('/campaigns/:id/duplicate', requirePermission('email_campaigns.cr
   return ok(c, await rpc(c, 'em_duplicate_campaign', { p_actor: actor(c), p_campaign: uuidParam(c), p_ctx: requestContext(c) }), 201)
 })
 
-// A test copy to the person's own address only, through SES, counted
-// against the daily limit. Variables are filled with their own name.
+// A test copy to the person's own address only, through the campaign's
+// sender mailbox (or SES while that path is on), counted against the daily
+// limits. Variables are filled with their own name.
 marketing.post('/campaigns/:id/test', requirePermission('email_campaigns.create'), async (c) => {
   const id = uuidParam(c)
   const user = c.get('user')
@@ -163,15 +181,42 @@ marketing.post('/campaigns/:id/test', requirePermission('email_campaigns.create'
   if (!readiness.ready) throw new HTTPException(409, { message: `Test sends need ${readiness.missing.join(', ')}.` })
   if (!isEmail(user?.email ?? '')) throw new HTTPException(400, { message: 'Your account has no email address to send a test to.' })
   const campaign = await rpc(c, 'em_get_campaign', { p_actor: actor(c), p_campaign: id })
-  if (!allowedSenders(c.env).includes(campaign.from_email)) throw new HTTPException(400, { message: 'Choose a verified sender first.' })
+
+  let sender = null
+  if (campaign.sender_account_id) {
+    // Responder or above in the sending mailbox, checked by the database.
+    sender = await rpc(c, 'em_access', { p_actor: actor(c), p_account: campaign.sender_account_id, p_min_role: 'responder' })
+    if (sender.status !== 'connected' || !sender.campaign_sender) throw new HTTPException(409, { message: 'The sending mailbox is not available for campaigns.' })
+  } else if (!readiness.ses) {
+    throw new HTTPException(400, { message: 'Choose a connected mailbox to send this campaign from first.' })
+  } else if (!allowedSenders(c.env).includes(campaign.from_email)) {
+    throw new HTTPException(400, { message: 'Choose a verified sender first.' })
+  }
   if (!(await rpc(c, 'em_take_budget', { p_n: 1, p_cap: dailyCap(c.env) }))) {
     throw new HTTPException(429, { message: 'Today\'s sending limit has been reached.' })
   }
+  if (sender && !(await rpc(c, 'em_take_mailbox_budget', { p_account: sender.id, p_n: 1 }))) {
+    throw new HTTPException(429, { message: 'Today\'s limit for this mailbox has been reached.' })
+  }
   const message = await buildCampaignMessage(c.env, { ...campaign, subject: `[Test] ${campaign.subject}` },
     { id: '00000000-0000-4000-8000-000000000000', email: user.email, name: '', company: '' })
-  const result = await sendEmail(c.env, { ...message, to: [{ email: user.email }], tags: { purpose: 'campaign_test', campaign: id } }, { provider: 'ses' })
+  const test = { ...message, to: [{ email: user.email }], tags: { purpose: 'campaign_test', campaign: id } }
+  if (sender) {
+    const result = await sendThroughMailbox(c.env, sender, test)
+    if (!result.ok) throw new HTTPException(result.uncertain ? 502 : result.retryable ? 429 : 400, { message: `The test was not sent: ${result.reason}` })
+    return ok(c, { sent_to: user.email, via: sender.provider })
+  }
+  const result = await sendEmail(c.env, test, { provider: 'ses' })
   if (!result.ok) throw new HTTPException(result.uncertain ? 502 : 400, { message: `The test was not sent: ${result.reason}` })
-  return ok(c, { sent_to: user.email })
+  return ok(c, { sent_to: user.email, via: 'ses' })
+})
+
+// Sends the next batch of whichever approved campaign is due, now. For when
+// no external scheduler is set up: dispatch otherwise rides on dashboard
+// traffic. Bounded like every batch (limits, consent, approval re-checked).
+marketing.post('/campaigns/dispatch', requirePermission('email_campaigns.create', 'email_campaigns.approve'), async (c) => {
+  noStore(c)
+  return ok(c, await dispatchCampaignBatch(c.env))
 })
 
 marketing.post('/audience/preview', requirePermission('email_campaigns.create'), async (c) => {

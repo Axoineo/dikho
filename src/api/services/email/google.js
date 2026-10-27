@@ -249,7 +249,13 @@ export async function gmail(env, account, path, { method = 'GET', body, query, r
     if (res.status === 404) throw new GmailError(404, 'That message is no longer in Gmail.')
     if (res.status === 429) throw new GmailError(429, 'Gmail is limiting requests from this mailbox. Try again in a minute.')
     logError('email.gmail.request_failed', `${method} ${path.split('?')[0].replace(/\/[0-9a-f]{6,}/gi, '/:id')} ${res.status}`)
-    throw new GmailError(res.status >= 500 ? 502 : 400, 'Gmail did not accept the request.')
+    const failure = new GmailError(res.status >= 500 ? 502 : 400, 'Gmail did not accept the request.')
+    // Gmail reports sending limits as 403 with a reason; kept for callers
+    // that must tell a limit from a refusal (campaign dispatch).
+    failure.providerStatus = res.status
+    const reason = data?.error?.errors?.[0]?.reason
+    failure.reason = typeof reason === 'string' && /^[A-Za-z]{1,60}$/.test(reason) ? reason : null
+    throw failure
   }
 }
 

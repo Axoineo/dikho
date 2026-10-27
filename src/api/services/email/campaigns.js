@@ -1,5 +1,6 @@
 import { callUserRpc } from '../userAdmin.js'
 import { sendEmail, activeProvider } from './delivery.js'
+import { sendThroughMailbox } from './mailboxDelivery.js'
 import { hmacSha256, safeEqual, sha256Hex } from './crypto.js'
 import { htmlToText } from './sanitizeHtml.js'
 import { isEmail } from './mime.js'
@@ -8,15 +9,20 @@ import { logError, logEvent } from '../../utils/logger.js'
 // Campaign sending, personalization and unsubscribe links.
 //
 // Dispatch claims one batch at a time from the database (em_claim_campaign_batch:
-// approval re-checked, consent re-checked, daily budget advanced), sends it
-// through Amazon SES only, and records every result. It is driven by API
-// traffic, the scheduled handler when cron fires, and POST /email/jobs/run
-// for an external scheduler; any of them may run at once safely.
+// approval re-checked, consent re-checked, sender mailbox re-checked, daily
+// budgets advanced), sends it, and records every result. A campaign with a
+// sender mailbox goes through that connected Gmail or Hostinger mailbox
+// (mailboxDelivery.js); one without uses Amazon SES, and is not even claimed
+// while SES sending is off. Driven by API traffic, "Send next batch" in the
+// dashboard, and POST /email/jobs/run for an external scheduler; any of them
+// may run at once safely. Cron Triggers do not fire on this plan, so nothing
+// runs while nobody uses Dikho unless an external scheduler is set up.
 //
 // Configuration (docs/CONFIGURATION.md):
 //   API_PUBLIC_URL               https origin of this API Worker (unsubscribe links)
-//   EMAIL_DAILY_CAP              positive daily ceiling on campaign sends (UTC)
-//   EMAIL_CAMPAIGN_SENDERS       comma-separated verified From addresses
+//   EMAIL_DAILY_CAP              organization-wide daily ceiling on campaign sends (UTC)
+//                                (each sender mailbox also has its own, set in Settings)
+//   EMAIL_CAMPAIGN_SENDERS       SES path only: comma-separated verified From addresses
 //                                (defaults to EMAIL_FROM_ADDRESS)
 //   EMAIL_CAMPAIGN_MAX_RECIPIENTS   per-campaign limit, default 5000
 //   EMAIL_FOOTER_ADDRESS         optional postal address for the footer
@@ -24,6 +30,8 @@ import { logError, logEvent } from '../../utils/logger.js'
 const rpc = (env, fn, args) => callUserRpc({ env }, fn, args)
 const BATCH = 20
 const CONCURRENCY = 5
+// Mailboxes are not bulk services: two at a time keeps a batch gentle.
+const MAILBOX_CONCURRENCY = 2
 
 // ── Variables ────────────────────────────────────────────────────────────────
 // The only placeholders a campaign or template may use. Unknown ones are
@@ -95,15 +103,28 @@ function publicApiUrl(env) {
   return /^https:\/\/[^/]+$/.test(base) ? base : null
 }
 
-/** Everything campaign sending needs, as yes/no with what is missing. */
+/** Amazon SES is switched on and configured (the optional, legacy path). */
+export function sesReady(env) {
+  return env.EMAIL_SES_SEND_ENABLED === 'true' && activeProvider({ ...env, EMAIL_PROVIDER: 'ses' }) === 'ses'
+}
+
+/**
+ * What campaign sending needs on the server, as yes/no with what is missing.
+ * Sender mailboxes and their own limits live in the database. SES is not
+ * required; `ses` says whether the SES path is available at all, and
+ * `scheduler` whether an external scheduler can call /email/jobs/run.
+ */
 export function campaignReadiness(env) {
   const missing = []
-  if (env.EMAIL_SES_SEND_ENABLED !== 'true' || activeProvider({ ...env, EMAIL_PROVIDER: 'ses' }) !== 'ses') missing.push('Amazon SES sending')
-  if (!allowedSenders(env).length) missing.push('a verified sender address')
-  if (!dailyCap(env)) missing.push('a daily sending limit')
-  if (!publicApiUrl(env)) missing.push('the public API address for unsubscribe links')
-  if (!env.EMAIL_TOKEN_KEY) missing.push('the signing key')
-  return { ready: missing.length === 0, missing }
+  if (!dailyCap(env)) missing.push('an organization-wide daily limit (EMAIL_DAILY_CAP)')
+  if (!publicApiUrl(env)) missing.push('the public API address for unsubscribe links (API_PUBLIC_URL)')
+  if (!env.EMAIL_TOKEN_KEY) missing.push('the signing key (EMAIL_TOKEN_KEY)')
+  return {
+    ready: missing.length === 0,
+    missing,
+    ses: sesReady(env),
+    scheduler: typeof env.EMAIL_JOBS_SECRET === 'string' && env.EMAIL_JOBS_SECRET.length >= 32,
+  }
 }
 
 // ── Unsubscribe links ────────────────────────────────────────────────────────
@@ -170,30 +191,47 @@ async function mapLimit(items, limit, fn) {
   return out
 }
 
+async function sendThroughSes(env, campaign, message, senders) {
+  if (!senders.includes(String(campaign.from_email).toLowerCase())) return { failed: true, reason: 'The sender is not a verified campaign sender.' }
+  const result = await sendEmail(env, message, { provider: 'ses' })
+  if (result.ok) return { ok: true, messageId: result.messageId }
+  if (result.retryable) return { retryable: true, reason: result.reason }
+  if (result.uncertain) return { uncertain: true, reason: result.reason }
+  return { failed: true, reason: result.reason }
+}
+
 /**
  * Sends one batch of whichever approved campaign is due. Never throws.
  * Returns { sent, failed, uncertain, retry } counts, or { idle } / { skipped }.
  */
 export async function dispatchCampaignBatch(env) {
   if (!campaignReadiness(env).ready) return { skipped: 'not_ready' }
+  const ses = sesReady(env)
   let batch
   try {
-    batch = await rpc(env, 'em_claim_campaign_batch', { p_limit: BATCH, p_daily_cap: dailyCap(env) })
+    batch = await rpc(env, 'em_claim_campaign_batch', { p_limit: BATCH, p_daily_cap: dailyCap(env), p_allow_ses: ses })
   } catch (err) {
     logError('email.campaign.claim_failed', err)
     return { skipped: 'claim_failed' }
   }
   if (!batch) return { idle: true }
 
+  const sender = batch.sender ?? null
   const senders = allowedSenders(env)
-  const results = await mapLimit(batch.recipients, CONCURRENCY, async (recipient) => {
-    if (!senders.includes(String(batch.campaign.from_email).toLowerCase())) {
-      return { id: recipient.id, status: 'failed', error: 'The sender is not a verified campaign sender.' }
-    }
+  // After the provider limits or refuses the mailbox, nothing else in this
+  // batch is attempted: those recipients go back to the queue untouched.
+  let cooldown = null
+  let pause = null
+  const results = await mapLimit(batch.recipients, sender ? MAILBOX_CONCURRENCY : CONCURRENCY, async (recipient) => {
+    if (cooldown || pause) return { id: recipient.id, status: 'pending', error: 'Held back: the provider limited or refused the sending mailbox.' }
     try {
-      const result = await sendEmail(env, await buildCampaignMessage(env, batch.campaign, recipient), { provider: 'ses' })
+      const message = await buildCampaignMessage(env, batch.campaign, recipient)
+      const result = sender
+        ? await sendThroughMailbox(env, sender, message)
+        : ses ? await sendThroughSes(env, batch.campaign, message, senders) : { retryable: true, reason: 'SES sending is off.' }
       if (result.ok) return { id: recipient.id, status: 'sent', message_id: result.messageId }
-      if (result.retryable) return { id: recipient.id, status: 'pending', error: result.reason }
+      if (result.pause) { pause = result.reason; return { id: recipient.id, status: 'pending', error: result.reason } }
+      if (result.retryable) { if (sender) cooldown = Math.max(cooldown ?? 0, result.cooldown ?? 900); return { id: recipient.id, status: 'pending', error: result.reason } }
       if (result.uncertain) return { id: recipient.id, status: 'uncertain', error: result.reason }
       return { id: recipient.id, status: 'failed', error: result.reason }
     } catch (err) {
@@ -203,14 +241,14 @@ export async function dispatchCampaignBatch(env) {
   })
 
   try {
-    await rpc(env, 'em_finish_campaign_batch', { p_results: results })
+    await rpc(env, 'em_finish_campaign_batch', { p_results: results, p_cooldown_seconds: cooldown, p_pause_note: pause })
   } catch (err) {
     // Rows stay 'sending' and turn 'uncertain' after ten minutes: never resent.
     logError('email.campaign.record_failed', err)
   }
   const count = (s) => results.filter((r) => r.status === s).length
   const summary = { sent: count('sent'), failed: count('failed'), uncertain: count('uncertain'), retry: count('pending') }
-  logEvent('email.campaign.batch', summary)
+  logEvent('email.campaign.batch', { ...summary, via: sender ? sender.provider : 'ses', paused: Boolean(pause), cooldown: Boolean(cooldown) })
   return summary
 }
 

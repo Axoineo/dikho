@@ -54,7 +54,7 @@ export function createApiApp() {
   app.use('*', async (c, next) => {
     maybeDispatchOnRequest(c)   // corporate-gifting confirmation queue (30s)
     maybeReconcileOnRequest(c)  // parked WhatsApp delivery receipts (2 min)
-    maybeDispatchCampaignsOnRequest(c) // approved email campaign batches (30s; only when SES is ready)
+    maybeDispatchCampaignsOnRequest(c) // approved email campaign batches (30s; only when campaign sending is configured)
     await next()
   })
 

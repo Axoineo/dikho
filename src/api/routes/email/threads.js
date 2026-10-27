@@ -9,14 +9,18 @@ import { inBackground } from '../../services/email/sync.js'
 import { fromBase64url } from '../../services/email/crypto.js'
 import { issueRenderTicket } from '../../services/email/renderTicket.js'
 import { logError } from '../../utils/logger.js'
-import { requireCapability } from '../../services/email/providers.js'
+import { requireCapability, providerOf } from '../../services/email/providers.js'
+import { readConversation, setFlag, downloadAttachment } from '../../services/email/hostingerMail.js'
+import { syncMailbox } from '../../services/email/sync.js'
 import {
-  actor, rpc, uuidParam, patternParam, requestContext, withGmail, publicAccount, noStore, GMAIL_ID, ATTACHMENT_ID,
+  actor, rpc, uuidParam, requestContext, withGmail, withHostinger, publicAccount, noStore,
+  GMAIL_ID, ATTACHMENT_ID, UUID, PROVIDER_ATTACHMENT_ID,
 } from './shared.js'
 
 // Conversations. Lists come from the metadata cache; opening a conversation
-// reads it live from Gmail and returns sanitized content that is never
-// stored or cached (Cache-Control: no-store). Mounted behind requireAuth.
+// reads it live from the provider (Gmail, or Hostinger by folder and UID)
+// and returns sanitized content that is never stored or cached
+// (Cache-Control: no-store). Mounted behind requireAuth.
 const threads = new Hono()
 const MAX_BODY = 16 * 1024
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
@@ -70,6 +74,7 @@ threads.get('/threads/:id', async (c) => {
   const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: id, p_min_role: 'viewer' })
   const account = meta.account
   requireCapability(account, 'read')
+  if (providerOf(account) === 'hostinger') return openHostingerThread(c, id, meta)
   const thread = await withGmail(c, account, async () => {
     try {
       return await gmail(c.env, account, `/threads/${meta.thread.gmail_thread_id}`, { query: 'format=full' })
@@ -121,6 +126,35 @@ threads.get('/threads/:id', async (c) => {
   })
 })
 
+// A Hostinger conversation: bodies of the newest messages, live, by folder
+// and UID from the index. A message moved since the last sync comes back
+// without its body, and a sync is started.
+async function openHostingerThread(c, id, meta) {
+  const account = meta.account
+  const { messages: raw, omitted, stale } = await withHostinger(c, () => readConversation(c.env, account, meta.provider_messages))
+  const messages = await Promise.all(raw.map(async ({ body, missing, ...m }) => {
+    const html = body?.html ? sanitizeHtml(body.html) : null
+    const ticket = html ? await issueRenderTicket(c.env, { userId: actor(c), threadId: id, messageId: m.id }) : null
+    return {
+      ...m,
+      html: html?.html ?? null,
+      render_path: ticket ? `/email/render/${id}/${m.id}?t=${ticket}` : null,
+      blocked_images: html?.blockedImages ?? 0,
+      text: missing ? 'This message was moved or deleted in Hostinger after the last sync.' : String(body?.text ?? '').slice(0, 200_000),
+    }
+  }))
+  if (stale) inBackground(c, syncMailbox(c.env, account.id))
+  noStore(c)
+  return ok(c, {
+    thread: meta.thread,
+    account: publicAccount(account),
+    notes: meta.notes,
+    assignable: meta.assignable,
+    messages,
+    omitted,
+  })
+}
+
 // Dikho workflow: status and assignee. Never touches Gmail.
 threads.patch('/threads/:id', async (c) => {
   const body = await readBoundedJson(c, MAX_BODY)
@@ -146,6 +180,7 @@ threads.post('/threads/:id/labels', async (c) => {
   const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: uuidParam(c), p_min_role: 'responder' })
   const account = meta.account
   for (const label of [...add, ...remove]) requireCapability(account, LABEL_FEATURE[label] ?? 'labels')
+  if (providerOf(account) === 'hostinger') return ok(c, await hostingerFlags(c, account, meta.provider_messages ?? [], add, remove))
   const result = await withGmail(c, account, () => gmail(c.env, account, `/threads/${meta.thread.gmail_thread_id}/modify`, {
     method: 'POST', body: { addLabelIds: add, removeLabelIds: remove },
   }))
@@ -154,6 +189,38 @@ threads.post('/threads/:id/labels', async (c) => {
   await rpc(c, 'em_set_thread_labels', { p_account: account.id, p_gmail_thread_id: meta.thread.gmail_thread_id, p_label_ids: labels })
   return ok(c, { label_ids: labels, unread: labels.includes('UNREAD'), starred: labels.includes('STARRED') })
 })
+
+// Read/unread and star on a Hostinger conversation, as IMAP flags: read
+// marks every received message \Seen; unread clears it on the newest
+// received one; star flags the newest message; unstar clears every flag.
+async function hostingerFlags(c, account, refs, add, remove) {
+  const received = refs.filter((r) => r.folder_role !== 'sent')
+  const state = new Map(refs.map((r) => [r.id, { unseen: r.unseen, flagged: r.flagged }]))
+  const apply = async (targets, flag, on, field, value) => {
+    if (!targets.length) return
+    const ids = await setFlag(c.env, account, targets, flag, on)
+    for (const i of ids) state.get(i)[field] = value
+    if (ids.length) {
+      await rpc(c, 'em_hostinger_set_flags', {
+        p_account: account.id, p_message_ids: ids,
+        p_unseen: field === 'unseen' ? value : null, p_flagged: field === 'flagged' ? value : null,
+      })
+    }
+  }
+  await withHostinger(c, async () => {
+    if (remove.includes('UNREAD')) await apply(received.filter((r) => r.unseen), '\\Seen', true, 'unseen', false)
+    if (add.includes('UNREAD') && received.length) await apply([received.at(-1)], '\\Seen', false, 'unseen', true)
+    if (add.includes('STARRED') && refs.length) await apply([refs.at(-1)], '\\Flagged', true, 'flagged', true)
+    if (remove.includes('STARRED')) await apply(refs.filter((r) => r.flagged), '\\Flagged', false, 'flagged', false)
+  })
+  const unread = received.some((r) => state.get(r.id).unseen)
+  const starred = refs.some((r) => state.get(r.id).flagged)
+  const label_ids = [
+    refs.some((r) => r.folder_role === 'inbox') && 'INBOX', refs.some((r) => r.folder_role === 'sent') && 'SENT',
+    unread && 'UNREAD', starred && 'STARRED',
+  ].filter(Boolean)
+  return { label_ids, unread, starred }
+}
 
 threads.post('/threads/:id/notes', async (c) => {
   const body = await readBoundedJson(c, MAX_BODY)
@@ -181,16 +248,30 @@ threads.delete('/threads/:id/links/:type/:entityId', (c) => link(c, false))
 // sandboxing CSP, never rendered by the browser as a page.
 threads.get('/threads/:id/messages/:messageId/attachments/:attachmentId', async (c) => {
   const id = uuidParam(c)
-  const messageId = patternParam(c, 'messageId', GMAIL_ID, 'message id')
-  const attachmentId = patternParam(c, 'attachmentId', ATTACHMENT_ID, 'attachment id')
+  const messageId = c.req.param('messageId') ?? ''
+  const attachmentId = c.req.param('attachmentId') ?? ''
+  if (!GMAIL_ID.test(messageId) && !UUID.test(messageId)) throw new HTTPException(400, { message: 'Invalid message id' })
+  if (!ATTACHMENT_ID.test(attachmentId) && !PROVIDER_ATTACHMENT_ID.test(attachmentId)) throw new HTTPException(400, { message: 'Invalid attachment id' })
   const meta = await rpc(c, 'em_open_thread', { p_actor: actor(c), p_thread: id, p_min_role: 'viewer' })
   const account = meta.account
   requireCapability(account, 'attachments')
-  const data = await withGmail(c, account, () => gmail(c.env, account, `/messages/${messageId}/attachments/${attachmentId}`))
-  if (typeof data?.data !== 'string' || (Number(data.size) || 0) > MAX_ATTACHMENT_BYTES) {
-    throw new HTTPException(413, { message: 'This attachment is too large to download here. Open it in Gmail.' })
+
+  let bytes
+  if (providerOf(account) === 'hostinger') {
+    // Only an attachment the index lists for a message of this conversation.
+    const ref = (meta.provider_messages ?? []).find((r) => r.id === messageId.toLowerCase())
+    const attachment = ref?.attachments?.find((a) => a.id === attachmentId)
+    if (!ref || !attachment) throw new HTTPException(404, { message: 'That attachment is not part of this conversation.' })
+    bytes = await withHostinger(c, () => downloadAttachment(c.env, account, ref, attachment))
+    if (!bytes) throw new HTTPException(413, { message: 'This attachment is too large to download here. Open it in Hostinger Webmail.' })
+  } else {
+    if (!GMAIL_ID.test(messageId) || !ATTACHMENT_ID.test(attachmentId)) throw new HTTPException(400, { message: 'Invalid attachment id' })
+    const data = await withGmail(c, account, () => gmail(c.env, account, `/messages/${messageId}/attachments/${attachmentId}`))
+    if (typeof data?.data !== 'string' || (Number(data.size) || 0) > MAX_ATTACHMENT_BYTES) {
+      throw new HTTPException(413, { message: 'This attachment is too large to download here. Open it in Gmail.' })
+    }
+    bytes = fromBase64url(data.data)
   }
-  const bytes = fromBase64url(data.data)
   const name = String(c.req.query('name') ?? 'attachment').replace(/[^\w.\- ()[\]]+/g, '_').slice(0, 150) || 'attachment'
   return new Response(bytes, {
     headers: {

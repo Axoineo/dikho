@@ -12,6 +12,9 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export const GMAIL_ID = /^[0-9a-f]{1,32}$/
 export const ATTACHMENT_ID = /^[A-Za-z0-9_-]{1,1024}$/
 export const DRAFT_ID = /^r-?[0-9]{1,24}$/
+// Opaque attachment ids from other providers: printable, no slash, bounded.
+// Always matched exactly against the ids the index stored for the message.
+export const PROVIDER_ATTACHMENT_ID = /^[\x21-\x2e\x30-\x7e]{1,200}$/
 
 export const actor = (c) => c.get('user').id
 export { requestContext }
