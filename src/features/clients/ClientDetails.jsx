@@ -1,54 +1,56 @@
-import { formatValue, getValue } from '../../lib/format'
+import { formatDisplayDate, formatPhone } from '../../lib/format'
+import { isActiveStatus } from '../../lib/status'
 import { Icon } from '../../components/Icon'
+import { DetailsPanel, Section, KeyValues, StatusPill } from '../../components/crm/CrmUi'
 
-export default function ClientDetails({ client, onClose }) {
+export default function ClientDetails({ client, onClose, onEdit }) {
   if (!client) return null
 
-  const statusValue = getValue(client, ['status', 'is_active'])
-  const fields = [
-    ['ID', getValue(client, ['id'])],
-    ['Company Name', getValue(client, ['company_name'])],
-    ['Contact Person', getValue(client, ['contact_person'])],
-    ['Contact Number', getValue(client, ['contact', 'contact_number', 'phone'])],
-    ['Email', getValue(client, ['email', 'email_address'])],
-    ['Status', statusValue === 1 || statusValue === '1' || statusValue === true || statusValue === 'true' || statusValue === 'active' || statusValue === 'Active' ? 'Active' : 'Inactive'],
-    ['TDS Percentage', getValue(client, ['tds_percentage', 'tds_percent', 'tdsPercentage'])],
-    ['TDS Section', getValue(client, ['tds_section', 'tdsSection'])],
-    ['Registration', getValue(client, ['registration', 'registration_type', 'registrationType'])],
-    ['GSTIN', getValue(client, ['gstin', 'gstin_number'])],
-    ['GSTIN Date', getValue(client, ['gstin_date', 'gstinDate'])],
-    ['PAN Number', getValue(client, ['pan_number', 'pan'])],
-    ['Designation', getValue(client, ['designation'])],
-    ['Address Line 1', getValue(client, ['address_line1'])],
-    ['Address Line 2', getValue(client, ['address_line2'])],
-    ['City', getValue(client, ['city'])],
-    ['State', getValue(client, ['state'])],
-    ['Pincode', getValue(client, ['pincode'])],
-    ['Country', getValue(client, ['country'])],
-  ]
+  const active = isActiveStatus(client.status)
+  const phone = formatPhone(client.country_dialcode, client.contact)
+  const address = [client.address_line1, client.address_line2].filter(Boolean).join(', ')
+  const place = [client.city, client.state, client.pincode].filter(Boolean).join(', ')
 
   return (
-    <aside className="details-drawer" aria-label="Client details">
-      <div className="drawer-header">
-        <div>
-          <span className="drawer-kicker">Client details</span>
-          <h2>{formatValue(client.company_name)}</h2>
-        </div>
-        <button className="icon-button" onClick={onClose} aria-label="Close">
-          <Icon name="close" size={19} />
+    <DetailsPanel
+      label="Client details"
+      title={client.company_name || 'Unnamed client'}
+      monogram={client.company_name}
+      meta={<><StatusPill tone={active ? 'active' : 'inactive'}>{active ? 'Active' : 'Inactive'}</StatusPill><span>Client #{client.id}</span></>}
+      onClose={onClose}
+      actions={onEdit && (
+        <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
+          <Icon name="edit" size={15} /> Edit
         </button>
-      </div>
+      )}
+    >
+      <Section title="Contact">
+        <KeyValues items={[
+          { label: 'Contact person', value: client.contact_person, keep: true },
+          { label: 'Designation', value: client.designation },
+          { label: 'Phone', value: phone, href: phone ? `tel:${phone.replace(/\s+/g, '')}` : null, mono: true, keep: true },
+          { label: 'Email', value: client.email, href: client.email ? `mailto:${client.email}` : null, wide: true, keep: true },
+        ]} />
+      </Section>
 
-      <div className="drawer-divider" />
+      <Section title="Tax">
+        <KeyValues items={[
+          { label: 'GSTIN', value: client.gstin, mono: true, keep: true },
+          { label: 'PAN', value: client.pan_number, mono: true, keep: true },
+          { label: 'Registration', value: client.registration },
+          { label: 'GSTIN date', value: client.gstin_date && formatDisplayDate(client.gstin_date) },
+          { label: 'TDS', value: client.tds_percentage != null && client.tds_percentage !== '' ? `${client.tds_percentage}%` : null },
+          { label: 'TDS section', value: client.tds_section },
+        ]} />
+      </Section>
 
-      <div className="details-list">
-        {fields.map(([label, value]) => (
-          <div className="detail-row" key={label}>
-            <span className="detail-label">{label}</span>
-            <span className="detail-value">{formatValue(value)}</span>
-          </div>
-        ))}
-      </div>
-    </aside>
+      <Section title="Address">
+        <KeyValues items={[
+          { label: 'Address', value: address, wide: true, keep: true },
+          { label: 'City, state, PIN', value: place, wide: true },
+          { label: 'Country', value: client.country },
+        ]} />
+      </Section>
+    </DetailsPanel>
   )
 }

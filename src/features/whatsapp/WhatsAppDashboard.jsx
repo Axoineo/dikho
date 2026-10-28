@@ -4,6 +4,11 @@ import { Icon } from '../../components/Icon'
 import { apiGet } from '../../lib/api'
 import { Alert, EmptyState, PageHeader, Panel, PanelHead } from './ui'
 import { useAccess } from '../../lib/access'
+import { formatCount } from '../../lib/format'
+
+// Grouped in the organization's number style (Settings > Regional):
+// 10320 reads as a string of digits, 10,320 reads as a number.
+const count = (n) => (typeof n === 'number' ? formatCount(n) : n)
 
 const CARDS = [
   { key: 'contacts', label: 'Contacts', accent: 'var(--brand-blue)', hint: 'Subscribed audience' },
@@ -63,7 +68,7 @@ export default function WhatsAppDashboard() {
             label={card.label}
             hint={card.hint}
             accent={card.accent}
-            value={stats ? stats[card.key] ?? 0 : '—'}
+            value={stats ? count(stats[card.key] ?? 0) : '—'}
           />
         ))}
       </div>
@@ -76,12 +81,14 @@ export default function WhatsAppDashboard() {
               Delivery and read rates appear here once your first campaign goes out.
             </EmptyState>
           ) : (
-            <div className="overflow-hidden rounded-[10px] border border-line">
+            // Capped width: full-bleed, each label sat ~1,300px from its value
+            // on a desktop screen, too far for the eye to pair them.
+            <div className="max-w-[560px] overflow-hidden rounded-[10px] border border-line">
               {[
                 ['Delivery rate', `${deliveryRate}% of accepted`],
                 ['Read rate', `${pct(stats.read, stats.delivered)}% of delivered`],
-                ['Awaiting a receipt', stats.awaiting],
-                ['Failures', stats.failed],
+                ['Awaiting a receipt', count(stats.awaiting)],
+                ['Failures', count(stats.failed)],
               ].map(([key, value]) => (
                 <div key={key} className="flex items-center justify-between gap-4 border-b
                   border-line-soft bg-surface px-3.5 py-3 text-[13px] last:border-b-0">

@@ -402,9 +402,9 @@ function AddShared({ onAdded, gmailReady, hostingerReady, existing }) {
           </select>
         </label>
       ) : (
-        <label>Address<input className="em-input" type="email" required maxLength={254} placeholder="sales@yourcompany.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+        <label>Address<input className="em-input" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} /></label>
       )}
-      <label>Name shown in Dikho<input className="em-input" maxLength={120} placeholder="Sales team" value={name} onChange={(e) => setName(e.target.value)} /></label>
+      <label>Name shown in Dikho<input className="em-input" maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></label>
       <button type="submit" className="em-btn em-btn-primary" disabled={busy || !email.trim() || (provider === 'hostinger' ? !hostingerReady : false)} style={{ minHeight: 36 }}>
         {busy ? 'Adding…' : provider === 'hostinger' ? 'Add and connect' : 'Add mailbox'}
       </button>

@@ -97,6 +97,15 @@ export default function WhatsAppInbox() {
     }
   }, [])
 
+  // Back to the list: the phone layout's Back button. Clearing the ref first
+  // makes a page still in flight for this thread drop itself (see above).
+  const closeConversation = useCallback(() => {
+    activeIdRef.current = null
+    setActiveId(null)
+    setThread(EMPTY_THREAD)
+    setLoadingMsgs(false)
+  }, [])
+
   const appendMessage = useCallback((message) => {
     setThread(withRows((prev) => {
       if (prev.some((m) => m.id === message.id ||
@@ -332,7 +341,12 @@ export default function WhatsAppInbox() {
       {/* The list is a distinct pane, not a column of the same sheet: its own
           fill plus a divider stronger than --line, so the boundary between
           "all chats" and the open thread reads at a glance. */}
-      <aside className="flex w-full max-w-[352px] shrink-0 flex-col border-r border-inbox-divider bg-inbox-list">
+      {/* Below md (768px) only one pane fits: the list, or the open thread with
+          a Back button. Side by side, the 480px of panes sat in a 390px
+          overflow-hidden box, so opening a chat slid the list off-screen with
+          no way to bring it back. */}
+      <aside className={`flex w-full shrink-0 flex-col border-r border-inbox-divider bg-inbox-list md:max-w-[352px]
+        ${activeConv ? 'max-md:hidden' : ''}`}>
         <ChatList
           conversations={conversations}
           activeId={activeId}
@@ -344,7 +358,7 @@ export default function WhatsAppInbox() {
       </aside>
 
       {/* Middle — active conversation */}
-      <main className="flex min-w-0 flex-1">
+      <main className={`flex min-w-0 flex-1 ${activeConv ? '' : 'max-md:hidden'}`}>
         <Conversation
           conversation={activeConv}
           messages={messages}
@@ -362,6 +376,7 @@ export default function WhatsAppInbox() {
           onCompose={handleCompose}
           onMessageAction={handleMessageAction}
           notice={notice}
+          onBack={closeConversation}
         />
       </main>
 

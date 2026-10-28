@@ -14,6 +14,32 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- Settings, phase 1 (migration `20261028120000_settings.sql`, applied
+  2026-10-28; without it every screen keeps the built-in values). One page per
+  section at `/settings/<section>`: "Your account" for everyone,
+  "Organization" for people with the new `settings.manage` permission
+  (Admins; Owners hold everything). On a phone, or beside an open sidebar on
+  a tablet, the list and each section are separate pages.
+  - Your account: Profile (read-only), Preferences (theme, table density,
+    start page after sign-in, rows per page) and Sign-in and security (the
+    devices you are signed in on). Preferences are stored on your account,
+    so they follow you to every device.
+  - Company: legal name, GSTIN, PAN, address and bank details used on tax
+    invoices, checked before saving (GSTIN and PAN formats, PAN inside the
+    GSTIN, IFSC, PIN code). Changes are audited with the account number
+    masked.
+  - Regional: date format (13 Apr 2026, 13/04/2026 or 2026-04-13) and number
+    style (₹1,00,000.00 or ₹100,000.00) on every screen. Exports, PDFs and
+    invoices are unchanged.
+  - Lists and media: the values offered for order type, order status,
+    purchase status, item type, courier status, registration and row colour,
+    plus media and sub media. Add, reorder and hide; media can also be
+    renamed. Nothing is deleted, because saved records keep their values;
+    a hidden value stays on records that already have it, and vendor
+    registration no longer offers hidden media.
+  - The Vendors list follows the rows-per-page preference (25, 50 or 100;
+    it showed 15).
+
 - Email Hub 2.0 (ADR 0010; migration `20261027120000` not yet applied; owner
   steps in `docs/runbooks/email-hub-setup-guide.md`).
   - Hostinger mailboxes through the Hostinger Mail API, beside Google
@@ -93,6 +119,54 @@ incident details or unreleased vulnerability exploitation instructions here.
   signatures and protected-media tickets.
 
 ### Changed
+
+- Input boxes no longer show example text ("e.g. …", sample numbers, "0.00",
+  "https://…", "Enter your email"): every labelled box starts empty, and the
+  few instructions worth keeping moved below the box as hints. Search bars,
+  message boxes and dropdown prompts keep their text, since it is the only
+  label they have. The corporate gifting page is unchanged.
+- Clients, Vendors, Sales Orders and Purchase Orders share one layout
+  (`src/components/crm/`): a page header, a search row with one result count,
+  a table whose rows open on a single click, a details panel that slides over
+  the table instead of squeezing it, and forms with a fixed Save bar. Sizes
+  come from one type scale in rem; colours from the theme tokens, so dark
+  mode needs no overrides. Dates read "13 Apr 2026", amounts "₹1,47,500.00".
+  - Clients and Vendors can be edited (Edit in the details panel, shown with
+    `clients.edit` / `vendors.edit`; RLS already enforced both). A new vendor
+    document is stored beside the old one, never in place of it.
+  - Removed: selection checkboxes that did nothing, the ID columns, the
+    repeated record counts, the unused purchase-order delete dialog, and
+    about 1,100 lines of CSS no screen referenced.
+  - Order forms show what most orders need; every other field is one click
+    away under "More details", per line item too.
+  - Purchase orders are listed from `salesorder`, where they are saved. The
+    list used to read the legacy `purchaseorders` table, so a PO saved in the
+    app never appeared. Editing a PO used to clear its vendor address, which
+    would have turned it into a sales order; it is now kept, and a new PO
+    needs one (picked for you when the vendor has only one).
+- Interface fixes from a design audit (Apple's design principles):
+  - Sign-in stays readable when the computer is in dark mode. The page is
+    light-only, but its sign-in method switch picked up dark colours (2.2:1);
+    its subtitle, labels and placeholder also now clear 4.5:1.
+  - Brand blue used as text (links, active tabs, selected pills) has its own
+    `--brand-ink` token, lighter in dark mode: 7.5:1 or better where it was
+    2.2:1. Tailwind uses `text-brand-ink`; `text-brand` remains for fills.
+  - The dark theme declares `color-scheme: dark`, so open dropdowns, date
+    pickers and autofill follow it.
+  - Vendor registration shows a step's problem under the field it belongs to,
+    and scrolls to and focuses that field. On a phone the old banner sat
+    above the screen, so Continue appeared to do nothing. Mismatched bank
+    account numbers are caught on the Tax & Bank step, not two steps later.
+  - Pages that only say "This section will be added next." (Dashboard,
+    Invoice Notification, Advance Payment Receipt, Payment Receipt, Payment
+    Request, Document Courier) are out of the sidebar and sign-in landing
+    until built. Their routes still resolve.
+  - On a phone the WhatsApp inbox shows the chat list or one open chat, with
+    a Back button; before, opening a chat hid the list with no way back.
+  - With reduced motion on, spinners keep turning (slower) instead of
+    freezing after one frame.
+  - The WhatsApp overview groups large numbers (10,320) and keeps each
+    delivery-health value next to its label.
 
 - The staff welcome email is sent through the new email delivery service:
   Amazon SES once it is switched on, otherwise Brevo as before.

@@ -1,20 +1,30 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { formatValue, getValue } from '../../lib/format'
+import { formatPhone } from '../../lib/format'
 import { isActiveStatus } from '../../lib/status'
 import { Icon } from '../../components/Icon'
-import { ContactHoverAction } from '../../components/ContactHoverAction'
 import { SearchableSelect } from '../../components/SearchableSelect'
-import VendorDetails from './VendorDetails'
-import AddVendorModal from './AddVendorModal'
-import { useAccess } from '../../lib/access'
 import {
-  EMPTY_VENDOR_FILTERS, VENDOR_COLUMN_COUNT, VENDORS_PAGE_SIZE,
+  PageHeader, ResultCount, Pagination, StatusPill, Cell, RowTitle, RowChevron, ContactCell,
+  SkeletonRows, EmptyState, ShareLink, Toast,
+} from '../../components/crm/CrmUi'
+import VendorDetails from './VendorDetails'
+import VendorForm from './VendorForm'
+import { useAccess } from '../../lib/access'
+import { preferredPageSize } from '../../lib/settings'
+import {
+  EMPTY_VENDOR_FILTERS, VENDOR_COLUMN_COUNT, VENDOR_PAGE_SIZES,
   vendorSelect, applyVendorFilters, primaryAddress,
   isSlashSearch, resolveSlashSearch, buildSlashInput,
-  uniqueOptions, fetchAllPaged, SLASH_PATH_HINT, needsAddressJoin,
+  uniqueOptions, fetchAllPaged, SLASH_PATH_HINT,
   SLASH_CHAIN, normalizeToken
 } from './vendorFilters'
+
+const STATUS_FILTER_OPTIONS = [
+  { value: '', label: 'Any status' },
+  { value: '1', label: 'Active' },
+  { value: '0', label: 'Inactive' },
+]
 
 export default function VendorsPage() {
   const { can } = useAccess()
@@ -37,6 +47,7 @@ export default function VendorsPage() {
 
   const [vendors, setVendors] = useState([])
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(() => preferredPageSize(VENDOR_PAGE_SIZES))
   const [totalCount, setTotalCount] = useState(0)
   // Bumping `refresh` re-runs the loader even when nothing else changed. It is
   // a fresh object every time on purpose: the previous implementation reset
@@ -49,13 +60,13 @@ export default function VendorsPage() {
   const [error, setError] = useState('')
   const [actionError, setActionError] = useState('')
 
-  const [showForm, setShowForm] = useState(false)
+  // `editing` is null when the form is closed, {} for a new vendor, or the
+  // vendor being edited.
+  const [editing, setEditing] = useState(null)
+  const showForm = Boolean(editing)
   const [selectedVendor, setSelectedVendor] = useState(null)
   const [selectedVendorAddress, setSelectedVendorAddress] = useState(null)
-  const [selectedIds, setSelectedIds] = useState([])
-  const [selectingAll, setSelectingAll] = useState(false)
-  const [showSharePopover, setShowSharePopover] = useState(false)
-  const [shareCopied, setShareCopied] = useState(false)
+  const [notice, setNotice] = useState('')
 
   /* ── Data loading ─────────────────────────────────────────────────────── */
 
@@ -253,12 +264,12 @@ export default function VendorsPage() {
       else setLoading(true)
       setError('')
 
-      const from = (page - 1) * VENDORS_PAGE_SIZE
+      const from = (page - 1) * pageSize
       let request = supabase
         .from('vendors')
         .select(vendorSelect('*', effectiveFilters), { count: 'exact' })
         .order('id', { ascending: false })
-        .range(from, from + VENDORS_PAGE_SIZE - 1)
+        .range(from, from + pageSize - 1)
 
       request = applyVendorFilters(request, textQuery, effectiveFilters)
 
@@ -279,19 +290,14 @@ export default function VendorsPage() {
 
     loadVendors()
     return () => { cancelled = true }
-  }, [page, textQuery, effectiveFilters, appliedSlash, catalogReady, refresh])
+  }, [page, pageSize, textQuery, effectiveFilters, appliedSlash, catalogReady, refresh])
 
   const mediaMap = useMemo(() => Object.fromEntries(mediaOptions.map((item) => [item.id, item.name])), [mediaOptions])
   const subMediaMap = useMemo(() => Object.fromEntries(subMediaOptions.map((item) => [item.id, item.name])), [subMediaOptions])
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / VENDORS_PAGE_SIZE))
-  const pageStart = totalCount === 0 ? 0 : (page - 1) * VENDORS_PAGE_SIZE + 1
-  const pageEnd = Math.min(page * VENDORS_PAGE_SIZE, totalCount)
-  const pageNumbers = useMemo(() => {
-    const current = Math.min(page, totalPages)
-    return [current - 2, current - 1, current, current + 1, current + 2].filter((n) => n >= 1 && n <= totalPages)
-  }, [page, totalPages])
-
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
+  const pageEnd = Math.min(page * pageSize, totalCount)
   // Deleting or filtering can shrink the result set under the current page.
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -383,10 +389,22 @@ export default function VendorsPage() {
     setPage(1)
   }
 
-  function afterSaved(created) {
-    setShowForm(false)
+  function afterSaved(saved, savedAddress) {
+    const wasEdit = Boolean(editing?.id)
+    setEditing(null)
     setError('')
     setActionError('')
+
+    if (wasEdit) {
+      // The edited row keeps its place; the panel shows what was saved.
+      setVendors((current) => current.map((vendor) => (vendor.id === saved.id ? { ...vendor, ...saved } : vendor)))
+      setSelectedVendor((current) => (current?.id === saved.id ? { ...current, ...saved } : current))
+      if (savedAddress) setSelectedVendorAddress(savedAddress)
+      setNotice('Vendor saved')
+      // A changed city or media can add a new option to the filters.
+      setRefresh((current) => ({ key: current.key + 1, silent: true }))
+      return
+    }
 
     // The new vendor need not match whatever is currently filtered, so return
     // the view to the top of the unfiltered list where it is guaranteed to be.
@@ -398,54 +416,17 @@ export default function VendorsPage() {
 
     // Optimistic: the row is on screen before the reload lands. Rows are
     // ordered by descending id, so a new vendor belongs at the top of page 1.
-    if (created?.id) {
-      setVendors((current) => [created, ...current.filter((vendor) => vendor.id !== created.id)].slice(0, VENDORS_PAGE_SIZE))
+    if (saved?.id) {
+      setVendors((current) => [saved, ...current.filter((vendor) => vendor.id !== saved.id)].slice(0, pageSize))
       setTotalCount((current) => current + 1)
+      setSelectedVendor(saved)
     }
+    setNotice('Vendor added')
 
     // …then reconcile against the server. `silent` keeps the optimistic row
     // visible instead of replacing it with loading skeletons.
-    setRefresh((current) => ({ key: current.key + 1, silent: Boolean(created?.id) }))
+    setRefresh((current) => ({ key: current.key + 1, silent: Boolean(saved?.id) }))
   }
-
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
-  const currentPageIds = vendors.map((vendor) => vendor.id)
-  const allCurrentSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedSet.has(id))
-
-  function toggleSelect(id) {
-    setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
-  }
-
-  function toggleSelectPage() {
-    setSelectedIds((current) => {
-      if (allCurrentSelected) return current.filter((id) => !currentPageIds.includes(id))
-      return [...new Set([...current, ...currentPageIds])]
-    })
-  }
-
-  // Selects every vendor matching the current criteria, not just this page.
-  async function selectAllFiltered() {
-    setSelectingAll(true)
-    setActionError('')
-    try {
-      const rows = await fetchAllPaged((from, to) => {
-        const columns = needsAddressJoin(effectiveFilters) ? 'id,vendor_addresses!inner(country,state,city)' : 'id'
-        return applyVendorFilters(
-          supabase.from('vendors').select(columns).order('id', { ascending: false }).range(from, to),
-          textQuery,
-          effectiveFilters,
-        )
-      })
-      setSelectedIds(rows.map((row) => row.id))
-    } catch (err) {
-      console.error(err)
-      setActionError(err?.message || 'Could not select all filtered vendors.')
-    } finally {
-      setSelectingAll(false)
-    }
-  }
-
-  const busy = selectingAll
 
   const emptyCopy = appliedSlash?.unmatched
     ? `No ${appliedSlash.unmatched.dimension.toLowerCase()} matches “${appliedSlash.unmatched.raw}”. Pick a suggestion from the search bar to correct that step.`
@@ -453,375 +434,245 @@ export default function VendorsPage() {
       ? 'No vendors match the current search and filters. Try clearing one of them.'
       : 'Add your first vendor to see it listed here.'
 
+  const canCreate = can('vendors.create')
+  const canEdit = can('vendors.edit')
+  const searching = Boolean(textQuery) || activeFilterCount > 0 || slashActive
+
   return (
-    <div className={`vendors-page ${selectedVendor ? 'has-selection' : ''}`}>
-      <div className="vendors-main-content">
-        <div className="page-header">
-          <div>
-            <span className="page-kicker">MASTER DATA</span>
-            <h1>Vendors</h1>
-            <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'vendor' : 'vendors'} in view · 15 per page</p>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
-            {showSharePopover && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 300,
-                background: 'var(--surface)', border: '1px solid var(--line)',
-                borderRadius: 10, padding: '14px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                minWidth: 320,
-              }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Vendor Registration Link
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: 10, lineHeight: 1.5 }}>
-                  Share this link with anyone — no login required. Submissions will appear as <strong>Inactive</strong> pending your review.
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input
-                    readOnly
-                    value={`${window.location.origin}/vendor/register`}
-                    style={{
-                      flex: 1, fontSize: '0.82rem', padding: '7px 10px',
-                      border: '1px solid var(--line)', borderRadius: 6,
-                      background: 'var(--page)', color: 'var(--text)',
-                      fontFamily: 'monospace', outline: 'none',
-                    }}
-                    onFocus={e => e.target.select()}
-                  />
-                  <button
-                    className="primary-button"
-                    style={{ padding: '7px 14px', fontSize: '0.82rem', flexShrink: 0 }}
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/vendor/register`)
-                        .then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000) })
-                    }}
-                  >
-                    {shareCopied ? <><Icon name="check" size={14} /> Copied!</> : 'Copy'}
-                  </button>
-                </div>
-              </div>
-            )}
-            <button
-              className="secondary-button"
-              onClick={() => { setShowSharePopover(v => !v); setShareCopied(false) }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-              </svg>
-              Share
+    <div className="crm-page">
+      <PageHeader title="Vendors" subtitle="Media owners and suppliers you buy from.">
+        <ShareLink
+          title="Vendor registration link"
+          description="Anyone with this link can register as a vendor without signing in. New registrations arrive as Inactive for your review."
+          path="/vendor/register"
+        />
+        {canCreate && (
+          <button type="button" className="crm-btn crm-btn--primary" onClick={() => setEditing({})}>
+            <Icon name="plus" size={17} /> New vendor
+          </button>
+        )}
+      </PageHeader>
+
+      {/* ── Search + filters ─────────────────────────────────────────── */}
+      <div className="crm-toolbar">
+        <div className="crm-search" ref={searchShellRef}>
+          <Icon name="search" size={17} />
+          <input
+            ref={searchInputRef}
+            value={searchInput}
+            onChange={(event) => { setSearchInput(event.target.value); setSuggestOpen(true) }}
+            onFocus={() => setSuggestOpen(true)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="Search vendors, or type / to filter by place and media"
+            aria-label="Search vendors"
+            role="combobox"
+            aria-expanded={showSuggestions}
+            aria-controls="vendor-slash-suggestions"
+            aria-autocomplete="list"
+            autoComplete="off"
+            spellCheck="false"
+          />
+          {slashActive
+            ? <span className="crm-search-mode">Filtering</span>
+            : !searchInput && <kbd className="crm-kbd" title={`Type / to filter by ${SLASH_PATH_HINT}`}>/</kbd>}
+          {searchInput && (
+            <button type="button" className="crm-icon-btn" onClick={clearSearch} aria-label="Clear search">
+              <Icon name="close" size={15} />
             </button>
-            {can('vendors.create') && (
-              <button className="primary-button add-button" onClick={() => setShowForm(true)}>
-                <Icon name="plus" size={18} /> Add vendor
-              </button>
-            )}
-          </div>
-        </div>
+          )}
 
-        {/* ── Search + actions ─────────────────────────────────────────── */}
-        <div className="vendors-toolbar">
-          <div className={`vendor-search ${slashActive ? 'is-chained' : ''}`} ref={searchShellRef}>
-            <span className="vendor-search-icon"><Icon name="search" size={17} /></span>
-            <input
-              ref={searchInputRef}
-              className="vendor-search-input"
-              value={searchInput}
-              onChange={(event) => { setSearchInput(event.target.value); setSuggestOpen(true) }}
-              onFocus={() => setSuggestOpen(true)}
-              onKeyDown={handleSearchKeyDown}
-              placeholder={`Search company, email, GSTIN or PAN — or type ${SLASH_PATH_HINT}`}
-              aria-label="Search vendors"
-              role="combobox"
-              aria-expanded={showSuggestions}
-              aria-controls="vendor-slash-suggestions"
-              aria-autocomplete="list"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            {slashActive
-              ? <span className="vendor-search-mode">Chained filter</span>
-              : <kbd className="vendor-search-kbd" title="Press / to filter by state, country, media and sub media">/</kbd>}
-            {searchInput && (
-              <button type="button" className="search-clear" onClick={clearSearch} aria-label="Clear search">
-                <Icon name="close" size={15} />
-              </button>
-            )}
-
-            {showSuggestions && activeToken && (
-              <div className="slash-suggestions" id="vendor-slash-suggestions" role="listbox" aria-label={`${activeToken.dimension} suggestions`}>
-                <div className="slash-suggestions-head">
-                  <span className="slash-suggestions-step">Step {liveSlash.activeIndex + 1} of {SLASH_CHAIN.length} · {activeToken.dimension}</span>
-                  <span className="slash-suggestions-path">{SLASH_PATH_HINT}</span>
-                </div>
-                {suggestions.length === 0 ? (
-                  <div className="search-select-empty">
-                    {activeToken.options.length === 0
-                      ? `No ${activeToken.dimension.toLowerCase()} values available yet`
-                      : `No ${activeToken.dimension.toLowerCase()} matches “${activeToken.raw}”`}
-                  </div>
-                ) : suggestions.map((option, index) => (
-                  <button
-                    type="button"
-                    key={`${activeToken.key}-${option.value}`}
-                    role="option"
-                    aria-selected={index === boundedSuggestIndex}
-                    className={`slash-suggestion ${index === boundedSuggestIndex ? 'is-active' : ''}`}
-                    onMouseEnter={() => setSuggestIndex(index)}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => applySuggestion(option)}
-                  >
-                    <span className="slash-suggestion-label">{option.label}</span>
-                    <span className="slash-suggestion-hint">↵</span>
-                  </button>
-                ))}
+          {showSuggestions && activeToken && (
+            <div className="slash-suggestions" id="vendor-slash-suggestions" role="listbox" aria-label={`${activeToken.dimension} suggestions`}>
+              <div className="slash-suggestions-head">
+                <span className="slash-suggestions-step">Step {liveSlash.activeIndex + 1} of {SLASH_CHAIN.length} · {activeToken.dimension}</span>
+                <span className="slash-suggestions-path">{SLASH_PATH_HINT}</span>
               </div>
-            )}
-          </div>
-
-          <div className="toolbar-actions">
-            <button
-              type="button"
-              className={`filter-toggle ${filtersOpen ? 'is-open' : ''}`}
-              onClick={() => setFiltersOpen((value) => !value)}
-              aria-expanded={filtersOpen}
-              aria-controls="vendor-filter-grid"
-            >
-              <Icon name="filter" size={16} />
-              Filters
-              {activeFilterCount > 0 && <span className="filter-count">{activeFilterCount}</span>}
-              <span className="filter-toggle-caret"><Icon name="chevronDown" size={15} /></span>
-            </button>
-          </div>
-        </div>
-
-        {/* ── Active criteria ──────────────────────────────────────────── */}
-        {(slashActive || filterChips.length > 0) && (
-          <div className="criteria-row">
-            {slashActive && liveSlash.tokens.map((token, index) => (
-              <button
-                type="button"
-                key={token.key}
-                className={`criteria-chip is-slash is-${token.status}`}
-                onClick={() => editSegment(index)}
-                title={`Edit the ${token.dimension.toLowerCase()} step`}
-              >
-                <span className="criteria-chip-key">{token.dimension}</span>
-                <span className="criteria-chip-value">{token.match?.label || token.raw || 'any'}</span>
-              </button>
-            ))}
-            {filterChips.map((chip) => (
-              <span className="criteria-chip" key={chip.field}>
-                <span className="criteria-chip-key">{chip.label}</span>
-                <span className="criteria-chip-value">{chip.value}</span>
-                <button type="button" className="criteria-chip-remove" onClick={() => setFilter(chip.field, '')} aria-label={`Remove ${chip.label} filter`}>
-                  <Icon name="close" size={12} />
+              {suggestions.length === 0 ? (
+                <div className="search-select-empty">
+                  {activeToken.options.length === 0
+                    ? `No ${activeToken.dimension.toLowerCase()} values yet`
+                    : `No ${activeToken.dimension.toLowerCase()} matches “${activeToken.raw}”`}
+                </div>
+              ) : suggestions.map((option, index) => (
+                <button
+                  type="button"
+                  key={`${activeToken.key}-${option.value}`}
+                  role="option"
+                  aria-selected={index === boundedSuggestIndex}
+                  className={`slash-suggestion ${index === boundedSuggestIndex ? 'is-active' : ''}`}
+                  onMouseEnter={() => setSuggestIndex(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => applySuggestion(option)}
+                >
+                  <span className="slash-suggestion-label">{option.label}</span>
+                  <span className="slash-suggestion-hint">↵</span>
                 </button>
-              </span>
-            ))}
-            {hasActiveCriteria && (
-              <button type="button" className="criteria-reset" onClick={clearAllCriteria}>Reset all</button>
-            )}
-          </div>
-        )}
-
-        {/* ── Filters ──────────────────────────────────────────────────── */}
-        {filtersOpen && (
-          <section className="filter-panel" id="vendor-filter-grid">
-            {slashActive && (
-              <p className="filter-panel-note">
-                State, country, media and sub media are coming from the <code>/</code> search. Clear it to set them here.
-              </p>
-            )}
-            <div className="filter-grid">
-              <SearchableSelect
-                label="Media"
-                value={filters.media_id}
-                onChange={(value) => setFilter('media_id', value)}
-                options={mediaFilterOptions}
-                placeholder="All media"
-                searchPlaceholder="Search media..."
-                disabled={slashActive}
-              />
-              <SearchableSelect
-                label="Sub Media"
-                value={filters.sub_media_id}
-                onChange={(value) => setFilter('sub_media_id', value)}
-                options={subMediaFilterOptions}
-                placeholder="All sub media"
-                searchPlaceholder="Search sub media..."
-                disabled={slashActive}
-              />
-              <SearchableSelect
-                label="Country"
-                value={filters.country}
-                onChange={(value) => setFilter('country', value)}
-                options={countryFilterOptions}
-                placeholder="All countries"
-                searchPlaceholder="Search countries..."
-                disabled={slashActive}
-              />
-              <SearchableSelect
-                label="State"
-                value={filters.state}
-                onChange={(value) => setFilter('state', value)}
-                options={stateFilterOptions}
-                placeholder="All states"
-                searchPlaceholder="Search states..."
-                disabled={slashActive}
-              />
-              <SearchableSelect
-                label="City"
-                value={filters.city}
-                onChange={(value) => setFilter('city', value)}
-                options={cityFilterOptions}
-                placeholder="All cities"
-                searchPlaceholder="Search cities..."
-                disabled={slashActive}
-              />
-              <div className="field">
-                <label htmlFor="vendor-status-filter">Vendor Status</label>
-                <select id="vendor-status-filter" value={filters.status} onChange={(event) => setFilter('status', event.target.value)}>
-                  <option value="">All statuses</option>
-                  <option value="1">Active</option>
-                  <option value="0">Inactive</option>
-                </select>
-              </div>
+              ))}
             </div>
-          </section>
-        )}
+          )}
+        </div>
 
-        {error && (
-          <div className="page-error" role="alert">
-            <span className="page-error-icon"><Icon name="alert" size={18} /></span>
-            <div><strong>Could not load vendors</strong><p>{error}</p></div>
-          </div>
-        )}
+        <button
+          type="button"
+          className={`crm-btn crm-btn--secondary${filtersOpen ? ' is-open' : ''}`}
+          onClick={() => setFiltersOpen((value) => !value)}
+          aria-expanded={filtersOpen}
+          aria-controls="vendor-filter-grid"
+        >
+          <Icon name="filter" size={16} /> Filters
+          {activeFilterCount > 0 && <span className="crm-badge">{activeFilterCount}</span>}
+        </button>
 
-        {actionError && (
-          <div className="page-error" role="alert">
-            <span className="page-error-icon"><Icon name="alert" size={18} /></span>
-            <div><strong>Action failed</strong><p>{actionError}</p></div>
-          </div>
-        )}
-
-        {/* ── Table ────────────────────────────────────────────────────── */}
-        <section className="table-card">
-          <div className="table-topline">
-            <div>
-              <strong>All Vendors</strong>
-              <span className="result-count">{totalCount.toLocaleString()} records</span>
-              {refreshing && <span className="result-count">Updating…</span>}
-              {textQuery && <span className="search-state">Filtered by “{textQuery}”</span>}
-            </div>
-            <div className="topline-right">
-              <span className="selection-count"><strong>{selectedIds.length.toLocaleString()}</strong> selected</span>
-              <button type="button" className="selection-link" onClick={selectAllFiltered} disabled={busy || loading || totalCount === 0}>
-                {selectingAll ? 'Selecting…' : 'Select all filtered'}
-              </button>
-              <button type="button" className="selection-link" onClick={() => setSelectedIds([])} disabled={selectedIds.length === 0}>
-                Clear selection
-              </button>
-            </div>
-          </div>
-
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th className="check-column"><button type="button" className={`checkbox-button ${allCurrentSelected ? 'checked' : ''}`} onClick={toggleSelectPage} aria-label="Select all vendors on this page">{allCurrentSelected ? <Icon name="check" size={14} /> : null}</button></th>
-                  <th>ID</th>
-                  <th>Vendor</th>
-                  <th>Media</th>
-                  <th>Location</th>
-                  <th>Contact</th>
-                  <th>GSTIN</th>
-                  <th>Status</th>
-                  <th className="actions-column">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: VENDORS_PAGE_SIZE }).map((_, index) => (
-                    <tr key={`vendor-skeleton-${index}`}>
-                      {Array.from({ length: VENDOR_COLUMN_COUNT }).map((__, cell) => <td key={cell}><span className="skeleton skeleton-company" /></td>)}
-                    </tr>
-                  ))
-                ) : vendors.length === 0 ? (
-                  <tr>
-                    <td colSpan={VENDOR_COLUMN_COUNT} className="empty-state">
-                      <div className="empty-title">No vendors found</div>
-                      <div className="empty-copy">{emptyCopy}</div>
-                    </td>
-                  </tr>
-                ) : (
-                  vendors.map((vendor) => {
-                    const isActive = isActiveStatus(getValue(vendor, ['status']))
-                    const address = primaryAddress(vendor)
-                    const subtitle = getValue(vendor, ['alias', 'contact_person', 'vendor_type'])
-                    const region = [address?.state, address?.country].filter(Boolean).join(' · ')
-                    const phone = vendor.contact == null ? null : `${vendor.country_dialcode || ''} ${vendor.contact}`.trim()
-                    return (
-                      <tr
-                        key={vendor.id}
-                        className={selectedVendor?.id === vendor.id ? 'is-open' : ''}
-                        onDoubleClick={() => setSelectedVendor(vendor)}
-                      >
-                        <td className="check-column"><button type="button" className={`checkbox-button ${selectedSet.has(vendor.id) ? 'checked' : ''}`} onClick={(event) => { event.stopPropagation(); toggleSelect(vendor.id) }} aria-label={`Select ${vendor.company_name}`}>{selectedSet.has(vendor.id) ? <Icon name="check" size={14} /> : null}</button></td>
-                        <td className="id-cell">{formatValue(vendor.id)}</td>
-                        <td>
-                          <span className="cell-primary company-cell" title={vendor.company_name || ''}>{formatValue(vendor.company_name)}</span>
-                          <span className="cell-secondary" title={subtitle || ''}>{formatValue(subtitle)}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatValue(mediaMap[vendor.media_id])}</span>
-                          <span className="cell-secondary">{formatValue(subMediaMap[vendor.sub_media_id])}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatValue(address?.city)}</span>
-                          <span className="cell-secondary" title={region}>{formatValue(region)}</span>
-                        </td>
-                        <td>
-                          {phone ? <ContactHoverAction type="phone" value={phone} /> : <span className="cell-primary">-</span>}
-                          {vendor.email ? <ContactHoverAction type="email" value={vendor.email} /> : <span className="cell-secondary">-</span>}
-                        </td>
-                        <td className="mono-cell">{formatValue(vendor.gstin)}</td>
-                        <td>
-                          <span className={`status-pill ${isActive ? 'active' : 'inactive'}`}>
-                            <span className="status-dot" />
-                            {isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="actions-column"><button className="row-action" onClick={() => setSelectedVendor(vendor)} aria-label={`Open vendor ${vendor.company_name}`}><Icon name="chevron" size={17} /></button></td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pagination-bar">
-            <span className="pagination-summary">
-              {totalCount === 0 ? 'No records' : <>Showing <strong>{pageStart}–{pageEnd}</strong> of {totalCount.toLocaleString()}</>}
-            </span>
-            <div className="pagination-meta">
-              <span className="pagination-page-label">Page {Math.min(page, totalPages)} of {totalPages.toLocaleString()}</span>
-              <div className="pagination-buttons">
-                <button onClick={() => changePage(1)} disabled={page <= 1} aria-label="First page"><Icon name="first" size={16} /></button>
-                <button onClick={() => changePage(page - 1)} disabled={page <= 1} aria-label="Previous page"><Icon name="chevron" size={16} /></button>
-                {pageNumbers.map((number) => <button key={number} className={number === page ? 'current' : ''} onClick={() => changePage(number)} aria-current={number === page ? 'page' : undefined}>{number}</button>)}
-                <button onClick={() => changePage(page + 1)} disabled={page >= totalPages} aria-label="Next page"><Icon name="chevron" size={16} /></button>
-                <button onClick={() => changePage(totalPages)} disabled={page >= totalPages} aria-label="Last page"><Icon name="last" size={16} /></button>
-              </div>
-            </div>
-          </div>
-        </section>
+        {!loading && <ResultCount shown={totalCount} total={totalCount} noun="vendor" filtered={searching} />}
+        {refreshing && <span className="crm-count" style={{ marginLeft: 0 }}>Updating…</span>}
       </div>
 
-      {selectedVendor && <aside className="vendors-side-panel"><VendorDetails vendor={selectedVendor} address={selectedVendorAddress} onClose={() => setSelectedVendor(null)} mediaMap={mediaMap} subMediaMap={subMediaMap} /></aside>}
-      {showForm && <AddVendorModal onClose={() => setShowForm(false)} onSaved={afterSaved} />}
+      {/* ── Active criteria ──────────────────────────────────────────── */}
+      {(slashActive || filterChips.length > 0) && (
+        <div className="criteria-row">
+          {slashActive && liveSlash.tokens.map((token, index) => (
+            <button
+              type="button"
+              key={token.key}
+              className={`criteria-chip is-slash is-${token.status}`}
+              onClick={() => editSegment(index)}
+              title={`Edit the ${token.dimension.toLowerCase()} step`}
+            >
+              <span className="criteria-chip-key">{token.dimension}</span>
+              <span className="criteria-chip-value">{token.match?.label || token.raw || 'any'}</span>
+            </button>
+          ))}
+          {filterChips.map((chip) => (
+            <span className="criteria-chip" key={chip.field}>
+              <span className="criteria-chip-key">{chip.label}</span>
+              <span className="criteria-chip-value">{chip.value}</span>
+              <button type="button" className="criteria-chip-remove" onClick={() => setFilter(chip.field, '')} aria-label={`Remove ${chip.label} filter`}>
+                <Icon name="close" size={12} />
+              </button>
+            </span>
+          ))}
+          {hasActiveCriteria && (
+            <button type="button" className="criteria-reset" onClick={clearAllCriteria}>Clear all</button>
+          )}
+        </div>
+      )}
+
+      {/* ── Filters ──────────────────────────────────────────────────── */}
+      {filtersOpen && (
+        <section className="filter-panel" id="vendor-filter-grid">
+          {slashActive && (
+            <p className="filter-panel-note">
+              State, country, media and sub media are coming from the <code>/</code> search. Clear it to set them here.
+            </p>
+          )}
+          <div className="filter-grid">
+            <SearchableSelect label="Media" value={filters.media_id} onChange={(value) => setFilter('media_id', value)} options={mediaFilterOptions} placeholder="All media" searchPlaceholder="Search media…" disabled={slashActive} />
+            <SearchableSelect label="Sub media" value={filters.sub_media_id} onChange={(value) => setFilter('sub_media_id', value)} options={subMediaFilterOptions} placeholder="All sub media" searchPlaceholder="Search sub media…" disabled={slashActive} />
+            <SearchableSelect label="Country" value={filters.country} onChange={(value) => setFilter('country', value)} options={countryFilterOptions} placeholder="All countries" searchPlaceholder="Search countries…" disabled={slashActive} />
+            <SearchableSelect label="State" value={filters.state} onChange={(value) => setFilter('state', value)} options={stateFilterOptions} placeholder="All states" searchPlaceholder="Search states…" disabled={slashActive} />
+            <SearchableSelect label="City" value={filters.city} onChange={(value) => setFilter('city', value)} options={cityFilterOptions} placeholder="All cities" searchPlaceholder="Search cities…" disabled={slashActive} />
+            <SearchableSelect label="Status" value={filters.status} onChange={(value) => setFilter('status', value)} options={STATUS_FILTER_OPTIONS} placeholder="Any status" searchPlaceholder="Search…" />
+          </div>
+        </section>
+      )}
+
+      {(error || actionError) && (
+        <div className="crm-note crm-note--danger" role="alert">
+          <Icon name="alert" size={17} />
+          <div><strong>{error ? 'Could not load vendors.' : 'That did not work.'}</strong> {error || actionError}</div>
+        </div>
+      )}
+
+      {/* ── Table ────────────────────────────────────────────────────── */}
+      <section className="crm-card">
+        <div className="crm-table-scroll">
+          <table className="crm-table">
+            <thead>
+              <tr>
+                <th style={{ width: '26%' }}>Vendor</th>
+                <th className="crm-hide-sm" style={{ width: '12%' }}>Media</th>
+                <th className="crm-hide-sm" style={{ width: '15%' }}>Location</th>
+                <th className="crm-hide-sm" style={{ width: '20%' }}>Contact</th>
+                <th className="crm-hide-sm crm-hide-lg" style={{ width: '14%' }}>GSTIN</th>
+                <th style={{ width: '110px' }}>Status</th>
+                <th className="crm-col-tight" style={{ width: '36px' }} aria-label="Open" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonRows rows={8} columns={VENDOR_COLUMN_COUNT} />
+              ) : vendors.length === 0 ? (
+                <tr>
+                  <td colSpan={VENDOR_COLUMN_COUNT} className="crm-empty-cell">
+                    <EmptyState
+                      icon={hasActiveCriteria ? 'search' : 'vendors'}
+                      title={hasActiveCriteria ? 'No vendors match' : 'No vendors yet'}
+                      action={!hasActiveCriteria && canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={() => setEditing({})}><Icon name="plus" size={16} /> New vendor</button>}
+                    >
+                      {emptyCopy}
+                    </EmptyState>
+                  </td>
+                </tr>
+              ) : (
+                vendors.map((vendor) => {
+                  const active = isActiveStatus(vendor.status)
+                  const address = primaryAddress(vendor)
+                  const region = [address?.state, address?.country].filter(Boolean).join(', ')
+                  return (
+                    <tr
+                      key={vendor.id}
+                      className={`crm-row${selectedVendor?.id === vendor.id ? ' is-selected' : ''}`}
+                      onClick={() => setSelectedVendor(vendor)}
+                    >
+                      <td>
+                        <RowTitle name={vendor.company_name} sub={vendor.alias || vendor.contact_person} onOpen={() => setSelectedVendor(vendor)} />
+                      </td>
+                      <td className="crm-hide-sm"><Cell main={mediaMap[vendor.media_id]} sub={subMediaMap[vendor.sub_media_id]} /></td>
+                      <td className="crm-hide-sm"><Cell main={address?.city} sub={region} title={region} /></td>
+                      <td className="crm-hide-sm"><ContactCell phone={formatPhone(vendor.country_dialcode, vendor.contact)} email={vendor.email} /></td>
+                      <td className="crm-hide-sm crm-hide-lg"><Cell main={vendor.gstin} sub={vendor.pan_number} mono /></td>
+                      <td><StatusPill tone={active ? 'active' : 'inactive'}>{active ? 'Active' : 'Inactive'}</StatusPill></td>
+                      <td className="crm-col-tight"><RowChevron /></td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          start={pageStart}
+          end={pageEnd}
+          total={totalCount}
+          pageSize={pageSize}
+          pageSizes={VENDOR_PAGE_SIZES}
+          onPage={changePage}
+          onPageSize={(size) => { setPageSize(size); setPage(1) }}
+        />
+      </section>
+
+      {selectedVendor && (
+        <VendorDetails
+          vendor={selectedVendor}
+          address={selectedVendorAddress}
+          onClose={() => setSelectedVendor(null)}
+          onEdit={canEdit ? () => setEditing(selectedVendor) : null}
+          mediaMap={mediaMap}
+          subMediaMap={subMediaMap}
+        />
+      )}
+      {editing && (
+        <VendorForm
+          vendor={editing.id ? editing : null}
+          address={editing.id ? selectedVendorAddress : null}
+          onClose={() => setEditing(null)}
+          onSaved={afterSaved}
+        />
+      )}
+      <Toast message={notice} onDone={() => setNotice('')} />
     </div>
   )
 }

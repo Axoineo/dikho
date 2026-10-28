@@ -114,7 +114,7 @@ export default function WhatsAppCampaigns() {
                           aria-expanded={isOpen}
                           title="Show who hasn't received this campaign"
                           className="inline-flex items-center gap-1 rounded-full border border-line
-                            px-2 py-0.5 text-[11px] font-semibold text-brand transition
+                            px-2 py-0.5 text-[11px] font-semibold text-brand-ink transition
                             hover:border-brand hover:bg-brand-soft dark:text-[#5ba0e0]"
                         >
                           {outstanding}

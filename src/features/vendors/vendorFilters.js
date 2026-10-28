@@ -1,11 +1,12 @@
 export const EMPTY_VENDOR_FILTERS = { media_id: '', sub_media_id: '', country: '', state: '', city: '', status: '' }
 
-// Checkbox, ID, Vendor, Media, Location, Contact, GSTIN, Status, Actions —
-// keep in step with the <thead> and the .vendors-page column widths.
-export const VENDOR_COLUMN_COUNT = 9
+// Vendor, Media, Location, Contact, GSTIN, Status, open chevron:
+// keep in step with the <thead> in VendorsPage.jsx (skeleton and empty rows).
+export const VENDOR_COLUMN_COUNT = 7
 
-// The vendor list shows exactly one page size and never offers another.
-export const VENDORS_PAGE_SIZE = 15
+// Rows per page the vendor list offers. The first is the default unless the
+// person picked another under Settings > Preferences.
+export const VENDOR_PAGE_SIZES = [25, 50, 100]
 
 // Country, state and city live on vendor_addresses, so every vendor query
 // embeds the address rows. When one of those filters is active the embed

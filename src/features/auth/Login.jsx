@@ -317,7 +317,6 @@ export default function Login({ onLogin }) {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter your WhatsApp number"
                   autoComplete="tel"
                   required
                 />
@@ -330,7 +329,6 @@ export default function Login({ onLogin }) {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
                   autoComplete="email"
                   required
                 />

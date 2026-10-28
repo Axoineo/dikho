@@ -1,12 +1,13 @@
-import { formatValue, formatMoney, formatDate } from '../../lib/format'
+import { formatDisplayDate, formatDateRange, formatRupees } from '../../lib/format'
 import { toAmount, round2 } from '../../lib/money'
 import { campaignDays } from '../../lib/dates'
 import { storedItemTotals, MONEY_EPSILON } from '../../lib/gst'
 import { statusTone } from '../../lib/status'
 import { Icon } from '../../components/Icon'
+import { DetailsPanel, Section, KeyValues, StatusPill } from '../../components/crm/CrmUi'
 import SalesOrderItemCard from './SalesOrderItemCard'
 
-export default function SalesOrderDetails({ order, items, itemsLoading, itemsError, onClose, onEdit }) {
+export default function SalesOrderDetails({ order, items, itemsLoading, itemsError, onClose, onEdit, onDownloadInvoice }) {
   if (!order) return null
 
   const duration = campaignDays(order.campaign_start_date, order.campaign_end_date)
@@ -18,129 +19,91 @@ export default function SalesOrderDetails({ order, items, itemsLoading, itemsErr
   const drifted = !itemsLoading && !itemsError && items.length > 0
     && Math.abs(stored.total - toAmount(order.total)) > MONEY_EPSILON
 
-  const receipt = toAmount(order.payment_receipt_amount)
-  const balance = order.payment_receipt_amount == null ? null : round2(toAmount(order.total) - receipt)
-
-  const sections = [
-    { title: 'Order Info', fields: [
-      ['ID', order.id],
-      ['Order Number', order.order_number],
-      ['CRM Reference', order.crm_reference_id],
-      ['Unique ID', order.unique_id],
-      ['Order Type', order.order_type],
-      ['Order Date', order.order_date && formatDate(order.order_date)],
-      ['Invoice Date', order.invoice_date && formatDate(order.invoice_date)],
-      ['Order Status', order.order_status],
-      ['Purchase Status', order.purchase_status],
-      ['Multi Purpose SO', order.multi_purpose_so == null ? null : (order.multi_purpose_so ? 'Yes' : 'No')],
-    ]},
-    { title: 'Client', fields: [
-      ['Company', order.company],
-      ['Client Contact', order.order_client_fullname],
-    ]},
-    { title: 'Campaign', fields: [
-      ['Start Date', order.campaign_start_date && formatDate(order.campaign_start_date)],
-      ['End Date', order.campaign_end_date && formatDate(order.campaign_end_date)],
-      ['Duration', duration && `${duration} ${duration === 1 ? 'day' : 'days'}`],
-    ]},
-    { title: 'Media / Brand', fields: [
-      ['Brand Name', order.brand_name],
-      ['Invoice Courier', order.invoice_courier],
-    ]},
-    { title: 'Approval', fields: [
-      ['Approved By', order.approved_by],
-      ['Approved Date', order.approved_date && formatDate(order.approved_date)],
-      ['Completed Date', order.complete_date && formatDate(order.complete_date)],
-      ['Created By', order.created_by],
-      ['Created At', order.created_at && formatDate(order.created_at)],
-      ['Last Updated', order.updated_at && formatDate(order.updated_at)],
-    ]},
-  ]
+  const received = order.payment_receipt_amount
+  const balance = received == null ? null : round2(toAmount(order.total) - toAmount(received))
 
   return (
-    <aside className="details-drawer" aria-label="Sales order details">
-      <div className="drawer-header">
-        <div>
-          <span className="drawer-kicker">SALES ORDER</span>
-          <h2>{formatValue(order.order_number)}</h2>
-        </div>
-        <div className="drawer-header-actions">
-          {onEdit && <button className="icon-button" onClick={onEdit} aria-label="Edit sales order" title="Edit">
-            <Icon name="edit" size={18} />
-          </button>}
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <Icon name="close" size={19} />
+    <DetailsPanel
+      label="Sales order details"
+      title={order.order_number || `Order #${order.id}`}
+      meta={<>
+        {order.order_status && <StatusPill tone={statusTone(order.order_status)}>{order.order_status}</StatusPill>}
+        <span>{order.company || 'No client'}</span>
+      </>}
+      onClose={onClose}
+      actions={<>
+        {onDownloadInvoice && (
+          <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onDownloadInvoice} title="Download the tax invoice PDF">
+            <Icon name="invoice" size={15} /> Invoice
           </button>
-        </div>
-      </div>
-      <div className="drawer-divider" />
-
-      {/* ── Financial totals ───────────────────────────────────────────── */}
-      <div className="so-total-panel">
-        <div className="so-total-row">
-          <span>Sub Total</span>
-          <span className="mono-cell">{formatMoney(order.sub_total)}</span>
-        </div>
-        <div className="so-total-row">
-          <span>Tax Total</span>
-          <span className="mono-cell">{formatMoney(order.tax_total)}</span>
-        </div>
-        <div className="so-total-row is-grand">
-          <span>Total</span>
-          <span className="mono-cell">{formatMoney(order.total)}</span>
-        </div>
-        {order.payment_receipt_amount != null && (
-          <>
-            <div className="so-total-row">
-              <span>Payment Received</span>
-              <span className="mono-cell">{formatMoney(receipt)}</span>
-            </div>
-            <div className="so-total-row">
-              <span>Balance</span>
-              <span className="mono-cell">{formatMoney(balance)}</span>
-            </div>
-          </>
         )}
+        {onEdit && (
+          <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
+            <Icon name="edit" size={15} /> Edit
+          </button>
+        )}
+      </>}
+    >
+      <div className="crm-figures">
+        <div className="crm-figures-total"><span>Total</span><strong className="crm-mono">{formatRupees(order.total)}</strong></div>
+        <div className="crm-figures-row"><span>Before tax</span><strong className="crm-mono">{formatRupees(order.sub_total)}</strong></div>
+        <div className="crm-figures-row"><span>Tax</span><strong className="crm-mono">{formatRupees(order.tax_total)}</strong></div>
+        {received != null && <div className="crm-figures-row"><span>Received</span><strong className="crm-mono">{formatRupees(received)}</strong></div>}
+        {balance != null && <div className="crm-figures-row is-balance"><span>Balance due</span><strong className="crm-mono">{formatRupees(balance)}</strong></div>}
       </div>
 
       {drifted && (
-        <div className="so-drift-note" role="status">
-          The items on this order add up to {formatMoney(stored.total)}, which differs from the stored total.
-          Saving the order again will recalculate it.
+        <div className="crm-note" role="status">
+          <Icon name="alert" size={16} />
+          <div>The items add up to {formatRupees(stored.total)}, not the stored total. Opening and saving the order recalculates it.</div>
         </div>
       )}
 
-      {/* ── Child items ────────────────────────────────────────────────── */}
-      <div className="details-list">
-        <div className="details-section-title">
-          Order Items
-          {!itemsLoading && !itemsError && <span className="so-item-count">{items.length}</span>}
-        </div>
-
+      <Section title={`Items${!itemsLoading && !itemsError ? ` (${items.length})` : ''}`}>
         {itemsLoading ? (
-          <div className="so-detail-items-state">Loading items…</div>
+          <p className="crm-section-note">Loading items…</p>
         ) : itemsError ? (
-          <div className="so-detail-items-state is-error">{itemsError}</div>
+          <div className="crm-note crm-note--danger" role="alert">{itemsError}</div>
         ) : items.length === 0 ? (
-          <div className="so-detail-items-state">No items recorded on this order yet.</div>
+          <p className="crm-section-note">This order has no items.</p>
         ) : (
-          <div className="so-detail-items">
-            {items.map((row) => <SalesOrderItemCard key={row.id} row={row} />)}
-          </div>
+          <div className="crm-lines">{items.map((row) => <SalesOrderItemCard key={row.id} row={row} />)}</div>
         )}
+      </Section>
 
-        {sections.map((section) => (
-          <div key={section.title}>
-            <div className="details-section-title">{section.title}</div>
-            {section.fields.map(([label, value]) => (
-              <div className="detail-row" key={label}>
-                <span className="detail-label">{label}</span>
-                <span className="detail-value">{formatValue(value)}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </aside>
+      <Section title="Order">
+        <KeyValues items={[
+          { label: 'Client', value: order.company, wide: true, keep: true },
+          { label: 'Client contact', value: order.order_client_fullname },
+          { label: 'Order type', value: order.order_type },
+          { label: 'Order date', value: order.order_date && formatDisplayDate(order.order_date), keep: true },
+          { label: 'Invoice date', value: order.invoice_date && formatDisplayDate(order.invoice_date) },
+          { label: 'Purchase status', value: order.purchase_status },
+          { label: 'CRM reference', value: order.crm_reference_id, mono: true },
+          { label: 'Unique ID', value: order.unique_id, mono: true },
+          { label: 'Multi-purpose SO', value: order.multi_purpose_so ? 'Yes' : null },
+        ]} />
+      </Section>
+
+      <Section title="Campaign">
+        <KeyValues items={[
+          { label: 'Dates', value: formatDateRange(order.campaign_start_date, order.campaign_end_date), keep: true },
+          { label: 'Duration', value: duration && `${duration} ${duration === 1 ? 'day' : 'days'}` },
+          { label: 'Brand', value: order.brand_name },
+          { label: 'Invoice courier', value: order.invoice_courier },
+        ]} />
+      </Section>
+
+      <Section title="History">
+        <KeyValues items={[
+          { label: 'Approved by', value: order.approved_by },
+          { label: 'Approved on', value: order.approved_date && formatDisplayDate(order.approved_date) },
+          { label: 'Completed on', value: order.complete_date && formatDisplayDate(order.complete_date) },
+          { label: 'Created by', value: order.created_by, wide: true },
+          { label: 'Created on', value: order.created_at && formatDisplayDate(order.created_at) },
+          { label: 'Last changed', value: order.updated_at && formatDisplayDate(order.updated_at) },
+        ]} />
+      </Section>
+    </DetailsPanel>
   )
 }

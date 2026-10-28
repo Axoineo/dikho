@@ -284,7 +284,7 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
             <div className="em-field em-span-2">
               <label htmlFor="em-name">Campaign name <span className="em-optional">only staff see this</span></label>
               <input id="em-name" className="em-input" value={form.name} maxLength={120} disabled={!editable} autoFocus={isNew}
-                onChange={(e) => update({ name: e.target.value })} placeholder="October outdoor offer" />
+                onChange={(e) => update({ name: e.target.value })} />
             </div>
             <div className="em-field">
               <label htmlFor="em-from">Send from</label>
@@ -319,12 +319,12 @@ export default function CampaignEditor({ id, meta, onChanged, toast }) {
             <div className="em-field">
               <label htmlFor="em-from-name">Sender name</label>
               <input id="em-from-name" className="em-input" value={form.from_name} maxLength={120} disabled={!editable}
-                onChange={(e) => update({ from_name: e.target.value.replace(/[\r\n]/g, ' ') })} placeholder="Dikho Global Media" />
+                onChange={(e) => update({ from_name: e.target.value.replace(/[\r\n]/g, ' ') })} />
             </div>
             <div className="em-field">
               <label htmlFor="em-reply">Replies go to <span className="em-optional">optional</span></label>
               <input id="em-reply" type="email" className="em-input" value={form.reply_to} maxLength={254} disabled={!editable || (hostingerSender && !form.reply_to)}
-                onChange={(e) => update({ reply_to: e.target.value })} placeholder={hostingerSender ? 'Replies go to the sending mailbox' : 'sales@yourcompany.com'} />
+                onChange={(e) => update({ reply_to: e.target.value })} />
               {hostingerSender && <p className="em-help">Hostinger cannot set a separate reply-to address: replies go to the sending mailbox.</p>}
             </div>
             <div className="em-field">

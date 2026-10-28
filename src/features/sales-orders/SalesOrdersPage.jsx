@@ -1,25 +1,29 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { formatValue, formatMoney, formatDate, formatDateInput, getValue } from '../../lib/format'
+import { formatDisplayDate, formatDateRange, formatRupees } from '../../lib/format'
 import { round2, toAmount } from '../../lib/money'
-import { campaignDays, todayIso } from '../../lib/dates'
+import { campaignDays } from '../../lib/dates'
 import {
   ORDER_TYPE_OPTIONS, ORDER_STATUS_OPTIONS, PURCHASE_STATUS_OPTIONS,
   GST_TYPE_OPTIONS, GST_RATES, SO_ITEM_TYPE_OPTIONS, SO_COURIER_STATUS_OPTIONS,
-  itemAmounts, taxFromRate, reconcileSalesOrderTotals, applyItemChange,
-  gstBreakdown, MONEY_EPSILON,
+  itemAmounts, reconcileSalesOrderTotals, applyItemChange, gstBreakdown,
 } from '../../lib/gst'
 import { statusTone, isIlikeTypeError } from '../../lib/status'
 import { writeRows } from '../../lib/writeRows'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
+import {
+  PageHeader, SearchField, ResultCount, Pagination, StatusPill, Cell, RowChevron, SkeletonRows, EmptyState, Toast,
+  FormModal, FormSection, Field, CheckToggle, Disclosure,
+} from '../../components/crm/CrmUi'
 import SalesOrderDetails from './SalesOrderDetails'
 import { useAccess } from '../../lib/access'
+import { getSettings, listOptions, listValues, preferredPageSize, useSettings } from '../../lib/settings'
 import {
   SO_COLOR_OPTIONS, blankSalesOrderForm, salesOrderToForm,
   blankSalesOrderItem, salesOrderItemToForm,
   buildSalesOrderPayload, buildSalesOrderItemPayload,
-  sessionActor, SALES_ORDER_FALLBACKS, SALES_ORDER_ITEM_FALLBACKS,
+  SALES_ORDER_FALLBACKS, SALES_ORDER_ITEM_FALLBACKS,
   SO_SEARCH_COLUMNS, SO_SEARCH_FALLBACK_COLUMNS, soSearchFilter,
 } from './salesOrderHelpers'
 
@@ -28,31 +32,53 @@ const SO_PAGE_SIZES = [25, 50, 75, 100]
 // Define constants that were in App.jsx scope
 const SALES_ORDER_TABLE = 'salesorder'
 const SALES_ORDER_ITEM_TABLE = 'salesorderdocument'
-const SO_COLUMN_COUNT = 8
+const SO_COLUMN_COUNT = 7
 
 function uniqueOptions(options) {
   return [...new Set(options)].map((opt) => (typeof opt === 'string' ? { label: opt, value: opt } : opt))
 }
 
+// Settings > Lists decides what a dropdown offers. Until that migration is
+// applied, fall back to the built-in values plus whatever the data already uses.
+function choiceValues(listKey, fallback, facetValues, current) {
+  if (getSettings().lists.some((row) => row.list_key === listKey)) return listValues(listKey, fallback, current)
+  return [...new Set([...fallback, ...(facetValues || []), ...(current ? [current] : [])])]
+}
+
+const colourChoices = (current) => [{ value: '', label: 'None' }, ...listOptions('row_color', SO_COLOR_OPTIONS.filter((option) => option.value), current)]
+
+// A new order and a new line start on the first value each list offers.
+function newOrderForm() {
+  const form = blankSalesOrderForm()
+  return {
+    ...form,
+    order_type: listValues('order_type', ORDER_TYPE_OPTIONS)[0] ?? form.order_type,
+    order_status: listValues('order_status', ORDER_STATUS_OPTIONS)[0] ?? form.order_status,
+    purchase_status: listValues('purchase_status', PURCHASE_STATUS_OPTIONS)[0] ?? form.purchase_status,
+  }
+}
+
+function newOrderItem(key) {
+  const item = blankSalesOrderItem(key)
+  return { ...item, type: listValues('item_type', SO_ITEM_TYPE_OPTIONS)[0] ?? item.type }
+}
+
 function SalesOrderItemEditor({ item, index, onChange, onRemove, onToggle, canRemove, typeOptions }) {
   const amounts = itemAmounts(item)
-  const field = (name) => (event) => onChange(index, name, event.target.value)
+  const field = (name) => ({ value: item[name], onChange: (event) => onChange(index, name, event.target.value) })
+  const id = (name) => `so-item-${name}-${item.key}`
   const breakdown = gstBreakdown(amounts)
 
   return (
-    <div className="so-item-card">
-      <div className="so-item-head">
-        <span className="so-item-index">{index + 1}</span>
-        {item.document_color && <span className="so-color-dot" style={{ background: item.document_color }} aria-hidden="true" />}
-        <span className="so-item-title" title={item.name}>{item.name.trim() || 'Untitled item'}</span>
-        <span className="so-item-amount mono-cell">{formatMoney(amounts.after_tax_amount)}</span>
-        <button type="button" className="so-item-more" onClick={() => onToggle(index)} aria-expanded={item.expanded}>
-          {item.expanded ? 'Fewer fields' : 'More fields'}
-          <Icon name="chevronDown" size={14} />
-        </button>
+    <div className="crm-item">
+      <div className="crm-item-head">
+        <span className="crm-item-index">{index + 1}</span>
+        {item.document_color && <span className="crm-swatch" style={{ background: item.document_color }} aria-hidden="true" />}
+        <span className={`crm-item-title${item.name.trim() ? '' : ' is-placeholder'}`} title={item.name}>{item.name.trim() || 'New item'}</span>
+        <span className="crm-item-total">{formatRupees(amounts.after_tax_amount)}</span>
         <button
           type="button"
-          className="icon-button small"
+          className="crm-icon-btn"
           onClick={() => onRemove(index)}
           disabled={!canRemove}
           title={canRemove ? 'Remove item' : 'An order needs at least one item'}
@@ -62,159 +88,95 @@ function SalesOrderItemEditor({ item, index, onChange, onRemove, onToggle, canRe
         </button>
       </div>
 
-      <div className="so-item-grid">
-        <div className="field so-item-name">
-          <label htmlFor={`so-item-name-${item.key}`}>Name *</label>
-          <input id={`so-item-name-${item.key}`} value={item.name} onChange={field('name')} placeholder="What is being sold" />
+      <div className="crm-item-body">
+        <div className="crm-grid crm-grid--4">
+          <Field label="Item" htmlFor={id('name')} required className="crm-span-2">
+            <input id={id('name')} className="crm-input" {...field('name')} />
+          </Field>
+          <Field label="Type" htmlFor={id('type')}>
+            <select id={id('type')} className="crm-select" {...field('type')}>
+              <option value="">Not set</option>
+              {(item.type && !typeOptions.includes(item.type) ? [...typeOptions, item.type] : typeOptions).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </Field>
+          <Field label="Amount before tax" htmlFor={id('taxable')}>
+            <div className="crm-input-group">
+              <span className="crm-addon">₹</span>
+              <input id={id('taxable')} type="number" step="0.01" min="0" inputMode="decimal" className="crm-input crm-mono-input" {...field('taxable_amount')} />
+            </div>
+          </Field>
+          <Field label="GST">
+            <CheckToggle checked={item.is_taxable} onChange={(value) => onChange(index, 'is_taxable', value)}>Charge GST</CheckToggle>
+          </Field>
+          <Field label="GST type" htmlFor={id('gst-type')}>
+            <select id={id('gst-type')} className="crm-select" {...field('gst_type')} disabled={!item.is_taxable}>
+              {GST_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </Field>
+          <Field label="GST rate" htmlFor={id('rate')}>
+            <select id={id('rate')} className="crm-select" {...field('gst_rate')} disabled={!item.is_taxable}>
+              {GST_RATES.map((rate) => <option key={rate} value={String(rate)}>{rate}%</option>)}
+              <option value="custom">Custom amount</option>
+            </select>
+          </Field>
+          <Field label="Tax" htmlFor={id('tax')} hint={item.is_taxable && item.gst_rate !== 'custom' ? 'Worked out from the rate' : null}>
+            <div className="crm-input-group">
+              <span className="crm-addon">₹</span>
+              <input id={id('tax')} type="number" step="0.01" min="0" inputMode="decimal" className="crm-input crm-mono-input" {...field('tax_amount')}
+                disabled={!item.is_taxable || item.gst_rate !== 'custom'} />
+            </div>
+          </Field>
         </div>
 
-        <div className="field">
-          <label htmlFor={`so-item-type-${item.key}`}>Type</label>
-          <select id={`so-item-type-${item.key}`} value={item.type} onChange={field('type')}>
-            <option value="">—</option>
-            {typeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`so-item-date-${item.key}`}>Date</label>
-          <input id={`so-item-date-${item.key}`} type="date" value={item.date} onChange={field('date')} />
-        </div>
-
-        <div className="field">
-          <label htmlFor={`so-item-taxable-${item.key}`}>Taxable Amount</label>
-          <input
-            id={`so-item-taxable-${item.key}`}
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            value={item.taxable_amount}
-            onChange={field('taxable_amount')}
-            placeholder="0.00"
-          />
-        </div>
-
-        <div className="field so-check-field">
-          <label>GST</label>
-          <button
-            type="button"
-            className="so-check"
-            onClick={() => onChange(index, 'is_taxable', !item.is_taxable)}
-            aria-pressed={item.is_taxable}
-          >
-            <span className={`checkbox-button ${item.is_taxable ? 'checked' : ''}`}>
-              {item.is_taxable ? <Icon name="check" size={13} /> : null}
-            </span>
-            Taxable
-          </button>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`so-item-gst-type-${item.key}`}>GST Type</label>
-          <select id={`so-item-gst-type-${item.key}`} value={item.gst_type} onChange={field('gst_type')} disabled={!item.is_taxable}>
-            {GST_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`so-item-rate-${item.key}`}>GST Rate</label>
-          <select id={`so-item-rate-${item.key}`} value={item.gst_rate} onChange={field('gst_rate')} disabled={!item.is_taxable}>
-            {GST_RATES.map((rate) => <option key={rate} value={String(rate)}>{rate}%</option>)}
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`so-item-tax-${item.key}`}>Tax Amount</label>
-          <input
-            id={`so-item-tax-${item.key}`}
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            value={item.tax_amount}
-            onChange={field('tax_amount')}
-            disabled={!item.is_taxable || item.gst_rate !== 'custom'}
-            placeholder="0.00"
-          />
-        </div>
+        <Disclosure open={item.expanded} onToggle={() => onToggle(index)} count="10 fields">
+          <div className="crm-grid crm-grid--4">
+            <Field label="Date" htmlFor={id('date')}>
+              <input id={id('date')} type="date" className="crm-input" {...field('date')} />
+            </Field>
+            <Field label="Invoice number" htmlFor={id('invoice')}>
+              <input id={id('invoice')} className="crm-input" {...field('invoice_number')} />
+            </Field>
+            <Field label="Short name" htmlFor={id('short')}>
+              <input id={id('short')} className="crm-input" {...field('short_name')} />
+            </Field>
+            <Field label="Label" htmlFor={id('label')}>
+              <input id={id('label')} className="crm-input" {...field('label')} />
+            </Field>
+            <Field label="Reference type" htmlFor={id('ref')}>
+              <input id={id('ref')} className="crm-input" {...field('reference_type')} />
+            </Field>
+            <Field label="Document courier" htmlFor={id('courier')}>
+              <input id={id('courier')} className="crm-input" {...field('document_courier')} />
+            </Field>
+            <Field label="Courier status" htmlFor={id('courier-status')}>
+              <select id={id('courier-status')} className="crm-select" {...field('courier_status')}>
+                <option value="">Not set</option>
+                {listValues('courier_status', SO_COURIER_STATUS_OPTIONS, item.courier_status).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </Field>
+            <Field label="Colour" htmlFor={id('color')}>
+              <select id={id('color')} className="crm-select" {...field('document_color')}>
+                {colourChoices(item.document_color).map((option) => <option key={option.value || 'none'} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Attachment link" htmlFor={id('file')} className="crm-span-2">
+              <input id={id('file')} type="url" className="crm-input" {...field('file_url')} />
+            </Field>
+            <Field label="Audit" className="crm-span-2">
+              <CheckToggle checked={item.self_audit_completed} onChange={(value) => onChange(index, 'self_audit_completed', value)}>Self audit done</CheckToggle>
+            </Field>
+            <Field label="Note" htmlFor={id('note')} className="crm-span-all">
+              <textarea id={id('note')} rows={2} className="crm-textarea" {...field('document_note')} />
+            </Field>
+          </div>
+        </Disclosure>
       </div>
 
-      {item.expanded && (
-        <div className="so-item-grid so-item-extra">
-          <div className="field">
-            <label htmlFor={`so-item-short-${item.key}`}>Short Name</label>
-            <input id={`so-item-short-${item.key}`} value={item.short_name} onChange={field('short_name')} />
-          </div>
-
-          <div className="field">
-            <label htmlFor={`so-item-label-${item.key}`}>Label</label>
-            <input id={`so-item-label-${item.key}`} value={item.label} onChange={field('label')} />
-          </div>
-
-          <div className="field">
-            <label htmlFor={`so-item-ref-${item.key}`}>Reference Type</label>
-            <input id={`so-item-ref-${item.key}`} value={item.reference_type} onChange={field('reference_type')} />
-          </div>
-
-          <div className="field">
-            <label htmlFor={`so-item-invoice-${item.key}`}>Invoice Number</label>
-            <input id={`so-item-invoice-${item.key}`} value={item.invoice_number} onChange={field('invoice_number')} />
-          </div>
-
-          <div className="field">
-            <label htmlFor={`so-item-courier-${item.key}`}>Document Courier</label>
-            <input id={`so-item-courier-${item.key}`} value={item.document_courier} onChange={field('document_courier')} />
-          </div>
-
-          <div className="field">
-            <label htmlFor={`so-item-courier-status-${item.key}`}>Courier Status</label>
-            <select id={`so-item-courier-status-${item.key}`} value={item.courier_status} onChange={field('courier_status')}>
-              <option value="">—</option>
-              {SO_COURIER_STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor={`so-item-color-${item.key}`}>Colour</label>
-            <select id={`so-item-color-${item.key}`} value={item.document_color} onChange={field('document_color')}>
-              {SO_COLOR_OPTIONS.map((option) => <option key={option.value || 'none'} value={option.value}>{option.label}</option>)}
-            </select>
-          </div>
-
-          <div className="field so-check-field">
-            <label>Audit</label>
-            <button
-              type="button"
-              className="so-check"
-              onClick={() => onChange(index, 'self_audit_completed', !item.self_audit_completed)}
-              aria-pressed={item.self_audit_completed}
-            >
-              <span className={`checkbox-button ${item.self_audit_completed ? 'checked' : ''}`}>
-                {item.self_audit_completed ? <Icon name="check" size={13} /> : null}
-              </span>
-              Self audit done
-            </button>
-          </div>
-
-          <div className="field field-wide">
-            <label htmlFor={`so-item-file-${item.key}`}>Attachment URL</label>
-            <input id={`so-item-file-${item.key}`} type="url" value={item.file_url} onChange={field('file_url')} placeholder="https://…" />
-          </div>
-
-          <div className="field field-wide">
-            <label htmlFor={`so-item-note-${item.key}`}>Note</label>
-            <textarea id={`so-item-note-${item.key}`} rows="2" value={item.document_note} onChange={field('document_note')} />
-          </div>
-        </div>
-      )}
-
-      <div className="so-item-foot">
-        <span>Taxable <strong className="mono-cell">{formatMoney(amounts.taxable_amount)}</strong></span>
-        <span>Tax <strong className="mono-cell">{formatMoney(amounts.tax_amount)}</strong></span>
-        <span className="so-item-foot-gst">{breakdown || (item.is_taxable ? 'No GST yet' : 'Not taxable')}</span>
-        <span className="so-item-foot-total">After tax <strong className="mono-cell">{formatMoney(amounts.after_tax_amount)}</strong></span>
+      <div className="crm-item-foot">
+        <span>Before tax <strong>{formatRupees(amounts.taxable_amount)}</strong></span>
+        <span>Tax <strong>{formatRupees(amounts.tax_amount)}</strong></span>
+        <span>{breakdown || (item.is_taxable ? 'No GST yet' : 'No GST')}</span>
+        <span className="is-end">Total <strong>{formatRupees(amounts.after_tax_amount)}</strong></span>
       </div>
     </div>
   )
@@ -223,11 +185,12 @@ function SalesOrderItemEditor({ item, index, onChange, onRemove, onToggle, canRe
 function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
   const isEdit = Boolean(order?.id)
 
-  const [form, setForm] = useState(() => (isEdit ? salesOrderToForm(order) : blankSalesOrderForm()))
+  useSettings()
+  const [form, setForm] = useState(() => (isEdit ? salesOrderToForm(order) : newOrderForm()))
   // Existing rows key off their database id, new ones off a counter, so the two
   // can never collide while a row is being added and removed.
   const keyRef = useRef(1)
-  const [items, setItems] = useState(() => (isEdit ? [] : [blankSalesOrderItem('item-1')]))
+  const [items, setItems] = useState(() => (isEdit ? [] : [newOrderItem('item-1')]))
   const [removedItemIds, setRemovedItemIds] = useState([])
   const [itemsLoading, setItemsLoading] = useState(isEdit)
   const [clients, setClients] = useState([])
@@ -269,10 +232,10 @@ function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
 
       if (fetchError) {
         setError(fetchError.message)
-        setItems([blankSalesOrderItem(nextKey())])
+        setItems([newOrderItem(nextKey())])
       } else {
         const rows = (data || []).map((row) => salesOrderItemToForm(row, `existing-${row.id}`))
-        setItems(rows.length > 0 ? rows : [blankSalesOrderItem(nextKey())])
+        setItems(rows.length > 0 ? rows : [newOrderItem(nextKey())])
       }
       setRemovedItemIds([])
       setItemsLoading(false)
@@ -309,7 +272,7 @@ function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
   function addItem() {
     // The key is minted outside the updater: updaters run twice under StrictMode,
     // and bumping the counter in there would burn a key on every add.
-    const blank = blankSalesOrderItem(nextKey())
+    const blank = newOrderItem(nextKey())
     setItems((current) => [...current, blank])
   }
 
@@ -327,10 +290,10 @@ function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
     return uniqueOptions(names.map(String))
   }, [clients, form.company])
 
-  const orderTypeOptions = useMemo(() => uniqueOptions([...ORDER_TYPE_OPTIONS, ...(facets?.order_type || [])]), [facets])
-  const orderStatusOptions = useMemo(() => uniqueOptions([...ORDER_STATUS_OPTIONS, ...(facets?.order_status || [])]), [facets])
-  const purchaseStatusOptions = useMemo(() => uniqueOptions([...PURCHASE_STATUS_OPTIONS, ...(facets?.purchase_status || [])]), [facets])
-  const itemTypeOptions = useMemo(() => uniqueOptions([...SO_ITEM_TYPE_OPTIONS, ...(facets?.item_type || [])]).map((option) => option.value), [facets])
+  const orderTypeOptions = uniqueOptions(choiceValues('order_type', ORDER_TYPE_OPTIONS, facets?.order_type, form.order_type))
+  const orderStatusOptions = uniqueOptions(choiceValues('order_status', ORDER_STATUS_OPTIONS, facets?.order_status, form.order_status))
+  const purchaseStatusOptions = uniqueOptions(choiceValues('purchase_status', PURCHASE_STATUS_OPTIONS, facets?.purchase_status, form.purchase_status))
+  const itemTypeOptions = choiceValues('item_type', SO_ITEM_TYPE_OPTIONS, facets?.item_type)
 
   // The same function that guards the payload also produces the figures on
   // screen, so what the Summary shows is exactly what will be written — and a
@@ -469,262 +432,167 @@ function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
     }
   }
 
+  const field = (name) => ({ value: form[name], onChange: (event) => update(name, event.target.value) })
+  const moreFilled = [form.crm_reference_id, form.unique_id, form.order_client_fullname, form.invoice_date, form.purchase_status,
+    form.approved_by, form.approved_date, form.complete_date, form.order_color, form.invoice_courier, form.multi_purpose_so].filter(Boolean).length
+
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal-card so-modal-card" onMouseDown={(event) => event.stopPropagation()}>
-
-        <div className="modal-header">
-          <div>
-            <span className="drawer-kicker">SALES ORDER</span>
-            <h2>{isEdit ? `Edit ${order.order_number || `order #${order.id}`}` : 'Add sales order'}</h2>
+    <FormModal
+      wide
+      title={isEdit ? `Edit ${order.order_number || `order #${order.id}`}` : 'New sales order'}
+      subtitle={isEdit ? order.company : 'Pick the client, add what is being sold, and save. Totals work themselves out.'}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      busy={saving}
+      submitDisabled={itemsLoading}
+      error={error}
+      errorTitle="Could not save the sales order"
+      submitLabel={isEdit ? 'Save changes' : 'Create order'}
+      footerInfo={<>Total <strong>{formatRupees(totals.total)}</strong></>}
+    >
+      <FormSection title="Order">
+        <div className="crm-grid crm-grid--3">
+          <div className="crm-span-2">
+            <SearchableSelect
+              label="Client"
+              required
+              value={form.company}
+              onChange={selectClient}
+              options={clientOptions}
+              placeholder={clientOptions.length === 0 ? 'Loading clients…' : 'Choose a client'}
+              searchPlaceholder="Search clients…"
+            />
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <Icon name="close" size={19} />
-          </button>
-        </div>
-
-        {error && (
-          <div className="form-error" role="alert">
-            <Icon name="alert" size={17} />
-            <div><strong>Could not save sales order</strong><span>{error}</span></div>
-          </div>
-        )}
-
-        <form className="vendor-form so-form" onSubmit={handleSubmit}>
-
-          {/* ── Order Info ──────────────────────────────────────────── */}
-          <div className="form-section-title field-wide">Order Info</div>
-
-          <div className="field">
-            <label htmlFor="so-order-number">Order Number *</label>
-            <input id="so-order-number" value={form.order_number} onChange={(event) => update('order_number', event.target.value)} required />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-crm">CRM Reference ID</label>
-            <input id="so-crm" value={form.crm_reference_id} onChange={(event) => update('crm_reference_id', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-unique">Unique ID</label>
-            <input id="so-unique" value={form.unique_id} onChange={(event) => update('unique_id', event.target.value)} placeholder="Auto if left blank" />
-          </div>
-
-          <SearchableSelect
-            label="Client"
-            required
-            value={form.company}
-            onChange={selectClient}
-            options={clientOptions}
-            placeholder={clientOptions.length === 0 ? 'Loading clients…' : 'Select a client'}
-            searchPlaceholder="Search clients..."
-          />
-
-          <div className="field">
-            <label htmlFor="so-client-contact">Client Contact Person</label>
-            <input id="so-client-contact" value={form.order_client_fullname} onChange={(event) => update('order_client_fullname', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-order-type">Order Type</label>
-            <select id="so-order-type" value={form.order_type} onChange={(event) => update('order_type', event.target.value)}>
-              <option value="">—</option>
+          <Field label="Order number" htmlFor="so-order-number" required>
+            <input id="so-order-number" className="crm-input crm-mono-input" {...field('order_number')} />
+          </Field>
+          <Field label="Order date" htmlFor="so-order-date">
+            <input id="so-order-date" type="date" className="crm-input" {...field('order_date')} />
+          </Field>
+          <Field label="Order type" htmlFor="so-order-type">
+            <select id="so-order-type" className="crm-select" {...field('order_type')}>
+              <option value="">Not set</option>
               {orderTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-order-date">Order Date</label>
-            <input id="so-order-date" type="date" value={form.order_date} onChange={(event) => update('order_date', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-invoice-date">Invoice Date</label>
-            <input id="so-invoice-date" type="date" value={form.invoice_date} onChange={(event) => update('invoice_date', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-order-color">Row Colour</label>
-            <select id="so-order-color" value={form.order_color} onChange={(event) => update('order_color', event.target.value)}>
-              {SO_COLOR_OPTIONS.map((option) => <option key={option.value || 'none'} value={option.value}>{option.label}</option>)}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-order-status">Order Status</label>
-            <select id="so-order-status" value={form.order_status} onChange={(event) => update('order_status', event.target.value)}>
-              <option value="">—</option>
+          </Field>
+          <Field label="Status" htmlFor="so-order-status">
+            <select id="so-order-status" className="crm-select" {...field('order_status')}>
+              <option value="">Not set</option>
               {orderStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
-          </div>
+          </Field>
+        </div>
+      </FormSection>
 
-          <div className="field">
-            <label htmlFor="so-purchase-status">Purchase Status</label>
-            <select id="so-purchase-status" value={form.purchase_status} onChange={(event) => update('purchase_status', event.target.value)}>
-              <option value="">—</option>
-              {purchaseStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </div>
-
-          <div className="field so-check-field">
-            <label>Scope</label>
-            <button
-              type="button"
-              className="so-check"
-              onClick={() => update('multi_purpose_so', !form.multi_purpose_so)}
-              aria-pressed={form.multi_purpose_so}
-            >
-              <span className={`checkbox-button ${form.multi_purpose_so ? 'checked' : ''}`}>
-                {form.multi_purpose_so ? <Icon name="check" size={13} /> : null}
-              </span>
-              Multi purpose SO
-            </button>
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-approved-by">Approved By</label>
-            <input id="so-approved-by" value={form.approved_by} onChange={(event) => update('approved_by', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-approved-date">Approved Date</label>
-            <input id="so-approved-date" type="date" value={form.approved_date} onChange={(event) => update('approved_date', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-complete-date">Completed Date</label>
-            <input id="so-complete-date" type="date" value={form.complete_date} onChange={(event) => update('complete_date', event.target.value)} />
-          </div>
-
-          {/* ── Campaign ────────────────────────────────────────────── */}
-          <div className="form-section-title field-wide">Campaign</div>
-
-          <div className="field">
-            <label htmlFor="so-campaign-start">Campaign Start Date</label>
-            <input id="so-campaign-start" type="date" value={form.campaign_start_date} onChange={(event) => update('campaign_start_date', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-campaign-end">Campaign End Date</label>
-            <input
-              id="so-campaign-end"
-              type="date"
-              value={form.campaign_end_date}
-              min={form.campaign_start_date || undefined}
-              onChange={(event) => update('campaign_end_date', event.target.value)}
-              aria-invalid={campaignInvalid}
-            />
-          </div>
-
-          <div className="field">
-            <label>Duration</label>
-            <div className={`so-readout ${campaignInvalid ? 'is-invalid' : ''}`}>
-              {campaignInvalid
-                ? 'End date is before the start date'
-                : duration
-                  ? `${duration} ${duration === 1 ? 'day' : 'days'}`
-                  : 'Set both dates'}
+      <FormSection title="Campaign">
+        <div className="crm-grid crm-grid--4">
+          <Field label="Brand" htmlFor="so-brand">
+            <input id="so-brand" className="crm-input" {...field('brand_name')} />
+          </Field>
+          <Field label="Starts" htmlFor="so-campaign-start">
+            <input id="so-campaign-start" type="date" className="crm-input" {...field('campaign_start_date')} />
+          </Field>
+          <Field label="Ends" htmlFor="so-campaign-end">
+            <input id="so-campaign-end" type="date" className="crm-input" {...field('campaign_end_date')}
+              min={form.campaign_start_date || undefined} aria-invalid={campaignInvalid} />
+          </Field>
+          <Field label="Duration">
+            <div className={`crm-readout${campaignInvalid ? ' is-invalid' : ''}`}>
+              {campaignInvalid ? 'Ends before it starts' : duration ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Set both dates'}
             </div>
-          </div>
+          </Field>
+        </div>
+      </FormSection>
 
-          {/* ── Media / Brand ───────────────────────────────────────── */}
-          <div className="form-section-title field-wide">Media / Brand</div>
+      <FormSection title={`Items (${items.length})`} description="Each line's GST is worked out from its rate. Open “More details” on a line for courier, audit and attachments.">
+        <div className="crm-items">
+          {itemsLoading ? (
+            <p className="crm-section-note">Loading items…</p>
+          ) : (
+            items.map((item, index) => (
+              <SalesOrderItemEditor
+                key={item.key}
+                item={item}
+                index={index}
+                onChange={changeItem}
+                onRemove={removeItem}
+                onToggle={toggleItem}
+                canRemove={items.length > 1}
+                typeOptions={itemTypeOptions}
+              />
+            ))
+          )}
+        </div>
+        <button type="button" className="crm-btn crm-btn--secondary" onClick={addItem} disabled={itemsLoading}>
+          <Icon name="plus" size={16} /> Add item
+        </button>
+      </FormSection>
 
-          <div className="field">
-            <label htmlFor="so-brand">Brand Name</label>
-            <input id="so-brand" value={form.brand_name} onChange={(event) => update('brand_name', event.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="so-invoice-courier">Invoice Courier</label>
-            <input id="so-invoice-courier" value={form.invoice_courier} onChange={(event) => update('invoice_courier', event.target.value)} />
-          </div>
-
-          {/* ── Order Items ─────────────────────────────────────────── */}
-          <div className="form-section-title field-wide">
-            Order Items
-            <span className="so-item-count">{items.length}</span>
-          </div>
-
-          <div className="so-items field-wide">
-            {itemsLoading ? (
-              <div className="so-detail-items-state">Loading items…</div>
-            ) : (
-              items.map((item, index) => (
-                <SalesOrderItemEditor
-                  key={item.key}
-                  item={item}
-                  index={index}
-                  onChange={changeItem}
-                  onRemove={removeItem}
-                  onToggle={toggleItem}
-                  canRemove={items.length > 1}
-                  typeOptions={itemTypeOptions}
-                />
-              ))
-            )}
-
-            <button type="button" className="secondary-button so-add-item" onClick={addItem}>
-              <Icon name="plus" size={16} /> Add item
-            </button>
-          </div>
-
-          {/* ── Summary ─────────────────────────────────────────────── */}
-          <div className="form-section-title field-wide">Summary</div>
-
-          <div className="so-summary field-wide">
-            <div className="so-summary-figures">
-              <div className="so-summary-cell">
-                <span>Sub Total</span>
-                <strong className="mono-cell">{formatMoney(totals.sub_total)}</strong>
-                <small>Sum of taxable amounts</small>
-              </div>
-              <div className="so-summary-cell">
-                <span>Tax Total</span>
-                <strong className="mono-cell">{formatMoney(totals.tax_total)}</strong>
-                <small>Sum of item tax</small>
-              </div>
-              <div className="so-summary-cell is-grand">
-                <span>Total</span>
-                <strong className="mono-cell">{formatMoney(totals.total)}</strong>
-                <small>Sum of after-tax amounts</small>
-              </div>
+      <FormSection title="Totals and payment">
+        <div className="crm-totals">
+          <div className="crm-total"><span>Before tax</span><strong>{formatRupees(totals.sub_total)}</strong></div>
+          <div className="crm-total"><span>Tax</span><strong>{formatRupees(totals.tax_total)}</strong></div>
+          <div className="crm-total is-grand"><span>Total</span><strong>{formatRupees(totals.total)}</strong></div>
+        </div>
+        {totals.error && <div className="crm-note crm-note--danger" role="alert" style={{ marginBottom: 14 }}>{totals.error}</div>}
+        <div className="crm-grid crm-grid--3">
+          <Field label="Payment received" htmlFor="so-receipt">
+            <div className="crm-input-group">
+              <span className="crm-addon">₹</span>
+              <input id="so-receipt" type="number" step="0.01" min="0" inputMode="decimal" className="crm-input crm-mono-input" {...field('payment_receipt_amount')} />
             </div>
+          </Field>
+          <Field label="Balance due">
+            <div className="crm-readout">{receiptBalance == null ? 'No payment yet' : formatRupees(receiptBalance)}</div>
+          </Field>
+        </div>
+      </FormSection>
 
-            {totals.error
-              ? <div className="so-summary-note is-error">{totals.error}</div>
-              : <div className="so-summary-note">These three figures are written to the order exactly as shown, recalculated from the {items.length} {items.length === 1 ? 'item' : 'items'} above.</div>}
+      <FormSection title="More details" description="References, approvals and other fields most orders leave empty.">
+        <Disclosure label="Show all fields" count={moreFilled ? `${moreFilled} filled` : '11 fields'} defaultOpen={false}>
+          <div className="crm-grid crm-grid--3">
+            <Field label="CRM reference" htmlFor="so-crm">
+              <input id="so-crm" className="crm-input crm-mono-input" {...field('crm_reference_id')} />
+            </Field>
+            <Field label="Unique ID" htmlFor="so-unique" hint="Made for you if left empty.">
+              <input id="so-unique" className="crm-input crm-mono-input" {...field('unique_id')} />
+            </Field>
+            <Field label="Client contact" htmlFor="so-client-contact" hint="Filled in from the client; change it for this order if needed.">
+              <input id="so-client-contact" className="crm-input" {...field('order_client_fullname')} />
+            </Field>
+            <Field label="Invoice date" htmlFor="so-invoice-date">
+              <input id="so-invoice-date" type="date" className="crm-input" {...field('invoice_date')} />
+            </Field>
+            <Field label="Purchase status" htmlFor="so-purchase-status">
+              <select id="so-purchase-status" className="crm-select" {...field('purchase_status')}>
+                <option value="">Not set</option>
+                {purchaseStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Invoice courier" htmlFor="so-invoice-courier">
+              <input id="so-invoice-courier" className="crm-input" {...field('invoice_courier')} />
+            </Field>
+            <Field label="Approved by" htmlFor="so-approved-by">
+              <input id="so-approved-by" className="crm-input" {...field('approved_by')} />
+            </Field>
+            <Field label="Approved on" htmlFor="so-approved-date">
+              <input id="so-approved-date" type="date" className="crm-input" {...field('approved_date')} />
+            </Field>
+            <Field label="Completed on" htmlFor="so-complete-date">
+              <input id="so-complete-date" type="date" className="crm-input" {...field('complete_date')} />
+            </Field>
+            <Field label="Row colour" htmlFor="so-order-color" hint="Marks the order in the list.">
+              <select id="so-order-color" className="crm-select" {...field('order_color')}>
+                {colourChoices(form.order_color).map((option) => <option key={option.value || 'none'} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Scope" className="crm-span-2">
+              <CheckToggle checked={form.multi_purpose_so} onChange={(value) => update('multi_purpose_so', value)}>Multi-purpose sales order</CheckToggle>
+            </Field>
           </div>
-
-          <div className="field">
-            <label htmlFor="so-receipt">Payment Receipt Amount</label>
-            <input
-              id="so-receipt"
-              type="number"
-              step="0.01"
-              min="0"
-              inputMode="decimal"
-              value={form.payment_receipt_amount}
-              onChange={(event) => update('payment_receipt_amount', event.target.value)}
-              placeholder="0.00"
-            />
-          </div>
-
-          <div className="field">
-            <label>Balance</label>
-            <div className="so-readout">{receiptBalance == null ? 'No payment recorded' : formatMoney(receiptBalance)}</div>
-          </div>
-
-          <div className="form-actions field-wide">
-            <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary-button" disabled={saving || itemsLoading}>
-              {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Save Sales Order'}
-            </button>
-          </div>
-
-        </form>
-      </div>
-    </div>
+        </Disclosure>
+      </FormSection>
+    </FormModal>
   )
 }
 
@@ -740,7 +608,7 @@ export default function SalesOrdersPage({ session }) {
 
   const [orders, setOrders] = useState([])
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(SO_PAGE_SIZES[0])
+  const [pageSize, setPageSize] = useState(() => preferredPageSize(SO_PAGE_SIZES))
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -757,6 +625,8 @@ export default function SalesOrdersPage({ session }) {
   const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [facets, setFacets] = useState(null)
+  const [actionError, setActionError] = useState('')
+  const [notice, setNotice] = useState('')
 
   // Held in a ref rather than state: narrowing it happens *inside* the loader,
   // which retries immediately, so re-running the effect would only refetch what
@@ -890,19 +760,8 @@ export default function SalesOrdersPage({ session }) {
   const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
   const pageEnd = Math.min(page * pageSize, totalCount)
 
-  const pageNumbers = useMemo(() => {
-    const current = Math.min(page, totalPages)
-    return [current - 2, current - 1, current, current + 1, current + 2]
-      .filter((number) => number >= 1 && number <= totalPages)
-  }, [page, totalPages])
-
   function changePage(nextPage) {
     setPage(Math.max(1, Math.min(nextPage, totalPages)))
-  }
-
-  function changePageSize(event) {
-    setPageSize(Number(event.target.value))
-    setPage(1)
   }
 
   function openAddForm() {
@@ -936,217 +795,164 @@ export default function SalesOrdersPage({ session }) {
     }
 
     setRefresh((current) => ({ key: current.key + 1, silent: Boolean(saved?.id) }))
+    setNotice(wasEdit ? 'Sales order saved' : 'Sales order created')
   }
 
   const searchNarrowed = searchColumnsRef.current.length < SO_SEARCH_COLUMNS.length
 
-  const emptyCopy = query
-    ? 'No sales orders match this search. Try an order number, client or CRM reference.'
-    : 'Add your first sales order to see it listed here.'
-
-  // ── Tax Invoice Download ─────────────────────────────────────────────
+  // ── Tax invoice PDF ──────────────────────────────────────────────────
   const TEMPLATE_PATH = '/Temps/SO_template.pdf'
 
   async function handleTIDownload(order) {
+    setActionError('')
     try {
-      // pdf-lib + fontkit are ~1.1 MB and only this one button needs them, so
+      // pdf-lib + fontkit are ~1.1 MB and only this action needs them, so
       // they load on the click rather than with the page.
       const { generateTaxInvoice } = await import('../invoices/generateTaxInvoice')
       await generateTaxInvoice(TEMPLATE_PATH, order)
     } catch (err) {
       console.error('[TI Download]', err)
-      alert(`Could not generate Tax Invoice: ${err.message}`)
+      setActionError(`Could not make the tax invoice for ${order.order_number || `order #${order.id}`}: ${err.message}`)
     }
   }
 
+  const canCreate = can('sales_orders.create')
+
   return (
-    <div className={`so-page ${selectedOrder ? 'has-selection' : ''}`}>
-      <div className="so-main-content">
-        <div className="page-header">
-          <div>
-            <span className="page-kicker">TRANSACTIONS</span>
-            <h1>Sales Orders</h1>
-            <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'order' : 'orders'} in view · {pageSize} per page</p>
-          </div>
-          {can('sales_orders.create') && (
-            <button className="primary-button add-button" onClick={openAddForm}>
-              <Icon name="plus" size={18} /> Add sales order
-            </button>
-          )}
-        </div>
-
-        {/* ── Search ───────────────────────────────────────────────────── */}
-        <div className="vendors-toolbar">
-          <div className="vendor-search">
-            <span className="vendor-search-icon"><Icon name="search" size={17} /></span>
-            <input
-              className="vendor-search-input"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={searchNarrowed ? 'Search client company…' : 'Search order number, client or CRM reference…'}
-              aria-label="Search sales orders"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            {searchInput && (
-              <button type="button" className="search-clear" onClick={() => setSearchInput('')} aria-label="Clear search">
-                <Icon name="close" size={15} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <div className="page-error" role="alert">
-            <span className="page-error-icon"><Icon name="alert" size={18} /></span>
-            <div>
-              <strong>Could not load sales orders</strong>
-              <p>{error}</p>
-            </div>
-          </div>
+    <div className="crm-page">
+      <PageHeader title="Sales orders" subtitle="What clients have ordered: campaigns, line items, invoices and payments.">
+        {canCreate && (
+          <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}>
+            <Icon name="plus" size={17} /> New sales order
+          </button>
         )}
+      </PageHeader>
 
-        {/* ── Table ────────────────────────────────────────────────────── */}
-        <section className="table-card">
-          <div className="table-topline">
-            <div>
-              <strong>All Sales Orders</strong>
-              <span className="result-count">{totalCount.toLocaleString()} records</span>
-              {refreshing && <span className="result-count">Updating…</span>}
-              {query && <span className="search-state">Filtered by “{query}”</span>}
-              {searchNarrowed && <span className="search-state">Searching client company only</span>}
-            </div>
-          </div>
-
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Order #</th>
-                  <th>Client</th>
-                  <th>Type</th>
-                  <th>Campaign</th>
-                  <th>Status</th>
-                  <th className="so-total-column">Total</th>
-                  <th className="actions-column">Actions</th>
-                  <th className="download-column">Download</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: Math.min(pageSize, 10) }).map((_, index) => (
-                    <tr key={`so-skeleton-${index}`}>
-                      {Array.from({ length: SO_COLUMN_COUNT }).map((__, cell) => <td key={cell}><span className="skeleton skeleton-company" /></td>)}
-                    </tr>
-                  ))
-                ) : orders.length === 0 ? (
-                  <tr>
-                    <td colSpan={SO_COLUMN_COUNT} className="empty-state">
-                      <div className="empty-title">No sales orders found</div>
-                      <div className="empty-copy">{emptyCopy}</div>
-                    </td>
-                  </tr>
-                ) : (
-                  orders.map((order) => {
-                    const duration = campaignDays(order.campaign_start_date, order.campaign_end_date)
-                    const campaign = order.campaign_start_date || order.campaign_end_date
-                      ? `${formatDate(order.campaign_start_date)} → ${formatDate(order.campaign_end_date)}`
-                      : null
-
-                    return (
-                      <tr
-                        key={order.id}
-                        className={selectedOrder?.id === order.id ? 'is-open' : ''}
-                        onDoubleClick={() => setSelectedOrder(order)}
-                      >
-                        <td>
-                          <span className="cell-primary so-order-cell">
-                            {order.order_color && <span className="so-color-dot" style={{ background: order.order_color }} aria-hidden="true" />}
-                            {formatValue(order.order_number)}
-                          </span>
-                          <span className="cell-secondary" title={order.crm_reference_id || ''}>{formatValue(getValue(order, ['crm_reference_id', 'unique_id']))}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary company-cell" title={order.company || ''}>{formatValue(order.company)}</span>
-                          <span className="cell-secondary" title={order.order_client_fullname || ''}>{formatValue(order.order_client_fullname)}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatValue(order.order_type)}</span>
-                          <span className="cell-secondary" title={order.brand_name || ''}>{formatValue(order.brand_name)}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatValue(campaign)}</span>
-                          <span className="cell-secondary">{duration ? `${duration} ${duration === 1 ? 'day' : 'days'}` : '—'}</span>
-                        </td>
-                        <td>
-                          <span className={`status-pill ${statusTone(order.order_status)}`}>
-                            <span className="status-dot" />
-                            {formatValue(order.order_status)}
-                          </span>
-                          <span className="cell-secondary">{formatValue(order.purchase_status)}</span>
-                        </td>
-                        <td className="so-total-column">
-                          <span className="cell-primary mono-cell">{formatMoney(order.total)}</span>
-                          <span className="cell-secondary mono-cell">Tax {formatMoney(order.tax_total)}</span>
-                        </td>
-                        <td className="actions-column">
-                          <button className="row-action" onClick={() => setSelectedOrder(order)} aria-label={`Open sales order ${order.order_number || order.id}`}>
-                            <Icon name="chevron" size={17} />
-                          </button>
-                        </td>
-                        <td className="download-column">
-                          <button
-                            className="download-btn"
-                            onClick={(e) => { e.stopPropagation(); handleTIDownload(order); }}
-                            aria-label={`Download Tax Invoice for ${order.order_number || order.id}`}
-                            title="Download Tax Invoice"
-                          >
-                            TI
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pagination-bar">
-            <div className="page-size-control">
-              <span>Items per page</span>
-              <select value={pageSize} onChange={changePageSize} aria-label="Sales orders per page">
-                {SO_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
-              </select>
-            </div>
-
-            <div className="pagination-meta">
-              <span className="pagination-page-label">
-                {totalCount === 0 ? 'No records' : <>Showing <strong>{pageStart}–{pageEnd}</strong> of {totalCount.toLocaleString()}</>}
-              </span>
-              <div className="pagination-buttons">
-                <button onClick={() => changePage(1)} disabled={page <= 1} aria-label="First page"><Icon name="first" size={16} /></button>
-                <button onClick={() => changePage(page - 1)} disabled={page <= 1} aria-label="Previous page"><Icon name="chevron" size={16} /></button>
-                {pageNumbers.map((number) => <button key={number} className={number === page ? 'current' : ''} onClick={() => changePage(number)} aria-current={number === page ? 'page' : undefined}>{number}</button>)}
-                <button onClick={() => changePage(page + 1)} disabled={page >= totalPages} aria-label="Next page"><Icon name="chevron" size={16} /></button>
-                <button onClick={() => changePage(totalPages)} disabled={page >= totalPages} aria-label="Last page"><Icon name="last" size={16} /></button>
-              </div>
-            </div>
-          </div>
-        </section>
+      <div className="crm-toolbar">
+        <SearchField
+          value={searchInput}
+          onChange={setSearchInput}
+          placeholder={searchNarrowed ? 'Search by client' : 'Search by order number, client or CRM reference'}
+          label="Search sales orders"
+        />
+        {!loading && <ResultCount shown={totalCount} total={totalCount} noun="order" filtered={Boolean(query)} />}
+        {refreshing && <span className="crm-count" style={{ marginLeft: 0 }}>Updating…</span>}
       </div>
 
+      {(error || actionError) && (
+        <div className="crm-note crm-note--danger" role="alert">
+          <Icon name="alert" size={17} />
+          <div><strong>{error ? 'Could not load sales orders.' : 'That did not work.'}</strong> {error || actionError}</div>
+        </div>
+      )}
+
+      <section className="crm-card">
+        <div className="crm-table-scroll">
+          <table className="crm-table">
+            <thead>
+              <tr>
+                <th style={{ width: '16%' }}>Order</th>
+                <th className="crm-hide-sm" style={{ width: '25%' }}>Client</th>
+                <th className="crm-hide-sm" style={{ width: '22%' }}>Campaign</th>
+                <th className="crm-hide-sm" style={{ width: '15%' }}>Status</th>
+                <th className="crm-num" style={{ width: '15%' }}>Total</th>
+                <th className="crm-col-tight crm-hide-sm" style={{ width: '48px' }} aria-label="Tax invoice" />
+                <th className="crm-col-tight" style={{ width: '36px' }} aria-label="Open" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonRows rows={8} columns={SO_COLUMN_COUNT} />
+              ) : orders.length === 0 ? (
+                <tr>
+                  <td colSpan={SO_COLUMN_COUNT} className="crm-empty-cell">
+                    {query ? (
+                      <EmptyState title="No sales orders match your search">Try an order number, a client or a CRM reference.</EmptyState>
+                    ) : (
+                      <EmptyState icon="file" title="No sales orders yet"
+                        action={canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}><Icon name="plus" size={16} /> New sales order</button>}>
+                        A sales order records what a client bought, for which campaign, and what they have paid.
+                      </EmptyState>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order) => {
+                  const brandAndType = [order.brand_name, order.order_type].filter(Boolean).join(' · ')
+                  return (
+                    <tr
+                      key={order.id}
+                      className={`crm-row${selectedOrder?.id === order.id ? ' is-selected' : ''}`}
+                      onClick={() => setSelectedOrder(order)}
+                    >
+                      <td>
+                        <div className="crm-cell">
+                          <button type="button" className="crm-row-link crm-cell-main is-strong crm-mono" onClick={(event) => { event.stopPropagation(); setSelectedOrder(order) }}>
+                            {order.order_color && <span className="crm-swatch" style={{ background: order.order_color, marginRight: 7 }} aria-hidden="true" />}
+                            {order.order_number || `#${order.id}`}
+                          </button>
+                          <span className="crm-cell-sub crm-hide-sm">{order.order_date ? formatDisplayDate(order.order_date) : (order.crm_reference_id || '—')}</span>
+                          <span className="crm-cell-sub crm-show-sm">{order.company || '—'}</span>
+                        </div>
+                      </td>
+                      <td className="crm-hide-sm"><Cell main={order.company} sub={order.order_client_fullname} title={order.company || ''} /></td>
+                      <td className="crm-hide-sm"><Cell main={formatDateRange(order.campaign_start_date, order.campaign_end_date)} sub={brandAndType} /></td>
+                      <td className="crm-hide-sm">
+                        <div className="crm-cell">
+                          <span>{order.order_status ? <StatusPill tone={statusTone(order.order_status)}>{order.order_status}</StatusPill> : <span className="crm-empty-value">—</span>}</span>
+                          {order.purchase_status && <span className="crm-cell-sub">Purchase: {order.purchase_status}</span>}
+                        </div>
+                      </td>
+                      <td className="crm-num">
+                        <div className="crm-cell">
+                          <span className="crm-cell-main is-strong crm-mono">{formatRupees(order.total)}</span>
+                          <span className="crm-cell-sub crm-mono crm-hide-sm">{order.tax_total ? `${formatRupees(order.tax_total)} tax` : 'No tax'}</span>
+                          <span className="crm-cell-sub crm-show-sm">{order.order_status || '—'}</span>
+                        </div>
+                      </td>
+                      <td className="crm-col-tight crm-hide-sm">
+                        <button
+                          type="button"
+                          className="crm-icon-btn"
+                          onClick={(event) => { event.stopPropagation(); handleTIDownload(order) }}
+                          aria-label={`Download the tax invoice for ${order.order_number || order.id}`}
+                          title="Download tax invoice"
+                        >
+                          <Icon name="invoice" size={17} />
+                        </button>
+                      </td>
+                      <td className="crm-col-tight"><RowChevron /></td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          start={pageStart}
+          end={pageEnd}
+          total={totalCount}
+          pageSize={pageSize}
+          pageSizes={SO_PAGE_SIZES}
+          onPage={changePage}
+          onPageSize={(size) => { setPageSize(size); setPage(1) }}
+        />
+      </section>
+
       {selectedOrder && (
-        <aside className="so-side-panel">
-          <SalesOrderDetails
-            order={selectedOrder}
-            items={items}
-            itemsLoading={itemsLoading}
-            itemsError={itemsError}
-            onClose={() => setSelectedOrder(null)}
-            onEdit={canEditOrder(selectedOrder) ? () => openEditForm(selectedOrder) : null}
-          />
-        </aside>
+        <SalesOrderDetails
+          order={selectedOrder}
+          items={items}
+          itemsLoading={itemsLoading}
+          itemsError={itemsError}
+          onClose={() => setSelectedOrder(null)}
+          onEdit={canEditOrder(selectedOrder) ? () => openEditForm(selectedOrder) : null}
+          onDownloadInvoice={() => handleTIDownload(selectedOrder)}
+        />
       )}
 
       {showForm && (
@@ -1158,6 +964,8 @@ export default function SalesOrdersPage({ session }) {
           onSaved={afterSaved}
         />
       )}
+
+      <Toast message={notice} onDone={() => setNotice('')} />
     </div>
   )
 }

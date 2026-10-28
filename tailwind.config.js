@@ -26,6 +26,9 @@ export default {
           DEFAULT: 'var(--brand-blue)',
           dark: 'var(--brand-blue-dark)',
           soft: 'var(--brand-blue-soft)',
+          // Brand blue for TEXT. Use text-brand-ink, not text-brand: the fill
+          // value is 2.2:1 on dark surfaces (see --brand-ink in index.css).
+          ink: 'var(--brand-ink)',
         },
         ok: 'var(--success)',
         danger: 'var(--danger)',

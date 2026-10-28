@@ -422,7 +422,7 @@ export default function Composer({ mailboxes, accountId: initialAccount, mode = 
       {linkOpen && (
         <form className="em-field-row" onSubmit={applyLink}>
           <label htmlFor="em-link">Link</label>
-          <input id="em-link" autoFocus placeholder="https://" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
+          <input id="em-link" autoFocus value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setLinkOpen(false) } }} />
           <button type="submit" className="em-btn">Apply</button>
         </form>

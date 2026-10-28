@@ -162,7 +162,7 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
               onClick={() => setFilter(f.key)}
               className={`h-7 rounded-full px-3.5 text-[12.5px] transition-all
                 ${filter === f.key
-                  ? 'bg-inbox-chip font-semibold text-brand'
+                  ? 'bg-inbox-chip font-semibold text-brand-ink'
                   : 'font-medium text-muted hover:text-ink'}`}
             >
               {f.label}{f.key === 'unread' && unreadTotal > 0 ? ` ${unreadTotal}` : ''}
@@ -219,7 +219,7 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
                   <span className={`truncate text-[14.5px] ${unread || active ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>
                     {displayName(conv)}
                   </span>
-                  <span className={`shrink-0 text-[11.5px] tabular-nums ${unread ? 'font-semibold text-brand' : 'text-muted'}`}>
+                  <span className={`shrink-0 text-[11.5px] tabular-nums ${unread ? 'font-semibold text-brand-ink' : 'text-muted'}`}>
                     {formatListTime(conv.last_message_at)}
                   </span>
                 </span>

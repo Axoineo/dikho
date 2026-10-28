@@ -55,7 +55,7 @@ export function AskHelpDialog({ onClose, onSend, already }) {
         {already && <p className="la-fineprint">You have already asked. Sending again just reminds you it is open.</p>}
         <label className="la-field">
           <span>What do you need help with? (optional)</span>
-          <textarea value={message} maxLength={300} rows={3} onChange={(e) => setMessage(e.target.value)} placeholder="How do I add an item to a sales order?" />
+          <textarea value={message} maxLength={300} rows={3} onChange={(e) => setMessage(e.target.value)} />
         </label>
 
         {nobody ? (

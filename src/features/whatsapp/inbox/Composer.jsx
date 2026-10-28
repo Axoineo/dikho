@@ -198,7 +198,7 @@ export function Composer({
             {[...FILE_KINDS.map((k) => ({ ...k, onClick: () => pickFile(k.accept) })), ...kinds.map((k) => ({ ...k, onClick: () => { setMenu(null); onCompose(k.key) } }))].map((a) => (
               <button key={a.key} type="button" onClick={a.onClick}
                 className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-ink transition-colors hover:bg-inbox-row-hover">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-inbox-chip text-brand">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-inbox-chip text-brand-ink">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{a.icon}</svg>
                 </span>
                 <span className="truncate">{a.label}</span>

@@ -27,7 +27,8 @@ session. PostgreSQL RLS is therefore a primary security boundary.
 | --- | --- | --- |
 | CRM | `clients`, `vendors`, `vendor_addresses` | Client/vendor master records |
 | Reference data | `media`, `sub_media`, `vendor_media` | Advertising categories |
-| Sales/procurement | `salesorders`, `salesorder`, `salesorderdocument`, `purchaseorders` | Orders and line items across schema generations |
+| Settings | `organization_settings`, `option_lists`, `staff_members.preferences` | Display formats, dropdown values and each person's preferences |
+| Sales/procurement | `salesorders`, `salesorder`, `salesorderdocument`, `purchaseorders` | Orders and line items across schema generations. The app reads and writes sales **and** purchase orders in `salesorder` (a row with `vendor_address_id` is a purchase order, as the RLS policies assume) and their lines in `salesorderdocument`. `purchaseorders` is a flattened, all-text table from an older generation; nothing writes to it and the app no longer reads it. |
 | Finance | `organization_profiles`, `invoices`, `invoice_lines`, `payments`, `payment_allocations`, `invoice_sequences`, `document_events` | Invoice/payment lifecycle and audit events |
 | Public intake | `cg_leads` and public-write RPCs | Corporate-gifting leads and vendor registration |
 | Login audit | `user_devices`, `login_events` | Per-user device and sign-in records |
@@ -90,7 +91,7 @@ anonymous execution would bypass that control.
 `template_permissions`, `role_permissions`, `staff_permission_overrides`,
 `staff_sessions` and `audit_log` have no table privileges for `anon` or
 `authenticated`. The browser reaches them only through `my_access()`,
-`touch_session()` and `set_my_theme()`; everything else goes through the API
+`touch_session()`, `set_my_theme()` and `set_my_preferences()`; everything else goes through the API
 Worker into the `um_*` functions (service role only), which hold the
 escalation rules and write `audit_log` in the same transaction.
 
@@ -115,6 +116,31 @@ escalation rules and write `audit_log` in the same transaction.
 
 Avoid new sensitive policies using unconditional `USING (true)` or
 `WITH CHECK (true)`.
+
+### Settings tables
+
+Migration `20261028120000_settings.sql`, applied 2026-10-28.
+
+- `organization_settings` (one row: the date format and number style screens
+  use) and `option_lists` (dropdown values, seeded with the values that were
+  fixed in code) follow the user-management pattern: RLS on, the restrictive
+  "staff members only" policy, no privileges for `anon` or `authenticated`.
+  Staff read both through `get_settings()`. Changes go through SECURITY
+  DEFINER functions that require `settings.manage` and write `audit_log`.
+- `staff_members.preferences` (jsonb, at most 2 KB) holds a person's table
+  density, rows per page and start page. `set_my_preferences()` accepts only
+  those keys and values, and `my_access()` returns them.
+- List values are never deleted or renamed, because orders store the value
+  text: a value is hidden instead and records that have it keep it.
+- `media.hidden` and `sub_media.hidden` take a value out of pickers without
+  deleting it (vendors point at media by id). `save_media()` and
+  `save_sub_media()` add, rename and hide; neither table has a direct write
+  policy.
+- Company details stay in `organization_profiles`, read and written through
+  `get_organization_profile()` and `update_organization_profile()`. The bank
+  account number is masked in the audit log.
+- Until the migration is applied the dashboard uses the built-in values: it
+  treats PostgREST's PGRST202 (function not found) as "not there yet".
 
 ### Email Hub tables (not yet applied)
 

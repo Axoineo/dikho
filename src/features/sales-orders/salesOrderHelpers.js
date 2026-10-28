@@ -3,8 +3,8 @@ import { formatDateInput } from '../../lib/format'
 import { todayIso } from '../../lib/dates'
 import {
   ORDER_TYPE_OPTIONS, ORDER_STATUS_OPTIONS, PURCHASE_STATUS_OPTIONS,
-  GST_TYPE_OPTIONS, GST_RATES, SO_ITEM_TYPE_OPTIONS,
-  itemAmounts, rateFromAmounts, taxFromRate,
+  GST_TYPE_OPTIONS, SO_ITEM_TYPE_OPTIONS,
+  itemAmounts, rateFromAmounts,
 } from '../../lib/gst'
 
 export const SALES_ORDER_FALLBACKS = {

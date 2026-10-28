@@ -46,11 +46,11 @@ function LocationForm({ input, set }) {
   const [link, setLink] = useState('')
   return (
     <>
-      <Field label="Google Maps link" value={link} placeholder="Paste a link to fill in the coordinates"
+      <Field label="Google Maps link" value={link} hint="Paste a link and the coordinates fill in."
         onChange={(v) => { setLink(v); const c = coordsFromLink(v); if (c) set(c) }} />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Latitude" required value={input.latitude ?? ''} onChange={(v) => set({ latitude: v })} placeholder="18.5204" />
-        <Field label="Longitude" required value={input.longitude ?? ''} onChange={(v) => set({ longitude: v })} placeholder="73.8567" />
+        <Field label="Latitude" required value={input.latitude ?? ''} onChange={(v) => set({ latitude: v })} />
+        <Field label="Longitude" required value={input.longitude ?? ''} onChange={(v) => set({ longitude: v })} />
       </div>
       <Field label="Place name" max={100} value={input.name ?? ''} onChange={(v) => set({ name: v })} />
       <Field label="Address" max={300} value={input.address ?? ''} onChange={(v) => set({ address: v })} />
@@ -62,7 +62,7 @@ function ContactForm({ input, set }) {
   return (
     <>
       <Field label="Name" required max={100} value={input.name ?? ''} onChange={(v) => set({ name: v })} />
-      <Field label="Phone number" required max={30} value={input.phone ?? ''} onChange={(v) => set({ phone: v })} placeholder="+91 98000 00000" />
+      <Field label="Phone number" required max={30} value={input.phone ?? ''} onChange={(v) => set({ phone: v })} />
       <Field label="Email" max={120} type="email" value={input.email ?? ''} onChange={(v) => set({ email: v })} />
       <Field label="Company" max={100} value={input.company ?? ''} onChange={(v) => set({ company: v })} />
     </>
@@ -100,7 +100,7 @@ function ListForm({ input, set }) {
   return (
     <>
       <Decorations input={input} set={set} bodyMax={4096} />
-      <Field label="List button label" required max={20} value={input.button ?? ''} onChange={(v) => set({ button: v })} placeholder="See options" />
+      <Field label="List button label" required max={20} value={input.button ?? ''} onChange={(v) => set({ button: v })} />
       <Field label="Section title" max={24} value={input.sectionTitle ?? ''} onChange={(v) => set({ sectionTitle: v })} />
       <div className="grid gap-2">
         {rows.map((r, i) => (
@@ -129,8 +129,8 @@ function CtaForm({ input, set }) {
   return (
     <>
       <Decorations input={input} set={set} />
-      <Field label="Button label" required max={20} value={input.label ?? ''} onChange={(v) => set({ label: v })} placeholder="Open" />
-      <Field label="Link" required value={input.url ?? ''} onChange={(v) => set({ url: v })} placeholder="https://" />
+      <Field label="Button label" required max={20} value={input.label ?? ''} onChange={(v) => set({ label: v })} />
+      <Field label="Link" required value={input.url ?? ''} onChange={(v) => set({ url: v })} />
     </>
   )
 }
