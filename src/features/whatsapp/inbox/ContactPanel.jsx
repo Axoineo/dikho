@@ -76,7 +76,7 @@ export function ContactPanel({ conversation, messages, onOpenMedia, onChatAction
               <ActionIcon action="block" className="h-3.5 w-3.5" /> Blocked
             </span>
           ) : msLeft > 0 ? (
-            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-semibold text-brand">
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-semibold text-brand-ink">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Replies open · {formatCountdown(msLeft)} left
             </span>
           ) : (

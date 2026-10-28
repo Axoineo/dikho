@@ -104,8 +104,10 @@ export function canOpen(access, path) {
 }
 
 // Where to land after sign-in or when a page is out of reach: the first page
-// in the sidebar's order this person may open.
-const LANDING_ORDER = ['/clients', '/sales-orders', '/purchase-orders', '/vendors', '/leads', '/whatsapp/inbox', '/whatsapp', '/invoices', '/users']
+// in the sidebar's order this person may open. No placeholder pages (see
+// Sidebar.jsx): landing on "This section will be added next." is a dead end,
+// and Settings is a better fallback.
+const LANDING_ORDER = ['/clients', '/sales-orders', '/purchase-orders', '/vendors', '/leads', '/whatsapp/inbox', '/whatsapp', '/users']
 export function landingPath(access) {
   return LANDING_ORDER.find((path) => canOpen(access, path)) ?? '/settings'
 }

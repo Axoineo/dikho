@@ -51,7 +51,7 @@
   transition: background .15s ease, color .15s ease;
 }
 .em-icon-btn:hover:not(:disabled) { background: var(--inbox-control); color: var(--text); }
-.em-icon-btn.is-on { color: var(--brand-blue); }
+.em-icon-btn.is-on { color: var(--brand-ink); }
 .em-icon-btn.is-star { color: var(--accent); }
 .em-icon-btn:disabled { opacity: .4; }
 
@@ -75,7 +75,7 @@
 .em-pill.is-ok { background: var(--em-ok-soft); color: var(--em-ok); }
 .em-pill.is-warn { background: var(--em-warn-soft); color: var(--em-warn); }
 .em-pill.is-danger { background: var(--em-danger-soft); color: var(--danger); }
-.em-pill.is-brand { background: var(--inbox-chip); color: var(--brand-blue); }
+.em-pill.is-brand { background: var(--inbox-chip); color: var(--brand-ink); }
 [data-theme="dark"] .em-pill.is-brand { color: #8fc2f0; }
 
 .em-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--muted); }
@@ -115,7 +115,7 @@
 .em-empty {
   display: grid; place-items: center; gap: 8px; padding: 48px 24px; text-align: center; color: var(--muted);
 }
-.em-empty-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--inbox-control); color: var(--brand-blue); }
+.em-empty-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--inbox-control); color: var(--brand-ink); }
 .em-empty strong { color: var(--text); font-size: 15px; }
 .em-empty p { margin: 0; max-width: 360px; font-size: 13px; line-height: 1.5; }
 
@@ -172,7 +172,7 @@
   border: 0; border-radius: 8px; background: transparent; color: var(--text); font-size: 13.5px; text-align: left;
 }
 .em-rail-item:hover { background: var(--inbox-row-hover); }
-.em-rail-item.is-active { background: var(--inbox-row-active); color: var(--brand-blue); font-weight: 600; }
+.em-rail-item.is-active { background: var(--inbox-row-active); color: var(--brand-ink); font-weight: 600; }
 [data-theme="dark"] .em-rail-item.is-active { color: #8fc2f0; }
 .em-rail-item .em-count { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
 .em-rail-item.is-active .em-count { color: inherit; }
@@ -190,7 +190,7 @@
 .em-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .em-chip { min-height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; }
 .em-chip:hover { color: var(--text); }
-.em-chip.is-active { border-color: transparent; background: var(--inbox-chip); color: var(--brand-blue); }
+.em-chip.is-active { border-color: transparent; background: var(--inbox-chip); color: var(--brand-ink); }
 [data-theme="dark"] .em-chip.is-active { color: #8fc2f0; }
 
 .em-threads { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 4px 0; }
@@ -206,7 +206,7 @@
 .em-row-time { flex-shrink: 0; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .em-row-subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--muted); }
 .em-row.is-unread .em-row-from, .em-row.is-unread .em-row-subject { color: var(--text); font-weight: 700; }
-.em-row.is-unread .em-row-time { color: var(--brand-blue); font-weight: 700; }
+.em-row.is-unread .em-row-time { color: var(--brand-ink); font-weight: 700; }
 [data-theme="dark"] .em-row.is-unread .em-row-time { color: #8fc2f0; }
 .em-row-meta { display: flex; align-items: center; gap: 6px; min-height: 18px; color: var(--muted); font-size: 11.5px; overflow: hidden; }
 .em-row-meta svg { flex-shrink: 0; }
@@ -233,7 +233,7 @@
 .em-msg.is-collapsed { cursor: pointer; }
 .em-msg.is-collapsed:hover { background: var(--inbox-row-hover); }
 .em-msg-head { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 12px; padding: 12px 14px; }
-.em-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--inbox-chip); color: var(--brand-blue); font-size: 13px; font-weight: 700; }
+.em-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--inbox-chip); color: var(--brand-ink); font-size: 13px; font-weight: 700; }
 [data-theme="dark"] .em-avatar { color: #8fc2f0; }
 .em-msg-who { flex: 1 1 180px; min-width: 0; }
 .em-msg-from { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 13.5px; }
@@ -348,13 +348,13 @@
 button.em-pill { border: 0; cursor: pointer; }
 button.em-pill:focus-visible, .em-link-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring-soft); }
 .em-health-note { flex-basis: 100%; margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); white-space: normal; }
-.em-link-btn { border: 0; background: transparent; color: var(--brand-blue); font-size: 12.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
+.em-link-btn { border: 0; background: transparent; color: var(--brand-ink); font-size: 12.5px; font-weight: 600; padding: 2px 6px; border-radius: 6px; }
 .em-link-btn:hover { background: var(--inbox-control); }
 [data-theme="dark"] .em-link-btn { color: #8fc2f0; }
 .em-form-inline .em-check-label { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; font-size: 13px; }
 .em-footnote { margin: 4px 2px 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .em-footnote code { font-size: 12px; overflow-wrap: anywhere; }
-.em-rail-tag { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--inbox-chip); color: var(--brand-blue); }
+.em-rail-tag { flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font-size: 10.5px; font-weight: 700; background: var(--inbox-chip); color: var(--brand-ink); }
 [data-theme="dark"] .em-rail-tag { color: #8fc2f0; }
 
 /* ── Forms (campaigns, templates, consent) ────────────────────────────────── */
@@ -373,7 +373,7 @@ button.em-pill:focus-visible, .em-link-btn:focus-visible { outline: none; box-sh
 .em-fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 12px; }
 .em-fieldset legend { padding: 0; margin-bottom: 10px; font-size: 13.5px; font-weight: 700; }
 .em-btn-quiet { min-height: 30px; padding: 0 10px; border-color: transparent; background: var(--inbox-control); color: var(--text); font-size: 12.5px; }
-.em-text-btn { padding: 0; border: 0; background: none; color: var(--brand-blue); font: inherit; font-weight: 600; text-align: left; }
+.em-text-btn { padding: 0; border: 0; background: none; color: var(--brand-ink); font: inherit; font-weight: 600; text-align: left; }
 .em-text-btn:hover { text-decoration: underline; }
 [data-theme="dark"] .em-text-btn { color: #8fc2f0; }
 .em-stack { display: grid; gap: 8px; }
@@ -424,7 +424,7 @@ button.em-pill:focus-visible, .em-link-btn:focus-visible { outline: none; box-sh
   border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap;
 }
 .em-step:hover { color: var(--text); background: var(--inbox-row-hover); }
-.em-step.is-active { background: var(--inbox-row-active); color: var(--brand-blue); }
+.em-step.is-active { background: var(--inbox-row-active); color: var(--brand-ink); }
 [data-theme="dark"] .em-step.is-active { color: #8fc2f0; }
 .em-step-num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid currentColor; font-size: 11px; font-weight: 700; }
 .em-step.is-done .em-step-num { border-color: var(--em-ok); background: var(--em-ok); color: #fff; }
@@ -517,7 +517,7 @@ button.em-camp-row:hover { background: var(--inbox-row-hover); }
 .em-consent-form .em-control-row { margin-top: 0; }
 .em-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; font-size: 13px; line-height: 1.5; }
 .em-rules li { display: flex; gap: 10px; }
-.em-rules svg { flex-shrink: 0; margin-top: 2px; color: var(--brand-blue); }
+.em-rules svg { flex-shrink: 0; margin-top: 2px; color: var(--brand-ink); }
 [data-theme="dark"] .em-rules svg { color: #8fc2f0; }
 
 /* Analytics: one hue, values labelled directly. */

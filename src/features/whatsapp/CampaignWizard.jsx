@@ -33,7 +33,7 @@ function Dropzone({ onFile, uploading, compact = false }) {
           : 'border-line bg-line-soft hover:border-brand hover:bg-brand-soft'}`}
     >
       <div className="mx-auto mb-3 grid h-[46px] w-[46px] place-items-center rounded-xl
-        bg-brand-soft text-brand dark:text-[#5ba0e0]">
+        bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
         {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
       </div>
       <div className="mb-1 text-sm font-semibold">
@@ -107,7 +107,7 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
             <button
               type="button"
               onClick={() => onSelectAll(false)}
-              className="font-semibold text-brand underline dark:text-[#5ba0e0]"
+              className="font-semibold text-brand-ink underline dark:text-[#5ba0e0]"
             >
               Clear selection
             </button>
@@ -270,7 +270,7 @@ function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availabl
           <div key={token} className="flex flex-wrap items-center gap-2.5 border-b border-line-soft
             bg-surface px-3.5 py-2.5 last:border-b-0">
             <code className="rounded bg-brand-soft px-1.5 py-0.5 text-[12.5px] font-semibold
-              text-brand dark:text-[#5ba0e0]">{`{{${token}}}`}</code>
+              text-brand-ink dark:text-[#5ba0e0]">{`{{${token}}}`}</code>
             <span className="text-muted" aria-hidden="true">→</span>
             <select
               className={`${inputClass} h-9 min-w-[150px] flex-1`}
@@ -354,7 +354,6 @@ function PreviewStep({
             className={inputClass}
             value={campaignName}
             onChange={(e) => onCampaignName(e.target.value)}
-            placeholder="e.g. September Offer — Mumbai list"
           />
         </div>
 
@@ -403,7 +402,7 @@ function SendStep({
   if (sending) {
     return (
       <EmptyState>
-        <Spinner className="text-brand" />
+        <Spinner className="text-brand-ink" />
         <div className="mb-1.5 mt-3 text-[15px] font-semibold text-ink">
           {partial ? 'Resuming campaign…' : 'Sending campaign…'}
         </div>

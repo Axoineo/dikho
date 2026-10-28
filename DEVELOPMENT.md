@@ -69,6 +69,12 @@ a real database. With `npm run dev` running, open
 `/scripts/preview/<name>.html`, for example `/scripts/preview/vendors.html`.
 They load the same stylesheets and fonts as the app and never submit.
 
+`/scripts/preview/crm.html?page=/clients` (or `/vendors`, `/sales-orders`,
+`/purchase-orders`) renders those four modules inside the real sidebar, with
+every permission granted (`&role=viewer` grants view only). Its stand-in for
+PostgREST keeps writes in memory, so add and edit can be exercised end to
+end; `window.__crmDb` shows what a save wrote. Reload to reset.
+
 ## Source organization
 
 ```text

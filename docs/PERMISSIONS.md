@@ -34,7 +34,7 @@ A job title (designation) never grants anything.
 | --- | --- | --- |
 | Staff | none | nobody |
 | Manager | none (team-level access arrives with team scopes) | nobody, unless given user-management permissions |
-| Admin | view/add/edit users, change roles below Admin, templates on people, suspend, sessions, departments, audit log, Live Assist | Staff and Managers |
+| Admin | view/add/edit users, change roles below Admin, templates on people, suspend, sessions, departments, audit log, Live Assist, organization settings | Staff and Managers |
 | Owner | every business permission | everyone, including other Owners |
 | Developer (level, any role) | every permission | everyone except Owners and other developers |
 
@@ -59,6 +59,7 @@ where listed.
 | WhatsApp | `inbox.view/reply/delete/block`, `wa_contacts.view/import/delete`, `campaigns.view/send`, `wa_templates.view`, `whatsapp.maintain` | API routes; inbox Realtime channel needs `inbox.view` |
 | Email (not yet deployed) | `email_inbox.view`, `email_mailboxes.manage`, `email_campaigns.view/create/approve`, `email_templates.manage`, `email_consent.manage` | `em_*` functions behind `/api/email`; mailboxes also need membership (below) |
 | User Management | `users.view/create/edit/roles/permissions/suspend/sessions`, `templates.manage`, `departments.manage`, `audit_logs.view`, `live_assist.use` | `um_*` functions behind `/api/users` |
+| Settings | `settings.manage` | Company, Regional, and Lists and media: `update_organization_settings()`, `get_organization_profile()`, `update_organization_profile()`, `add_list_option()`, `set_list_option_hidden()`, `move_list_option()`, `save_media()`, `save_sub_media()` |
 | Developer | `developer_tools.access`, `feature_flags.view/manage` | developer access only |
 
 `inbox.delete` (Clear chat, Delete chat, delete one message) and `inbox.block`
@@ -71,7 +72,13 @@ star is the person's own. Sending an approved template from a chat needs
 24-hour window.
 
 `document_events` follows invoices or payments. `media`/`sub_media` stay
-readable by every staff member (and by the public vendor form).
+readable by every staff member (and by the public vendor form); only
+`settings.manage` changes them, through `save_media()` and `save_sub_media()`.
+
+Every staff member reads the organization's display formats and dropdown
+values (`get_settings()`) and saves their own preferences
+(`set_my_preferences()`). Settings pages under "Organization" are hidden
+without `settings.manage`, and the functions refuse the change regardless.
 
 Built-in templates: Sales Executive, Sales Manager, Finance, Operations,
 Procurement, WhatsApp Support, Marketing, Management (read everything) and

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useOutletContext } from 'react-router-dom'
-import { landingPath, EMAIL_HUB_BUILD } from '../lib/access'
+import { landingPath, canOpen, EMAIL_HUB_BUILD } from '../lib/access'
+import { getSettings } from '../lib/settings'
 import AuthenticatedLayout from '../layouts/AuthenticatedLayout'
 import PublicLayout from '../layouts/PublicLayout'
 import { PlaceholderPage } from '../components/PlaceholderPage'
@@ -51,7 +52,9 @@ function SettingsRoute() {
 // cannot use (a finance user has no Clients page, for example).
 function Landing() {
   const { access } = useOutletContext()
-  return <Navigate to={landingPath(access)} replace />
+  // Their own start page (Settings > Preferences), while they can still open it.
+  const start = getSettings().preferences.start_page
+  return <Navigate to={start && canOpen(access, start) ? start : landingPath(access)} replace />
 }
 
 /* ── App ────────────────────────────────────────────────────────────────── */
@@ -104,6 +107,7 @@ export default function App() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/users/:userId" element={<UserProfilePage />} />
           <Route path="/settings" element={<SettingsRoute />} />
+          <Route path="/settings/:section" element={<SettingsRoute />} />
           <Route path="*" element={<Landing />} />
         </Route>
       </Routes>

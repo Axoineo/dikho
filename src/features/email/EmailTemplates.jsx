@@ -214,7 +214,7 @@ function TemplateEditor({ id, variables, onChanged, toast }) {
             <div className="em-field">
               <label htmlFor="em-t-name">Template name</label>
               <input id="em-t-name" className="em-input" value={name} maxLength={120} disabled={!canManage} autoFocus={isNew}
-                onChange={(e) => { setName(e.target.value.replace(/[\r\n]/g, ' ')); touch() }} placeholder="Monthly offer" />
+                onChange={(e) => { setName(e.target.value.replace(/[\r\n]/g, ' ')); touch() }} />
             </div>
             <div className="em-field">
               <label htmlFor="em-t-kind">Type</label>

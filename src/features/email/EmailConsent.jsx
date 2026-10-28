@@ -70,7 +70,7 @@ export default function EmailConsent() {
           <div className="em-card-head"><div><h2 id="em-lookup-title">Look up an address</h2><p>The record is the same wherever the address appears (client, vendor or lead).</p></div></div>
           <form className="em-lookup" onSubmit={lookup}>
             <label htmlFor="em-lookup-input" className="em-visually-hidden">Email address</label>
-            <input id="em-lookup-input" type="email" className="em-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="name@company.com" autoComplete="off" />
+            <input id="em-lookup-input" type="email" className="em-input" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
             <button type="submit" className="em-btn em-btn-primary" disabled={looking}><Icon name="search" size={15} /> {looking ? 'Looking…' : 'Look up'}</button>
           </form>
           {error && <div style={{ marginTop: 12 }}><Banner tone="danger">{error}</Banner></div>}

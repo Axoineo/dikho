@@ -74,7 +74,7 @@
   font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .um-tab:hover { color: var(--text); }
-.um-tab.is-active { color: var(--brand-blue); border-bottom-color: var(--brand-blue); }
+.um-tab.is-active { color: var(--brand-ink); border-bottom-color: var(--brand-blue); }
 [data-theme="dark"] .um-tab.is-active { color: #8fbfec; border-bottom-color: #5ba0e0; }
 .um-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 6px 6px 0 0; }
 
@@ -106,10 +106,10 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 .um-row:hover td { background: var(--line-soft); }
 .um-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .um-name { color: var(--text); font-weight: 650; text-decoration: none; }
-.um-name:hover { color: var(--brand-blue); text-decoration: underline; }
+.um-name:hover { color: var(--brand-ink); text-decoration: underline; }
 .um-avatar {
   flex: 0 0 auto; display: inline-grid; place-items: center; border-radius: 50%;
-  background: var(--brand-blue-soft); color: var(--brand-blue); font-weight: 700; object-fit: cover;
+  background: var(--brand-blue-soft); color: var(--brand-ink); font-weight: 700; object-fit: cover;
 }
 [data-theme="dark"] .um-avatar { color: #8fbfec; }
 
@@ -119,14 +119,14 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
   background: var(--line-soft); color: var(--muted); white-space: nowrap;
 }
 .um-badge.is-owner { background: var(--um-owner-soft); color: var(--um-owner); }
-.um-badge.is-admin { background: var(--brand-blue-soft); color: var(--brand-blue); }
+.um-badge.is-admin { background: var(--brand-blue-soft); color: var(--brand-ink); }
 [data-theme="dark"] .um-badge.is-admin { color: #8fbfec; }
 .um-badge.is-manager { background: var(--line-soft); color: var(--text); }
 .um-badge.is-developer { background: var(--um-dev-soft); color: var(--um-dev); }
 
 .um-status { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 650; white-space: nowrap; }
 .um-status.is-active { background: var(--um-online-soft); color: var(--um-online); }
-.um-status.is-invited { background: var(--brand-blue-soft); color: var(--brand-blue); }
+.um-status.is-invited { background: var(--brand-blue-soft); color: var(--brand-ink); }
 [data-theme="dark"] .um-status.is-invited { color: #8fbfec; }
 .um-status.is-suspended { background: var(--um-danger-soft); color: var(--danger); }
 .um-status.is-archived { background: var(--line-soft); color: var(--muted); }
@@ -149,7 +149,7 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 .um-danger-button:disabled { opacity: 0.6; cursor: default; }
 .um-text-button {
   display: inline-flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px;
-  background: transparent; color: var(--brand-blue); border: 0; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: transparent; color: var(--brand-ink); border: 0; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 [data-theme="dark"] .um-text-button { color: #8fbfec; }
 .um-text-button:hover:not(:disabled) { background: var(--brand-blue-soft); }
@@ -171,7 +171,7 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
   display: inline-flex; align-items: center; gap: 4px; margin-bottom: 12px;
   color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none;
 }
-.um-back:hover { color: var(--brand-blue); }
+.um-back:hover { color: var(--brand-ink); }
 /* The shared Icon has no rotation prop: point its chevron back. */
 .um-back svg { transform: rotate(180deg); }
 .um-profile-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -181,7 +181,7 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 .um-profile-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .um-you {
   display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 650;
-  background: var(--brand-blue-soft); color: var(--brand-blue); vertical-align: middle;
+  background: var(--brand-blue-soft); color: var(--brand-ink); vertical-align: middle;
 }
 [data-theme="dark"] .um-you { color: #8fbfec; }
 
@@ -199,7 +199,7 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 .um-field { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; font-size: 13px; }
 .um-field dt { color: var(--muted); }
 .um-field dd { margin: 0; overflow-wrap: anywhere; }
-.um-field a { color: var(--brand-blue); }
+.um-field a { color: var(--brand-ink); }
 .um-plain-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 
 /* ── Access tab ───────────────────────────────────────────────────────── */
@@ -231,7 +231,7 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 .um-check:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .um-check:disabled { cursor: not-allowed; opacity: 0.55; }
 .um-check.is-on.is-inherited, .um-check.is-on.is-template, .um-check.is-on.is-full {
-  background: var(--um-inherited-soft); border-color: var(--brand-blue); color: var(--brand-blue);
+  background: var(--um-inherited-soft); border-color: var(--brand-blue); color: var(--brand-ink);
 }
 [data-theme="dark"] .um-check.is-on.is-inherited,
 [data-theme="dark"] .um-check.is-on.is-template,
@@ -322,7 +322,7 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 .um-audit-item:first-child { border-top: 0; }
 .um-audit-item time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .um-audit-item p { margin: 0; }
-.um-audit-item a { color: var(--brand-blue); font-weight: 600; }
+.um-audit-item a { color: var(--brand-ink); font-weight: 600; }
 [data-theme="dark"] .um-audit-item a,
 [data-theme="dark"] .um-field a,
 [data-theme="dark"] .um-name:hover,

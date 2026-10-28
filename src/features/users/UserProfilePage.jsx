@@ -480,7 +480,7 @@ function AccessTab({ member, catalog, readOnly, onSaved }) {
   )
 }
 
-function SessionsTab({ member, isSelf, canEnd, onChanged }) {
+export function SessionsTab({ member, isSelf, canEnd, onChanged }) {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState('')
 

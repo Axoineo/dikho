@@ -111,7 +111,7 @@ export default function AddUserModal({ catalog, members, onClose, onAdded }) {
             </div>
             <div className="field">
               <label htmlFor="um-phone">WhatsApp number</label>
-              <input id="um-phone" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+91 98xxx xxxxx" maxLength={20} autoComplete="off" />
+              <input id="um-phone" type="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} maxLength={20} autoComplete="off" />
             </div>
             <p className="um-hint field-wide">They sign in with a one-time code sent to this email or WhatsApp number. There is no password.</p>
           </fieldset>
@@ -124,7 +124,7 @@ export default function AddUserModal({ catalog, members, onClose, onAdded }) {
             </div>
             <div className="field">
               <label htmlFor="um-designation">Designation</label>
-              <input id="um-designation" value={form.designation} onChange={(e) => update('designation', e.target.value)} maxLength={80} placeholder="e.g. Sales Executive" />
+              <input id="um-designation" value={form.designation} onChange={(e) => update('designation', e.target.value)} maxLength={80} />
             </div>
             <div className="field">
               <label htmlFor="um-dept">Department</label>

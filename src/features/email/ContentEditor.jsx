@@ -100,15 +100,15 @@ export default function ContentEditor({ value, onChange, variables, disabled, re
         <label htmlFor="em-c-subject">Subject</label>
         <div className="em-input-with">
           <input id="em-c-subject" ref={subjectRef} className="em-input" value={value.subject} maxLength={900} disabled={disabled}
-            onChange={(e) => set({ subject: e.target.value.replace(/[\r\n]/g, ' ') })} placeholder="What the email is about" />
+            onChange={(e) => set({ subject: e.target.value.replace(/[\r\n]/g, ' ') })} />
           {!disabled && varEntries.length > 0 && <VariableMenu label="Add to subject" variables={varEntries} onPick={insertIntoSubject} />}
         </div>
       </div>
       <div className="em-field">
         <label htmlFor="em-c-preheader">Preview text <span className="em-optional">optional</span></label>
         <input id="em-c-preheader" className="em-input" value={value.preheader} maxLength={200} disabled={disabled}
-          onChange={(e) => set({ preheader: e.target.value.replace(/[\r\n]/g, ' ') })}
-          placeholder="Shown after the subject in most inboxes" />
+          onChange={(e) => set({ preheader: e.target.value.replace(/[\r\n]/g, ' ') })} />
+        <p className="em-help">Shown after the subject in most inboxes.</p>
       </div>
 
       <div className="em-field">
@@ -149,7 +149,7 @@ export default function ContentEditor({ value, onChange, variables, disabled, re
           {linkOpen && mode === 'write' && (
             <form className="em-field-row" onSubmit={applyLink}>
               <label htmlFor="em-c-link">Link</label>
-              <input id="em-c-link" autoFocus placeholder="https://" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
+              <input id="em-c-link" autoFocus value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setLinkOpen(false) } }} />
               <button type="submit" className="em-btn">Apply</button>
             </form>
@@ -164,7 +164,6 @@ export default function ContentEditor({ value, onChange, variables, disabled, re
               role="textbox"
               aria-multiline="true"
               aria-labelledby="em-c-body-label"
-              data-placeholder="Write the email. Use variables to greet each person by name."
               onInput={readEditor}
               onPaste={onPaste}
               onKeyUp={rememberSelection}
@@ -174,7 +173,7 @@ export default function ContentEditor({ value, onChange, variables, disabled, re
             />
           ) : (
             <textarea className="em-html-source" aria-labelledby="em-c-body-label" spellCheck={false} disabled={disabled}
-              value={value.html ?? ''} onChange={(e) => set({ html: e.target.value })} placeholder="<p>Hello {{first_name}},</p>" />
+              value={value.html ?? ''} onChange={(e) => set({ html: e.target.value })} />
           )}
         </div>
         <p className="em-help">

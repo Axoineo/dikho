@@ -105,7 +105,7 @@ export default function WhatsAppContacts() {
             : 'border-line bg-line-soft hover:border-brand hover:bg-brand-soft'}`}
       >
         <div className="mx-auto mb-3 grid h-[46px] w-[46px] place-items-center rounded-xl
-          bg-brand-soft text-brand dark:text-[#5ba0e0]">
+          bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
           {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
         </div>
         <div className="mb-1 text-sm font-semibold">
@@ -161,7 +161,7 @@ export default function WhatsAppContacts() {
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}
-                className="font-semibold text-brand underline dark:text-[#5ba0e0]"
+                className="font-semibold text-brand-ink underline dark:text-[#5ba0e0]"
               >
                 Clear
               </button>

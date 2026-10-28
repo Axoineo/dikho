@@ -4,6 +4,7 @@ import RouteBoundary from '../components/RouteBoundary'
 import { Outlet, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { Sidebar } from '../components/Sidebar'
+import { loadSettings, applyPreferences } from '../lib/settings'
 import { MAX_SESSION_MS, INACTIVITY_MS, WARN_BEFORE_MS } from '../app/constants'
 import Login from '../features/auth/Login'
 import AccessDenied from '../components/AccessDenied'
@@ -105,6 +106,8 @@ export default function AuthenticatedLayout() {
     if (status === 'active') {
       setAccess(data)
       setAccessState('granted')
+      // Older databases do not return preferences yet: keep this device's.
+      if ('preferences' in data) applyPreferences(data.preferences)
       if (data.theme && data.theme !== localStorage.getItem('dikho-theme')) {
         localStorage.setItem('dikho-theme', data.theme)
         setThemeMode(data.theme)
@@ -166,6 +169,11 @@ export default function AuthenticatedLayout() {
   const { pathname } = useLocation()
   const sectionRef = useRef(null)
   const granted = accessState === 'granted'
+
+  // Organization formats and dropdown values, once access is known.
+  useEffect(() => {
+    if (granted) loadSettings()
+  }, [granted])
 
   const beat = useCallback(async () => {
     if (document.visibilityState !== 'visible') return

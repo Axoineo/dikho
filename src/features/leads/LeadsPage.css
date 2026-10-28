@@ -58,7 +58,7 @@
   line-height: 1.15;
 }
 
-.leads-stat-tile--sent .leads-stat-value { color: var(--brand-blue); }
+.leads-stat-tile--sent .leads-stat-value { color: var(--brand-ink); }
 [data-theme="dark"] .leads-stat-tile--sent .leads-stat-value { color: #5ba0e0; }
 .leads-stat-tile--delivered .leads-stat-value,
 .leads-stat-tile--read .leads-stat-value { color: #2d7a52; }
@@ -194,7 +194,7 @@
   font-size: 10.5px;
   font-weight: 700;
   background: var(--brand-blue-soft);
-  color: var(--brand-blue);
+  color: var(--brand-ink);
   white-space: nowrap;
 }
 [data-theme="dark"] .lt-source-chip {

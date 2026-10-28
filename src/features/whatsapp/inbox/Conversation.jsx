@@ -39,7 +39,7 @@ function buildRows(messages) {
    --chat-* palette, because that is the part agents read all day. */
 export function Conversation({
   conversation, messages, loading, hasMore, loadingOlder, onLoadOlder, onSendText, onSendMedia, onOpenMedia, onUploadAvatar, infoOpen, onToggleInfo,
-  onChatAction, onCompose, onMessageAction, notice,
+  onChatAction, onCompose, onMessageAction, notice, onBack,
 }) {
   const { can } = useAccess()
   const canReply = can('inbox.reply')
@@ -154,7 +154,7 @@ export function Conversation({
   if (!conversation) {
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center bg-page px-6 text-center">
-        <div className="mb-5 grid h-20 w-20 place-items-center rounded-full bg-inbox-chip text-brand">
+        <div className="mb-5 grid h-20 w-20 place-items-center rounded-full bg-inbox-chip text-brand-ink">
           <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.4 11.8a8.3 8.3 0 0 1-12.4 7.2l-4.5 1.2 1.3-4.4A8.3 8.3 0 1 1 20.4 11.8Z" />
           </svg>
@@ -217,7 +217,18 @@ export function Conversation({
   return (
     <div className="chat-canvas relative flex h-full flex-1 flex-col">
       {/* Header — 64px to match the list header across the divider. */}
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-inbox-divider bg-surface px-4">
+      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-inbox-divider bg-surface px-4 max-md:gap-2 max-md:pl-1">
+        {/* Phones show one pane at a time, so the thread needs a way back to
+            the list. Wider screens have the list beside it and no button. */}
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back to chats"
+          title="Back to chats"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink transition-colors hover:bg-inbox-control md:hidden"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+        </button>
         <div className="relative shrink-0">
           <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={40} />
           <button
@@ -258,7 +269,7 @@ export function Conversation({
           aria-pressed={search !== null}
           onClick={() => setSearch((v) => (v === null ? '' : null))}
           className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-colors
-            ${search !== null ? 'bg-inbox-chip text-brand' : 'text-muted hover:bg-inbox-control hover:text-ink'}`}
+            ${search !== null ? 'bg-inbox-chip text-brand-ink' : 'text-muted hover:bg-inbox-control hover:text-ink'}`}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
         </button>

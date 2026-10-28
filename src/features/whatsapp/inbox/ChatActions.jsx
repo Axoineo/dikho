@@ -168,7 +168,7 @@ export function ChatMenu({ conversation, canDelete, canBlock, onAction }) {
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className={`grid h-10 w-10 place-items-center rounded-full transition-colors
-          ${open ? 'bg-inbox-chip text-brand' : 'text-muted hover:bg-inbox-control hover:text-ink'}`}
+          ${open ? 'bg-inbox-chip text-brand-ink' : 'text-muted hover:bg-inbox-control hover:text-ink'}`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="12" cy="18.5" r="1.8" /></svg>
       </button>

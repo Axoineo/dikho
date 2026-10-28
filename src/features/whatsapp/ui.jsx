@@ -27,7 +27,7 @@ export function PanelHead({ title, subtitle, children }) {
 const BADGE_TONES = {
   neutral: 'bg-line-soft text-muted border-line',
   success: 'bg-tint-ok text-ok border-tint-ok-line',
-  info: 'bg-brand-soft text-brand border-tint-brand-line dark:text-[#5ba0e0]',
+  info: 'bg-brand-soft text-brand-ink border-tint-brand-line dark:text-[#5ba0e0]',
   warn: 'bg-tint-warn text-[#b8830f] border-tint-warn-line dark:text-accent',
   danger: 'bg-tint-danger text-danger border-tint-danger-line',
 }
@@ -118,7 +118,7 @@ export function Avatar({ name, phone }) {
     : String(phone || '').slice(-2)
   return (
     <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full
-      bg-brand-soft text-[11.5px] font-bold text-brand dark:text-[#5ba0e0]">
+      bg-brand-soft text-[11.5px] font-bold text-brand-ink dark:text-[#5ba0e0]">
       {label}
     </span>
   )

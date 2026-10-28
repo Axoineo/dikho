@@ -7,14 +7,14 @@
 .la-dialog { width: min(460px, 100%); text-align: left; }
 .la-dialog h2 { margin: 0 0 8px; font-size: 18px; color: var(--text); }
 .la-dialog p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--text); }
-.la-dialog-icon { display: inline-grid; place-items: center; width: 46px; height: 46px; margin-bottom: 10px; border-radius: 12px; background: var(--brand-blue-soft); color: var(--brand-blue); }
+.la-dialog-icon { display: inline-grid; place-items: center; width: 46px; height: 46px; margin-bottom: 10px; border-radius: 12px; background: var(--brand-blue-soft); color: var(--brand-ink); }
 [data-theme="dark"] .la-dialog-icon { color: #8fbfec; }
 .la-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .la-fineprint { margin: 10px 0 0 !important; color: var(--muted) !important; font-size: 12px !important; }
 .la-error { color: var(--danger) !important; }
 .la-field { display: grid; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--text); }
 .la-field textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 400; resize: vertical; }
-.la-link { padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--brand-blue); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.la-link { padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--brand-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 [data-theme="dark"] .la-link { color: #8fbfec; }
 
 /* Employee side: the banner, and the chat that hangs under it. Everything
@@ -57,7 +57,7 @@
   padding: 4px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text);
   font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
 }
-.la-quick:hover { border-color: var(--brand-blue); color: var(--brand-blue); }
+.la-quick:hover { border-color: var(--brand-blue); color: var(--brand-ink); }
 [data-theme="dark"] .la-quick:hover { border-color: #8fbfec; color: #8fbfec; }
 .la-icon-button {
   display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;

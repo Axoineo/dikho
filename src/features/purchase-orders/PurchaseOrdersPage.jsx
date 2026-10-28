@@ -2,29 +2,46 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
-import { formatValue, getValue, formatMoney, formatDate, formatDateInput } from '../../lib/format'
+import { formatDateInput, formatDisplayDate, formatDateRange, formatRupees } from '../../lib/format'
 import { round2, toAmount } from '../../lib/money'
 import { campaignDays, todayIso } from '../../lib/dates'
 import {
   ORDER_TYPE_OPTIONS, ORDER_STATUS_OPTIONS,
   GST_TYPE_OPTIONS, GST_RATES,
-  splitGst, itemAmounts, taxFromRate, rateFromAmounts, gstBreakdown,
+  itemAmounts, rateFromAmounts, gstBreakdown,
   storedItemTotals, applyItemChange,
 } from '../../lib/gst'
 import { statusTone, missingColumnFrom, notNullColumnFrom } from '../../lib/status'
-import { uniqueOptions } from '../vendors/vendorFilters'
 import { sessionActor } from '../sales-orders/salesOrderHelpers'
+import SalesOrderItemCard from '../sales-orders/SalesOrderItemCard'
 import { useAccess } from '../../lib/access'
+import { listValues, preferredPageSize, useSettings } from '../../lib/settings'
+import {
+  PageHeader, SearchField, ResultCount, Pagination, StatusPill, Cell, RowChevron, SkeletonRows, EmptyState, Toast,
+  DetailsPanel, Section, KeyValues, FormModal, FormSection, Field, CheckToggle, Disclosure,
+} from '../../components/crm/CrmUi'
 
 /* ─── Constants ────────────────────────────────────────────────────────── */
 
-const PURCHASE_ORDER_VIEW = 'purchaseorders'
+// Purchase orders live in public.salesorder: a row with vendor_address_id is
+// a PO (the convention the RLS policies use; see the user-management
+// migration). Their items are salesorderdocument rows with purchase_order_id
+// set, whose sales_order_id points at the sales order they were bought for.
+//
+// The list used to read public.purchaseorders, a flattened table left over
+// from an older schema that nothing writes to, so a PO saved here never
+// appeared in the list. It now reads the rows it writes.
 const PO_HEADER_TABLE     = 'salesorder'
 const PO_ITEM_TABLE       = 'salesorderdocument'
-const PO_PAGE_SIZES       = [25, 50, 75, 100]
-const PO_COLUMN_COUNT     = 10
-const PO_SEARCH_COLUMNS   = ['order_number', 'company', 'order_sales_number', 'crm_reference_id']
+const PO_PAGE_SIZES       = [25, 50, 100]
+const PO_COLUMN_COUNT     = 7
+const PO_SEARCH_COLUMNS   = ['order_number', 'company', 'crm_reference_id', 'brand_name']
 const PO_SEARCH_FALLBACK  = ['company']
+// The vendor and its address come along through the foreign keys
+// salesorder.vendor_address_id -> vendor_addresses -> vendors. Someone
+// without vendors.view gets null embeds, and the row falls back to the
+// vendor name stored on the order itself.
+const PO_SELECT = '*,vendor_addresses(id,vendor_id,address,city,state,country,zipcode,vendors(id,company_name,contact_person,alias,email,gstin,pan_number,vendor_type))'
 
 const PO_ITEM_TYPE_OPTIONS = ['Media', 'Production', 'Printing', 'Installation', 'Service', 'Other']
 
@@ -57,6 +74,50 @@ const PO_ITEM_FALLBACKS = {
 }
 
 /* ─── Helpers ──────────────────────────────────────────────────────────── */
+
+// Flattens a salesorder row and its embeds into the fields the list, the
+// panel and the edit form read.
+function normalizePO(row, salesOrders = {}) {
+  const address = row.vendor_addresses || null
+  const vendor = address?.vendors || null
+  const so = row.sales_order_id ? salesOrders[row.sales_order_id] : null
+  return {
+    ...row,
+    vendor_id: address?.vendor_id ?? row.vendor_id ?? null,
+    vendor_name: vendor?.company_name || row.company,
+    contact_person: vendor?.contact_person ?? row.contact_person ?? null,
+    alias: vendor?.alias ?? null,
+    email: vendor?.email ?? null,
+    gstin: vendor?.gstin ?? null,
+    pan_number: vendor?.pan_number ?? null,
+    vendor_type: vendor?.vendor_type ?? null,
+    address: address?.address ?? null,
+    city: address?.city ?? null,
+    state: address?.state ?? null,
+    country: address?.country ?? null,
+    zipcode: address?.zipcode ?? null,
+    order_sales_number: so?.order_number ?? row.order_sales_number ?? null,
+    so_company: so?.company ?? row.so_company ?? null,
+  }
+}
+
+// Which sales order each PO was raised against, read from its items. Two
+// small requests per page; someone who cannot see sales orders just gets no
+// SO number.
+async function attachSalesOrders(rows) {
+  const ids = rows.map((row) => row.id)
+  if (ids.length === 0) return rows
+  const { data: links } = await supabase.from(PO_ITEM_TABLE).select('purchase_order_id,sales_order_id').in('purchase_order_id', ids)
+  const soByPo = {}
+  ;(links || []).forEach((link) => { if (link.sales_order_id && !soByPo[link.purchase_order_id]) soByPo[link.purchase_order_id] = link.sales_order_id })
+  const soIds = [...new Set(Object.values(soByPo))]
+  const { data: sos } = soIds.length
+    ? await supabase.from(PO_HEADER_TABLE).select('id,order_number,company').in('id', soIds)
+    : { data: [] }
+  const salesOrders = Object.fromEntries((sos || []).map((so) => [so.id, so]))
+  return rows.map((row) => normalizePO({ ...row, sales_order_id: soByPo[row.id] ?? null }, salesOrders))
+}
+
 
 const MONEY_EPSILON = 0.005
 
@@ -116,9 +177,10 @@ function blankPOForm() {
   return {
     order_number: '',
     crm_reference_id: '',
-    order_type: ORDER_TYPE_OPTIONS[0],
+    // The first value each list offers (Settings > Lists).
+    order_type: listValues('order_type', ORDER_TYPE_OPTIONS)[0] ?? '',
     order_date: todayIso(),
-    order_status: ORDER_STATUS_OPTIONS[0],
+    order_status: listValues('order_status', ORDER_STATUS_OPTIONS)[0] ?? '',
     campaign_start_date: '',
     campaign_end_date: '',
     brand_name: '',
@@ -152,12 +214,15 @@ function poToForm(row) {
     approved_by: row.approved_by ?? '',
     approved_date: formatDateInput(row.approved_date),
     complete_date: formatDateInput(row.complete_date),
-    sales_order_id: '',
+    // Carried over from the saved row. These used to start empty, and saving
+    // wrote vendor_address_id back as null: that turns a purchase order into
+    // a sales order (or is refused by RLS for someone with only PO rights).
+    sales_order_id: row.sales_order_id ? String(row.sales_order_id) : '',
     so_order_number: row.order_sales_number ?? '',
-    so_company: '',
-    vendor_id: '',
-    vendor_name: row.company ?? '',
-    vendor_address_id: '',
+    so_company: row.so_company ?? '',
+    vendor_id: row.vendor_id ? String(row.vendor_id) : '',
+    vendor_name: row.vendor_name ?? row.company ?? '',
+    vendor_address_id: row.vendor_address_id ? String(row.vendor_address_id) : '',
   }
 }
 
@@ -168,7 +233,7 @@ function blankPOItem(key) {
     so_item_id: '',
     so_item_name: '',
     so_item_taxable: 0,
-    type: PO_ITEM_TYPE_OPTIONS[0],
+    type: listValues('item_type', PO_ITEM_TYPE_OPTIONS)[0] ?? '',
     name: '',
     short_name: '',
     label: '',
@@ -266,127 +331,102 @@ function buildPOItemPayload(item, salesOrderId, purchaseOrderId) {
 
 function POItemEditor({ item, index, onChange, onRemove, onToggle, canRemove, soItems, typeOptions }) {
   const amounts = itemAmounts(item)
-  const field = (name) => (event) => onChange(index, name, event.target.value)
+  const field = (name) => ({ value: item[name], onChange: (event) => onChange(index, name, event.target.value) })
+  const id = (name) => `po-item-${name}-${item.key}`
   const breakdown = gstBreakdown(amounts)
 
-  const soItem = soItems.find(si => String(si.id) === String(item.so_item_id))
-  const profit = soItem ? round2(toAmount(soItem.taxable_amount) - amounts.taxable_amount) : null
+  const soItem = soItems.find((row) => String(row.id) === String(item.so_item_id))
+  const margin = soItem ? round2(toAmount(soItem.taxable_amount) - amounts.taxable_amount) : null
 
   return (
-    <div className="so-item-card">
-      <div className="so-item-head">
-        <span className="so-item-index">{index + 1}</span>
-        <span className="so-item-title" title={item.name}>{item.name.trim() || 'Untitled item'}</span>
-        <span className="so-item-amount mono-cell">{formatMoney(amounts.after_tax_amount)}</span>
-        <button type="button" className="so-item-more" onClick={() => onToggle(index)} aria-expanded={item.expanded}>
-          {item.expanded ? 'Fewer fields' : 'More fields'}
-          <Icon name="chevronDown" size={14} />
-        </button>
-        <button type="button" className="icon-button small" onClick={() => onRemove(index)} disabled={!canRemove} title={canRemove ? 'Remove item' : 'At least one item required'} aria-label={`Remove item ${index + 1}`}>
+    <div className="crm-item">
+      <div className="crm-item-head">
+        <span className="crm-item-index">{index + 1}</span>
+        <span className={`crm-item-title${item.name.trim() ? '' : ' is-placeholder'}`} title={item.name}>{item.name.trim() || 'New item'}</span>
+        <span className="crm-item-total">{formatRupees(amounts.after_tax_amount)}</span>
+        <button type="button" className="crm-icon-btn" onClick={() => onRemove(index)} disabled={!canRemove}
+          title={canRemove ? 'Remove item' : 'A purchase order needs at least one item'} aria-label={`Remove item ${index + 1}`}>
           <Icon name="trash" size={16} />
         </button>
       </div>
 
-      <div className="so-item-grid">
-        <div className="field">
-          <label htmlFor={`po-item-soitem-${item.key}`}>SO Item</label>
-          <select id={`po-item-soitem-${item.key}`} value={item.so_item_id} onChange={field('so_item_id')}>
-            <option value="">— Select —</option>
-            {soItems.map(si => (
-              <option key={si.id} value={si.id}>{si.name} ({formatMoney(si.taxable_amount)})</option>
-            ))}
-          </select>
+      <div className="crm-item-body">
+        <div className="crm-grid crm-grid--4">
+          <Field label="For sales order line" htmlFor={id('soitem')} className="crm-span-2"
+            hint={soItems.length === 0 ? 'Pick the sales order first to link a line.' : null}>
+            <select id={id('soitem')} className="crm-select" {...field('so_item_id')} disabled={soItems.length === 0}>
+              <option value="">Not linked</option>
+              {soItems.map((row) => <option key={row.id} value={row.id}>{row.name} ({formatRupees(row.taxable_amount)})</option>)}
+            </select>
+          </Field>
+          <Field label="Item" htmlFor={id('name')} required className="crm-span-2">
+            <input id={id('name')} className="crm-input" {...field('name')} />
+          </Field>
+          <Field label="Type" htmlFor={id('type')}>
+            <select id={id('type')} className="crm-select" {...field('type')}>
+              <option value="">Not set</option>
+              {(item.type && !typeOptions.includes(item.type) ? [...typeOptions, item.type] : typeOptions).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </Field>
+          <Field label="Cost before tax" htmlFor={id('taxable')}>
+            <div className="crm-input-group">
+              <span className="crm-addon">₹</span>
+              <input id={id('taxable')} type="number" step="0.01" min="0" inputMode="decimal" className="crm-input crm-mono-input" {...field('taxable_amount')} />
+            </div>
+          </Field>
+          <Field label="GST">
+            <CheckToggle checked={item.is_taxable} onChange={(value) => onChange(index, 'is_taxable', value)}>Charged GST</CheckToggle>
+          </Field>
+          <Field label="GST type" htmlFor={id('gst-type')}>
+            <select id={id('gst-type')} className="crm-select" {...field('gst_type')} disabled={!item.is_taxable}>
+              {GST_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </Field>
+          <Field label="GST rate" htmlFor={id('rate')}>
+            <select id={id('rate')} className="crm-select" {...field('gst_rate')} disabled={!item.is_taxable}>
+              {GST_RATES.map((rate) => <option key={rate} value={String(rate)}>{rate}%</option>)}
+              <option value="custom">Custom amount</option>
+            </select>
+          </Field>
+          <Field label="Tax" htmlFor={id('tax')} hint={item.is_taxable && item.gst_rate !== 'custom' ? 'Worked out from the rate' : null}>
+            <div className="crm-input-group">
+              <span className="crm-addon">₹</span>
+              <input id={id('tax')} type="number" step="0.01" min="0" inputMode="decimal" className="crm-input crm-mono-input" {...field('tax_amount')}
+                disabled={!item.is_taxable || item.gst_rate !== 'custom'} />
+            </div>
+          </Field>
         </div>
 
-        <div className="field so-item-name">
-          <label htmlFor={`po-item-name-${item.key}`}>Name *</label>
-          <input id={`po-item-name-${item.key}`} value={item.name} onChange={field('name')} placeholder="What is being purchased" />
-        </div>
-
-        <div className="field">
-          <label htmlFor={`po-item-type-${item.key}`}>Type</label>
-          <select id={`po-item-type-${item.key}`} value={item.type} onChange={field('type')}>
-            <option value="">—</option>
-            {typeOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`po-item-taxable-${item.key}`}>PO Cost (Taxable)</label>
-          <input id={`po-item-taxable-${item.key}`} type="number" step="0.01" min="0" inputMode="decimal" value={item.taxable_amount} onChange={field('taxable_amount')} placeholder="0.00" />
-        </div>
-
-        <div className="field so-check-field">
-          <label>GST</label>
-          <button type="button" className="so-check" onClick={() => onChange(index, 'is_taxable', !item.is_taxable)} aria-pressed={item.is_taxable}>
-            <span className={`checkbox-button ${item.is_taxable ? 'checked' : ''}`}>
-              {item.is_taxable ? <Icon name="check" size={13} /> : null}
-            </span>
-            Taxable
-          </button>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`po-item-gst-type-${item.key}`}>GST Type</label>
-          <select id={`po-item-gst-type-${item.key}`} value={item.gst_type} onChange={field('gst_type')} disabled={!item.is_taxable}>
-            {GST_TYPE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`po-item-rate-${item.key}`}>GST Rate</label>
-          <select id={`po-item-rate-${item.key}`} value={item.gst_rate} onChange={field('gst_rate')} disabled={!item.is_taxable}>
-            {GST_RATES.map(rate => <option key={rate} value={String(rate)}>{rate}%</option>)}
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={`po-item-tax-${item.key}`}>Tax Amount</label>
-          <input id={`po-item-tax-${item.key}`} type="number" step="0.01" min="0" inputMode="decimal" value={item.tax_amount} onChange={field('tax_amount')} disabled={!item.is_taxable || item.gst_rate !== 'custom'} placeholder="0.00" />
-        </div>
+        <Disclosure open={item.expanded} onToggle={() => onToggle(index)} count="6 fields">
+          <div className="crm-grid crm-grid--4">
+            <Field label="Date" htmlFor={id('date')}>
+              <input id={id('date')} type="date" className="crm-input" {...field('date')} />
+            </Field>
+            <Field label="Invoice number" htmlFor={id('invoice')}>
+              <input id={id('invoice')} className="crm-input" {...field('invoice_number')} />
+            </Field>
+            <Field label="Short name" htmlFor={id('short')}>
+              <input id={id('short')} className="crm-input" {...field('short_name')} />
+            </Field>
+            <Field label="Audit">
+              <CheckToggle checked={item.self_audit_completed} onChange={(value) => onChange(index, 'self_audit_completed', value)}>Self audit done</CheckToggle>
+            </Field>
+            <Field label="Attachment link" htmlFor={id('file')} className="crm-span-2">
+              <input id={id('file')} type="url" className="crm-input" {...field('file_url')} />
+            </Field>
+            <Field label="Note" htmlFor={id('note')} className="crm-span-2">
+              <input id={id('note')} className="crm-input" {...field('document_note')} />
+            </Field>
+          </div>
+        </Disclosure>
       </div>
 
-      {item.expanded && (
-        <div className="so-item-grid so-item-extra">
-          <div className="field">
-            <label htmlFor={`po-item-date-${item.key}`}>Date</label>
-            <input id={`po-item-date-${item.key}`} type="date" value={item.date} onChange={field('date')} />
-          </div>
-          <div className="field">
-            <label htmlFor={`po-item-short-${item.key}`}>Short Name</label>
-            <input id={`po-item-short-${item.key}`} value={item.short_name} onChange={field('short_name')} />
-          </div>
-          <div className="field">
-            <label htmlFor={`po-item-invoice-${item.key}`}>Invoice Number</label>
-            <input id={`po-item-invoice-${item.key}`} value={item.invoice_number} onChange={field('invoice_number')} />
-          </div>
-          <div className="field so-check-field">
-            <label>Audit</label>
-            <button type="button" className="so-check" onClick={() => onChange(index, 'self_audit_completed', !item.self_audit_completed)} aria-pressed={item.self_audit_completed}>
-              <span className={`checkbox-button ${item.self_audit_completed ? 'checked' : ''}`}>
-                {item.self_audit_completed ? <Icon name="check" size={13} /> : null}
-              </span>
-              Self audit done
-            </button>
-          </div>
-          <div className="field field-wide">
-            <label htmlFor={`po-item-file-${item.key}`}>Attachment URL</label>
-            <input id={`po-item-file-${item.key}`} type="url" value={item.file_url} onChange={field('file_url')} placeholder="https://…" />
-          </div>
-          <div className="field field-wide">
-            <label htmlFor={`po-item-note-${item.key}`}>Note</label>
-            <textarea id={`po-item-note-${item.key}`} rows="2" value={item.document_note} onChange={field('document_note')} />
-          </div>
-        </div>
-      )}
-
-      <div className="so-item-foot">
-        <span>Taxable <strong className="mono-cell">{formatMoney(amounts.taxable_amount)}</strong></span>
-        <span>Tax <strong className="mono-cell">{formatMoney(amounts.tax_amount)}</strong></span>
-        <span className="so-item-foot-gst">{breakdown || (item.is_taxable ? 'No GST yet' : 'Not taxable')}</span>
-        <span className="so-item-foot-total">After tax <strong className="mono-cell">{formatMoney(amounts.after_tax_amount)}</strong></span>
-        {profit != null && <span className="so-item-foot-total">Profit <strong className="mono-cell">{formatMoney(profit)}</strong></span>}
+      <div className="crm-item-foot">
+        <span>Before tax <strong>{formatRupees(amounts.taxable_amount)}</strong></span>
+        <span>Tax <strong>{formatRupees(amounts.tax_amount)}</strong></span>
+        <span>{breakdown || (item.is_taxable ? 'No GST yet' : 'No GST')}</span>
+        {margin != null && <span>Margin <strong>{formatRupees(margin)}</strong></span>}
+        <span className="is-end">Total <strong>{formatRupees(amounts.after_tax_amount)}</strong></span>
       </div>
     </div>
   )
@@ -396,177 +436,93 @@ function POItemEditor({ item, index, onChange, onRemove, onToggle, canRemove, so
    PO DETAILS PANEL
    ═══════════════════════════════════════════════════════════════════════ */
 
-function POItemCard({ row }) {
-  const breakdown = gstBreakdown(row)
-  return (
-    <div className="so-detail-item">
-      <div className="so-detail-item-head">
-        <span className="so-detail-item-name" title={row.name || ''}>{formatValue(row.name)}</span>
-        <span className="so-detail-item-total">{formatMoney(row.after_tax_amount)}</span>
-      </div>
-      <div className="so-detail-item-meta">
-        <span>{formatValue(getValue(row, ['type', 'label']))}</span>
-        {row.date && <span>{formatDate(row.date)}</span>}
-        {row.invoice_number && <span>Inv {row.invoice_number}</span>}
-        {row.self_audit_completed && <span className="so-detail-item-flag">Self-audited</span>}
-      </div>
-      <div className="so-detail-item-money">
-        <span>Taxable <strong>{formatMoney(row.taxable_amount)}</strong></span>
-        <span>Tax <strong>{formatMoney(row.tax_amount)}</strong></span>
-      </div>
-      {(breakdown || row.gst_type) && (
-        <div className="so-detail-item-gst">{[row.is_taxable === false ? 'Not taxable' : row.gst_type, breakdown].filter(Boolean).join(' · ')}</div>
-      )}
-      {row.document_note && <div className="so-detail-item-note">{row.document_note}</div>}
-      {row.file_url && (
-        <a className="so-detail-item-link" href={row.file_url} target="_blank" rel="noopener noreferrer">
-          <Icon name="file" size={14} /> Open attachment
-        </a>
-      )}
-    </div>
-  )
-}
-
 function PurchaseOrderDetails({ order, items, itemsLoading, itemsError, onClose, onEdit }) {
   if (!order) return null
 
   const duration = campaignDays(order.campaign_start_date, order.campaign_end_date)
   const stored = storedItemTotals(items)
   const drifted = !itemsLoading && !itemsError && items.length > 0 && Math.abs(stored.total - toAmount(order.total)) > MONEY_EPSILON
-  const receipt = toAmount(order.payment_request_amount || order.payment_receipt_amount)
-  const balance = (order.payment_request_amount != null || order.payment_receipt_amount != null) ? round2(toAmount(order.total) - receipt) : null
-
-  const sections = [
-    { title: 'Order Info', fields: [
-      ['PO Number', order.order_number],
-      ['CRM Reference', order.crm_reference_id],
-      ['Order Type', order.order_type],
-      ['Order Date', order.order_date && formatDate(order.order_date)],
-      ['Order Status', order.order_status],
-    ]},
-    { title: 'Sales Order', fields: [
-      ['SO Number', order.order_sales_number],
-    ]},
-    { title: 'Vendor', fields: [
-      ['Company', order.company],
-      ['Contact Person', order.order_vendor_fullname || order.contact_person],
-      ['Alias', order.alias],
-      ['Email', order.email],
-      ['GSTIN', order.gstin],
-      ['PAN', order.pan_number],
-      ['Vendor Type', order.vendor_type],
-    ]},
-    { title: 'Address', fields: [
-      ['Address', order.address],
-      ['City', order.city],
-      ['State', order.state],
-      ['Country', order.country],
-      ['Zipcode', order.zipcode],
-    ]},
-    { title: 'Campaign', fields: [
-      ['Start Date', order.campaign_start_date && formatDate(order.campaign_start_date)],
-      ['End Date', order.campaign_end_date && formatDate(order.campaign_end_date)],
-      ['Duration', duration && `${duration} ${duration === 1 ? 'day' : 'days'}`],
-    ]},
-    { title: 'Media / Brand', fields: [
-      ['Brand Name', order.brand_name],
-    ]},
-    { title: 'Approval', fields: [
-      ['Approved By', order.approved_by],
-      ['Approved Date', order.approved_date && formatDate(order.approved_date)],
-      ['Completed Date', order.complete_date && formatDate(order.complete_date)],
-      ['Created By', order.created_by],
-      ['Created At', order.created_at && formatDate(order.created_at)],
-      ['Last Updated', order.updated_at && formatDate(order.updated_at)],
-    ]},
-  ]
+  const requested = order.payment_receipt_amount
+  const balance = requested == null ? null : round2(toAmount(order.total) - toAmount(requested))
+  const place = [order.city, order.state, order.zipcode].filter(Boolean).join(', ')
 
   return (
-    <aside className="details-drawer" aria-label="Purchase order details">
-      <div className="drawer-header">
-        <div>
-          <span className="drawer-kicker">PURCHASE ORDER</span>
-          <h2>{formatValue(order.order_number)}</h2>
-        </div>
-        <div className="drawer-header-actions">
-          {onEdit && <button className="icon-button" onClick={onEdit} aria-label="Edit purchase order" title="Edit">
-            <Icon name="edit" size={18} />
-          </button>}
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <Icon name="close" size={19} />
-          </button>
-        </div>
-      </div>
-      <div className="drawer-divider" />
-
-      {/* Financial totals */}
-      <div className="so-total-panel">
-        <div className="so-total-row">
-          <span>Sub Total</span>
-          <span className="mono-cell">{formatMoney(order.sub_total)}</span>
-        </div>
-        <div className="so-total-row">
-          <span>Tax Total</span>
-          <span className="mono-cell">{formatMoney(order.tax_total)}</span>
-        </div>
-        <div className="so-total-row is-grand">
-          <span>Total</span>
-          <span className="mono-cell">{formatMoney(order.total)}</span>
-        </div>
-        {receipt > 0 && (
-          <>
-            <div className="so-total-row">
-              <span>Payment Request</span>
-              <span className="mono-cell">{formatMoney(receipt)}</span>
-            </div>
-            {balance != null && (
-              <div className="so-total-row">
-                <span>Balance</span>
-                <span className="mono-cell">{formatMoney(balance)}</span>
-              </div>
-            )}
-          </>
-        )}
+    <DetailsPanel
+      label="Purchase order details"
+      title={order.order_number || `PO #${order.id}`}
+      meta={<>
+        {order.order_status && <StatusPill tone={statusTone(order.order_status)}>{order.order_status}</StatusPill>}
+        <span>{order.vendor_name || 'No vendor'}</span>
+      </>}
+      onClose={onClose}
+      actions={onEdit && (
+        <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
+          <Icon name="edit" size={15} /> Edit
+        </button>
+      )}
+    >
+      <div className="crm-figures">
+        <div className="crm-figures-total"><span>Total</span><strong className="crm-mono">{formatRupees(order.total)}</strong></div>
+        <div className="crm-figures-row"><span>Before tax</span><strong className="crm-mono">{formatRupees(order.sub_total)}</strong></div>
+        <div className="crm-figures-row"><span>Tax</span><strong className="crm-mono">{formatRupees(order.tax_total)}</strong></div>
+        {requested != null && <div className="crm-figures-row"><span>Payment requested</span><strong className="crm-mono">{formatRupees(requested)}</strong></div>}
+        {balance != null && <div className="crm-figures-row is-balance"><span>Still to request</span><strong className="crm-mono">{formatRupees(balance)}</strong></div>}
       </div>
 
       {drifted && (
-        <div className="so-drift-note" role="status">
-          Items add up to {formatMoney(stored.total)}, which differs from the stored total. Saving again will recalculate.
+        <div className="crm-note" role="status">
+          <Icon name="alert" size={16} />
+          <div>The items add up to {formatRupees(stored.total)}, not the stored total. Opening and saving the order recalculates it.</div>
         </div>
       )}
 
-      {/* Child items */}
-      <div className="details-list">
-        <div className="details-section-title">
-          Order Items
-          {!itemsLoading && !itemsError && <span className="so-item-count">{items.length}</span>}
-        </div>
-
+      <Section title={`Items${!itemsLoading && !itemsError ? ` (${items.length})` : ''}`}>
         {itemsLoading ? (
-          <div className="so-detail-items-state">Loading items…</div>
+          <p className="crm-section-note">Loading items…</p>
         ) : itemsError ? (
-          <div className="so-detail-items-state is-error">{itemsError}</div>
+          <div className="crm-note crm-note--danger" role="alert">{itemsError}</div>
         ) : items.length === 0 ? (
-          <div className="so-detail-items-state">No items on this order.</div>
+          <p className="crm-section-note">This purchase order has no items.</p>
         ) : (
-          <div className="so-detail-items">
-            {items.map(row => <POItemCard key={row.id} row={row} />)}
-          </div>
+          <div className="crm-lines">{items.map((row) => <SalesOrderItemCard key={row.id} row={row} forPurchaseOrder />)}</div>
         )}
+      </Section>
 
-        {sections.map(section => (
-          <div key={section.title}>
-            <div className="details-section-title">{section.title}</div>
-            {section.fields.map(([label, value]) => (
-              <div className="detail-row" key={label}>
-                <span className="detail-label">{label}</span>
-                <span className="detail-value">{formatValue(value)}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </aside>
+      <Section title="Vendor">
+        <KeyValues items={[
+          { label: 'Vendor', value: order.vendor_name, wide: true, keep: true },
+          { label: 'Contact person', value: order.contact_person },
+          { label: 'Alias', value: order.alias },
+          { label: 'Email', value: order.email, href: order.email ? `mailto:${order.email}` : null, wide: true },
+          { label: 'GSTIN', value: order.gstin, mono: true },
+          { label: 'PAN', value: order.pan_number, mono: true },
+          { label: 'Address', value: [order.address, place, order.country].filter(Boolean).join(', '), wide: true },
+        ]} />
+      </Section>
+
+      <Section title="Order">
+        <KeyValues items={[
+          { label: 'For sales order', value: [order.order_sales_number, order.so_company].filter(Boolean).join(' · '), wide: true, keep: true },
+          { label: 'Order date', value: order.order_date && formatDisplayDate(order.order_date), keep: true },
+          { label: 'Order type', value: order.order_type },
+          { label: 'CRM reference', value: order.crm_reference_id, mono: true },
+          { label: 'Brand', value: order.brand_name },
+          { label: 'Campaign', value: formatDateRange(order.campaign_start_date, order.campaign_end_date), wide: true },
+          { label: 'Duration', value: duration && `${duration} ${duration === 1 ? 'day' : 'days'}` },
+        ]} />
+      </Section>
+
+      <Section title="History">
+        <KeyValues items={[
+          { label: 'Approved by', value: order.approved_by },
+          { label: 'Approved on', value: order.approved_date && formatDisplayDate(order.approved_date) },
+          { label: 'Completed on', value: order.complete_date && formatDisplayDate(order.complete_date) },
+          { label: 'Created by', value: order.created_by, wide: true },
+          { label: 'Created on', value: order.created_at && formatDisplayDate(order.created_at) },
+          { label: 'Last changed', value: order.updated_at && formatDisplayDate(order.updated_at) },
+        ]} />
+      </Section>
+    </DetailsPanel>
   )
 }
 
@@ -577,6 +533,7 @@ function PurchaseOrderDetails({ order, items, itemsLoading, itemsError, onClose,
 function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
   const isEdit = Boolean(order?.id)
 
+  useSettings()
   const [form, setForm] = useState(() => isEdit ? poToForm(order) : blankPOForm())
   const keyRef = useRef(1)
   const [items, setItems] = useState(() => isEdit ? [] : [blankPOItem('item-1')])
@@ -590,8 +547,6 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
   const [soItems, setSoItems] = useState([])
   const [vendors, setVendors] = useState([])
   const [vendorAddresses, setVendorAddresses] = useState([])
-  const [mediaOptions, setMediaOptions] = useState([])
-  const [subMediaOptions, setSubMediaOptions] = useState([])
 
   function nextKey() { keyRef.current += 1; return `item-${keyRef.current}` }
 
@@ -603,17 +558,13 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [soRes, vRes, mRes, smRes] = await Promise.all([
+      const [soRes, vRes] = await Promise.all([
         supabase.from('salesorder').select('id,order_number,company,crm_reference_id,campaign_start_date,campaign_end_date,brand_name').is('vendor_address_id', null).order('id', { ascending: false }).limit(1000),
         supabase.from('vendors').select('id,company_name,contact_person,alias,email,gstin,pan_number,vendor_type,media_id,sub_media_id').order('company_name', { ascending: true }).limit(1000),
-        supabase.from('media').select('id,name').order('name', { ascending: true }),
-        supabase.from('sub_media').select('id,name,media_id').order('name', { ascending: true }),
       ])
       if (cancelled) return
       setSalesOrders(soRes.data || [])
       setVendors(vRes.data || [])
-      setMediaOptions(mRes.data || [])
-      setSubMediaOptions(smRes.data || [])
     }
     load()
     return () => { cancelled = true }
@@ -666,7 +617,13 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
     if (!form.vendor_id) { setVendorAddresses([]); return }
     let cancelled = false
     supabase.from('vendor_addresses').select('*').eq('vendor_id', Number(form.vendor_id)).then(({ data }) => {
-      if (!cancelled) setVendorAddresses(data || [])
+      if (cancelled) return
+      const rows = data || []
+      setVendorAddresses(rows)
+      // Most vendors have one address: pick it, or the default, so the PO
+      // does not wait on a choice there is nothing to choose between.
+      const pick = rows.length === 1 ? rows[0] : rows.find((row) => row.is_default)
+      if (pick) setForm((current) => (current.vendor_address_id ? current : { ...current, vendor_address_id: String(pick.id) }))
     })
     return () => { cancelled = true }
   }, [form.vendor_id])
@@ -744,7 +701,7 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
     setItems(current => current.filter((_, pos) => pos !== index))
   }
 
-  const itemTypeOptions = useMemo(() => [...PO_ITEM_TYPE_OPTIONS], [])
+  const itemTypeOptions = listValues('item_type', PO_ITEM_TYPE_OPTIONS)
 
   // --- Totals ---
   const totals = useMemo(() => {
@@ -768,10 +725,14 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
   const campaignInvalid = Boolean(form.campaign_start_date && form.campaign_end_date && form.campaign_end_date < form.campaign_start_date)
   const duration = campaignInvalid ? null : campaignDays(form.campaign_start_date, form.campaign_end_date)
 
+  // In the order the form asks, so the first message is the first gap.
   function validate() {
-    if (!form.vendor_name.trim() && !form.vendor_id) return 'Select a vendor.'
+    if (!form.sales_order_id) return 'Choose the sales order this purchase is for.'
     if (!form.order_number.trim()) return 'Enter a PO number.'
-    if (!form.sales_order_id) return 'Select a Sales Order.'
+    if (!form.vendor_name.trim() && !form.vendor_id) return 'Choose the vendor.'
+    // vendor_address_id is what marks this salesorder row as a purchase
+    // order. Saved without it, the PO would turn into a sales order.
+    if (!form.vendor_address_id) return 'Choose the vendor address this purchase order goes to.'
     if (campaignInvalid) return 'Campaign end date must be on or after start date.'
     if (items.length === 0) return 'Add at least one item.'
     const unnamed = items.findIndex(item => !item.name.trim())
@@ -862,235 +823,171 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
     }
   }
 
+  const field = (name) => ({ value: form[name], onChange: (event) => update(name, event.target.value) })
+  const moreFilled = [form.crm_reference_id, form.order_type, form.approved_by, form.approved_date, form.complete_date].filter(Boolean).length
+
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal-card so-modal-card" onMouseDown={e => e.stopPropagation()}>
-
-        <div className="modal-header">
-          <div>
-            <span className="drawer-kicker">PURCHASE ORDER</span>
-            <h2>{isEdit ? `Edit ${order.order_number || `PO #${order.id}`}` : 'Add purchase order'}</h2>
+    <FormModal
+      wide
+      title={isEdit ? `Edit ${order.order_number || `PO #${order.id}`}` : 'New purchase order'}
+      subtitle={isEdit ? (order.vendor_name || order.company) : 'Pick the sales order and the vendor, add what you are buying, and save.'}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      busy={saving}
+      submitDisabled={itemsLoading}
+      error={error}
+      errorTitle="Could not save the purchase order"
+      submitLabel={isEdit ? 'Save changes' : 'Create purchase order'}
+      footerInfo={<>Total <strong>{formatRupees(totals.total)}</strong></>}
+    >
+      <FormSection title="Order">
+        <div className="crm-grid crm-grid--3">
+          <div className="crm-span-2">
+            <SearchableSelect
+              label="For sales order"
+              required
+              value={form.sales_order_id}
+              onChange={selectSO}
+              options={soOptions}
+              placeholder={soOptions.length === 0 ? 'Loading sales orders…' : 'Choose a sales order'}
+              searchPlaceholder="Search sales orders…"
+            />
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
-            <Icon name="close" size={19} />
-          </button>
+          <Field label="PO number" htmlFor="po-order-number" required>
+            <input id="po-order-number" className="crm-input crm-mono-input" {...field('order_number')} />
+          </Field>
+          <Field label="Client">
+            <div className="crm-readout">{form.so_company || 'From the sales order'}</div>
+          </Field>
+          <Field label="Order date" htmlFor="po-order-date">
+            <input id="po-order-date" type="date" className="crm-input" {...field('order_date')} />
+          </Field>
+          <Field label="Status" htmlFor="po-order-status">
+            <select id="po-order-status" className="crm-select" {...field('order_status')}>
+              <option value="">Not set</option>
+              {listValues('order_status', ORDER_STATUS_OPTIONS, form.order_status).map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </Field>
         </div>
+      </FormSection>
 
-        {error && (
-          <div className="form-error" role="alert">
-            <Icon name="alert" size={17} />
-            <div><strong>Could not save purchase order</strong><span>{error}</span></div>
-          </div>
-        )}
-
-        <form className="vendor-form so-form" onSubmit={handleSubmit}>
-
-          {/* ── Order Info ─────────────────────────────────── */}
-          <div className="form-section-title field-wide">Order Info</div>
-
-          <div className="field">
-            <label htmlFor="po-order-number">PO Number *</label>
-            <input id="po-order-number" value={form.order_number} onChange={e => update('order_number', e.target.value)} required />
-          </div>
-
-          <SearchableSelect
-            label="Sales Order"
-            required
-            value={form.sales_order_id}
-            onChange={selectSO}
-            options={soOptions}
-            placeholder={soOptions.length === 0 ? 'Loading…' : 'Select a sales order'}
-            searchPlaceholder="Search orders…"
-          />
-
-          {form.so_company && (
-            <div className="field">
-              <label>Client</label>
-              <div className="so-readout">{form.so_company}</div>
-            </div>
-          )}
-
-          <div className="field">
-            <label htmlFor="po-crm">CRM Reference ID</label>
-            <input id="po-crm" value={form.crm_reference_id} onChange={e => update('crm_reference_id', e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-order-type">Order Type</label>
-            <select id="po-order-type" value={form.order_type} onChange={e => update('order_type', e.target.value)}>
-              <option value="">—</option>
-              {ORDER_TYPE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-order-date">Order Date</label>
-            <input id="po-order-date" type="date" value={form.order_date} onChange={e => update('order_date', e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-order-status">Order Status</label>
-            <select id="po-order-status" value={form.order_status} onChange={e => update('order_status', e.target.value)}>
-              <option value="">—</option>
-              {ORDER_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-approved-by">Approved By</label>
-            <input id="po-approved-by" value={form.approved_by} onChange={e => update('approved_by', e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-approved-date">Approved Date</label>
-            <input id="po-approved-date" type="date" value={form.approved_date} onChange={e => update('approved_date', e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-complete-date">Completed Date</label>
-            <input id="po-complete-date" type="date" value={form.complete_date} onChange={e => update('complete_date', e.target.value)} />
-          </div>
-
-          {/* ── Campaign ──────────────────────────────────── */}
-          <div className="form-section-title field-wide">Campaign</div>
-
-          <div className="field">
-            <label htmlFor="po-campaign-start">Campaign Start Date</label>
-            <input id="po-campaign-start" type="date" value={form.campaign_start_date} onChange={e => update('campaign_start_date', e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="po-campaign-end">Campaign End Date</label>
-            <input id="po-campaign-end" type="date" value={form.campaign_end_date} min={form.campaign_start_date || undefined} onChange={e => update('campaign_end_date', e.target.value)} aria-invalid={campaignInvalid} />
-          </div>
-
-          <div className="field">
-            <label>Duration</label>
-            <div className={`so-readout ${campaignInvalid ? 'is-invalid' : ''}`}>
-              {campaignInvalid ? 'End date before start' : duration ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Set both dates'}
-            </div>
-          </div>
-
-          {/* ── Vendor ────────────────────────────────────── */}
-          <div className="form-section-title field-wide">Vendor</div>
-
+      <FormSection title="Vendor">
+        <div className="crm-grid">
           <SearchableSelect
             label="Vendor"
             required
             value={form.vendor_id}
             onChange={selectVendor}
             options={vendorOptions}
-            placeholder={vendorOptions.length === 0 ? 'Loading…' : 'Select a vendor'}
+            placeholder={vendorOptions.length === 0 ? 'Loading vendors…' : 'Choose a vendor'}
             searchPlaceholder="Search vendors…"
           />
-
           <SearchableSelect
-            label="Vendor Address"
+            label="Vendor address"
+            required
             value={form.vendor_address_id}
-            onChange={(val) => update('vendor_address_id', val)}
+            onChange={(value) => update('vendor_address_id', value)}
             options={addressOptions}
-            placeholder={vendorAddresses.length === 0 ? (form.vendor_id ? 'No addresses' : 'Select vendor first') : 'Select address'}
+            placeholder={!form.vendor_id ? 'Choose the vendor first' : vendorAddresses.length === 0 ? 'This vendor has no address' : 'Choose an address'}
             searchPlaceholder="Search addresses…"
             disabled={!form.vendor_id}
           />
+        </div>
+      </FormSection>
 
-          {/* ── Media / Brand ─────────────────────────────── */}
-          <div className="form-section-title field-wide">Media / Brand</div>
-
-          <div className="field">
-            <label htmlFor="po-brand">Brand Name</label>
-            <input id="po-brand" value={form.brand_name} onChange={e => update('brand_name', e.target.value)} />
-          </div>
-
-          {/* ── PO Items ──────────────────────────────────── */}
-          <div className="form-section-title field-wide">
-            PO Items
-            <span className="so-item-count">{items.length}</span>
-          </div>
-
-          <div className="so-items field-wide">
-            {itemsLoading ? (
-              <div className="so-detail-items-state">Loading items…</div>
-            ) : (
-              items.map((item, index) => (
-                <POItemEditor
-                  key={item.key}
-                  item={item}
-                  index={index}
-                  onChange={changeItem}
-                  onRemove={removeItem}
-                  onToggle={toggleItem}
-                  canRemove={items.length > 1}
-                  soItems={soItems}
-                  typeOptions={itemTypeOptions}
-                />
-              ))
-            )}
-
-            <button type="button" className="secondary-button so-add-item" onClick={addItem}>
-              <Icon name="plus" size={16} /> Add item
-            </button>
-          </div>
-
-          {/* ── Summary ───────────────────────────────────── */}
-          <div className="form-section-title field-wide">Summary</div>
-
-          <div className="so-summary field-wide">
-            <div className="so-summary-figures">
-              <div className="so-summary-cell">
-                <span>Sub Total</span>
-                <strong className="mono-cell">{formatMoney(totals.sub_total)}</strong>
-                <small>Sum of taxable amounts</small>
-              </div>
-              <div className="so-summary-cell">
-                <span>Tax Total</span>
-                <strong className="mono-cell">{formatMoney(totals.tax_total)}</strong>
-                <small>Sum of item tax</small>
-              </div>
-              <div className="so-summary-cell is-grand">
-                <span>Total</span>
-                <strong className="mono-cell">{formatMoney(totals.total)}</strong>
-                <small>Sum of after-tax amounts</small>
-              </div>
+      <FormSection title="Campaign" description="Filled in from the sales order. Change it if this purchase covers different dates.">
+        <div className="crm-grid crm-grid--4">
+          <Field label="Brand" htmlFor="po-brand">
+            <input id="po-brand" className="crm-input" {...field('brand_name')} />
+          </Field>
+          <Field label="Starts" htmlFor="po-campaign-start">
+            <input id="po-campaign-start" type="date" className="crm-input" {...field('campaign_start_date')} />
+          </Field>
+          <Field label="Ends" htmlFor="po-campaign-end">
+            <input id="po-campaign-end" type="date" className="crm-input" {...field('campaign_end_date')} min={form.campaign_start_date || undefined} aria-invalid={campaignInvalid} />
+          </Field>
+          <Field label="Duration">
+            <div className={`crm-readout${campaignInvalid ? ' is-invalid' : ''}`}>
+              {campaignInvalid ? 'Ends before it starts' : duration ? `${duration} ${duration === 1 ? 'day' : 'days'}` : 'Set both dates'}
             </div>
+          </Field>
+        </div>
+      </FormSection>
 
-            {profitSummary.so_before_tax > 0 && (
-              <div className="so-summary-figures" style={{ marginTop: '8px' }}>
-                <div className="so-summary-cell">
-                  <span>SO Before Tax</span>
-                  <strong className="mono-cell">{formatMoney(profitSummary.so_before_tax)}</strong>
-                </div>
-                <div className="so-summary-cell">
-                  <span>PO Before Tax</span>
-                  <strong className="mono-cell">{formatMoney(profitSummary.po_before_tax)}</strong>
-                </div>
-                <div className="so-summary-cell is-grand">
-                  <span>Profit</span>
-                  <strong className="mono-cell">{formatMoney(profitSummary.profit)}</strong>
-                </div>
-              </div>
-            )}
+      <FormSection title={`Items (${items.length})`} description="Link each line to the sales order line it supplies to see the margin on it.">
+        <div className="crm-items">
+          {itemsLoading ? (
+            <p className="crm-section-note">Loading items…</p>
+          ) : (
+            items.map((item, index) => (
+              <POItemEditor
+                key={item.key}
+                item={item}
+                index={index}
+                onChange={changeItem}
+                onRemove={removeItem}
+                onToggle={toggleItem}
+                canRemove={items.length > 1}
+                soItems={soItems}
+                typeOptions={itemTypeOptions}
+              />
+            ))
+          )}
+        </div>
+        <button type="button" className="crm-btn crm-btn--secondary" onClick={addItem} disabled={itemsLoading}>
+          <Icon name="plus" size={16} /> Add item
+        </button>
+      </FormSection>
 
-            {totals.error
-              ? <div className="so-summary-note is-error">{totals.error}</div>
-              : <div className="so-summary-note">Recalculated from the {items.length} {items.length === 1 ? 'item' : 'items'} above.</div>}
+      <FormSection title="Totals and payment">
+        <div className="crm-totals">
+          <div className="crm-total"><span>Before tax</span><strong>{formatRupees(totals.sub_total)}</strong></div>
+          <div className="crm-total"><span>Tax</span><strong>{formatRupees(totals.tax_total)}</strong></div>
+          <div className="crm-total is-grand"><span>Total</span><strong>{formatRupees(totals.total)}</strong></div>
+        </div>
+        {profitSummary.so_before_tax > 0 && (
+          <div className="crm-totals">
+            <div className="crm-total"><span>Sold for (before tax)</span><strong>{formatRupees(profitSummary.so_before_tax)}</strong></div>
+            <div className="crm-total"><span>Bought for (before tax)</span><strong>{formatRupees(profitSummary.po_before_tax)}</strong></div>
+            <div className="crm-total is-grand"><span>Margin</span><strong>{formatRupees(profitSummary.profit)}</strong></div>
           </div>
+        )}
+        {totals.error && <div className="crm-note crm-note--danger" role="alert" style={{ marginBottom: 14 }}>{totals.error}</div>}
+        <div className="crm-grid crm-grid--3">
+          <Field label="Payment requested" htmlFor="po-receipt">
+            <div className="crm-input-group">
+              <span className="crm-addon">₹</span>
+              <input id="po-receipt" type="number" step="0.01" min="0" inputMode="decimal" className="crm-input crm-mono-input" {...field('payment_receipt_amount')} />
+            </div>
+          </Field>
+        </div>
+      </FormSection>
 
-          <div className="field">
-            <label htmlFor="po-receipt">Payment Request Amount</label>
-            <input id="po-receipt" type="number" step="0.01" min="0" inputMode="decimal" value={form.payment_receipt_amount} onChange={e => update('payment_receipt_amount', e.target.value)} placeholder="0.00" />
+      <FormSection title="More details" description="References and approvals most purchase orders leave empty.">
+        <Disclosure label="Show all fields" count={moreFilled ? `${moreFilled} filled` : '5 fields'}>
+          <div className="crm-grid crm-grid--3">
+            <Field label="CRM reference" htmlFor="po-crm">
+              <input id="po-crm" className="crm-input crm-mono-input" {...field('crm_reference_id')} />
+            </Field>
+            <Field label="Order type" htmlFor="po-order-type">
+              <select id="po-order-type" className="crm-select" {...field('order_type')}>
+                <option value="">Not set</option>
+                {listValues('order_type', ORDER_TYPE_OPTIONS, form.order_type).map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </Field>
+            <Field label="Approved by" htmlFor="po-approved-by">
+              <input id="po-approved-by" className="crm-input" {...field('approved_by')} />
+            </Field>
+            <Field label="Approved on" htmlFor="po-approved-date">
+              <input id="po-approved-date" type="date" className="crm-input" {...field('approved_date')} />
+            </Field>
+            <Field label="Completed on" htmlFor="po-complete-date">
+              <input id="po-complete-date" type="date" className="crm-input" {...field('complete_date')} />
+            </Field>
           </div>
-
-          <div className="form-actions field-wide">
-            <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary-button" disabled={saving || itemsLoading}>
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Purchase Order'}
-            </button>
-          </div>
-
-        </form>
-      </div>
-    </div>
+        </Disclosure>
+      </FormSection>
+    </FormModal>
   )
 }
 
@@ -1105,7 +1002,7 @@ export default function PurchaseOrdersPage({ session }) {
 
   const [orders, setOrders] = useState([])
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(PO_PAGE_SIZES[0])
+  const [pageSize, setPageSize] = useState(() => preferredPageSize(PO_PAGE_SIZES))
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -1119,9 +1016,7 @@ export default function PurchaseOrdersPage({ session }) {
 
   const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
-
-  const [deleteTarget, setDeleteTarget] = useState(null)
-  const [deleting, setDeleting] = useState(false)
+  const [notice, setNotice] = useState('')
 
   const searchColumnsRef = useRef(PO_SEARCH_COLUMNS)
 
@@ -1131,7 +1026,7 @@ export default function PurchaseOrdersPage({ session }) {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  // Load PO list
+  // Load the page of purchase orders
   useEffect(() => {
     let cancelled = false
     const silent = refresh.silent
@@ -1145,8 +1040,9 @@ export default function PurchaseOrdersPage({ session }) {
 
       function runQuery(columns) {
         const request = supabase
-          .from(PURCHASE_ORDER_VIEW)
-          .select('*', { count: 'exact' })
+          .from(PO_HEADER_TABLE)
+          .select(PO_SELECT, { count: 'exact' })
+          .not('vendor_address_id', 'is', null)
           .order('id', { ascending: false })
           .range(from, from + pageSize - 1)
         return poSearchFilter(request, query, columns)
@@ -1159,6 +1055,8 @@ export default function PurchaseOrdersPage({ session }) {
         result = await runQuery(PO_SEARCH_FALLBACK)
       }
 
+      let rows = result.data || []
+      if (!result.error) rows = await attachSalesOrders(rows)
       if (cancelled) return
 
       if (result.error) {
@@ -1166,8 +1064,10 @@ export default function PurchaseOrdersPage({ session }) {
         setTotalCount(0)
         setError(result.error.message)
       } else {
-        setOrders(result.data || [])
+        setOrders(rows)
         setTotalCount(result.count || 0)
+        // Keep an open panel in step with what was just loaded.
+        setSelectedOrder((current) => (current ? rows.find((row) => row.id === current.id) || current : current))
       }
       setLoading(false)
       setRefreshing(false)
@@ -1177,10 +1077,10 @@ export default function PurchaseOrdersPage({ session }) {
     return () => { cancelled = true }
   }, [page, pageSize, query, refresh])
 
-  // Load child items for selected order
+  // Items of the open purchase order
   useEffect(() => {
     const orderId = selectedOrder?.id
-    if (!orderId) { setItems([]); setItemsError(''); return }
+    if (!orderId) { setItems([]); setItemsError(''); return undefined }
     let cancelled = false
 
     async function loadItems() {
@@ -1201,240 +1101,154 @@ export default function PurchaseOrdersPage({ session }) {
     return () => { cancelled = true }
   }, [selectedOrder?.id, refresh.key])
 
-  // Pagination
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const pageStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
   const pageEnd = Math.min(page * pageSize, totalCount)
 
-  const pageNumbers = useMemo(() => {
-    const current = Math.min(page, totalPages)
-    return [current - 2, current - 1, current, current + 1, current + 2].filter(n => n >= 1 && n <= totalPages)
-  }, [page, totalPages])
-
-  function changePage(n) { setPage(Math.max(1, Math.min(n, totalPages))) }
-  function changePageSize(e) { setPageSize(Number(e.target.value)); setPage(1) }
-
-  // Actions
+  function changePage(next) { setPage(Math.max(1, Math.min(next, totalPages))) }
   function openAddForm() { setEditingOrder(null); setShowForm(true) }
-  function openEditForm(ord) { setEditingOrder(ord); setShowForm(true) }
+  function openEditForm(order) { setEditingOrder(order); setShowForm(true) }
   function closeForm() { setShowForm(false); setEditingOrder(null) }
 
   function afterSaved(saved) {
     const wasEdit = Boolean(editingOrder?.id)
     closeForm()
     if (saved?.id) {
-      setOrders(current => current.some(r => r.id === saved.id)
-        ? current.map(r => r.id === saved.id ? { ...r, ...saved } : r)
-        : [saved, ...current].slice(0, pageSize))
-      setSelectedOrder(current => current?.id === saved.id ? { ...current, ...saved } : current)
-      if (!wasEdit) setTotalCount(c => c + 1)
+      const row = normalizePO(saved)
+      setOrders((current) => (current.some((existing) => existing.id === saved.id)
+        ? current.map((existing) => (existing.id === saved.id ? { ...existing, ...saved } : existing))
+        : [row, ...current].slice(0, pageSize)))
+      setSelectedOrder((current) => (current?.id === saved.id ? { ...current, ...saved } : current))
+      if (!wasEdit) setTotalCount((count) => count + 1)
     }
-    setRefresh(c => ({ key: c.key + 1, silent: Boolean(saved?.id) }))
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return
-    setDeleting(true)
-    try {
-      // Delete child items first
-      await supabase.from(PO_ITEM_TABLE).delete().eq('purchase_order_id', deleteTarget.id)
-      const { error: delErr } = await supabase.from(PO_HEADER_TABLE).delete().eq('id', deleteTarget.id)
-      if (delErr) throw delErr
-      setOrders(current => current.filter(r => r.id !== deleteTarget.id))
-      setTotalCount(c => Math.max(0, c - 1))
-      if (selectedOrder?.id === deleteTarget.id) setSelectedOrder(null)
-    } catch (err) {
-      console.error(err)
-      setError(err?.message || 'Could not delete purchase order.')
-    }
-    setDeleting(false)
-    setDeleteTarget(null)
+    // Reload quietly so vendor, address and SO number come back joined.
+    setRefresh((current) => ({ key: current.key + 1, silent: Boolean(saved?.id) }))
+    setNotice(wasEdit ? 'Purchase order saved' : 'Purchase order created')
   }
 
   const searchNarrowed = searchColumnsRef.current.length < PO_SEARCH_COLUMNS.length
-  const emptyCopy = query
-    ? 'No purchase orders match this search. Try a PO number, vendor or SO number.'
-    : 'Add your first purchase order to see it listed here.'
+  const canCreate = can('purchase_orders.create')
 
   return (
-    <div className={`so-page ${selectedOrder ? 'has-selection' : ''}`}>
-      <div className="so-main-content">
-        <div className="page-header">
-          <div>
-            <span className="page-kicker">PROCUREMENT</span>
-            <h1>Purchase Orders</h1>
-            <p>{totalCount.toLocaleString()} {totalCount === 1 ? 'order' : 'orders'} in view · {pageSize} per page</p>
-          </div>
-          {can('purchase_orders.create') && (
-            <button className="primary-button add-button" onClick={openAddForm}>
-              <Icon name="plus" size={18} /> Add purchase order
-            </button>
-          )}
-        </div>
-
-        {/* Search */}
-        <div className="vendors-toolbar">
-          <div className="vendor-search">
-            <span className="vendor-search-icon"><Icon name="search" size={17} /></span>
-            <input
-              className="vendor-search-input"
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              placeholder={searchNarrowed ? 'Search vendor company…' : 'Search PO number, vendor, SO number or CRM reference…'}
-              aria-label="Search purchase orders"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            {searchInput && (
-              <button type="button" className="search-clear" onClick={() => setSearchInput('')} aria-label="Clear search">
-                <Icon name="close" size={15} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <div className="page-error" role="alert">
-            <span className="page-error-icon"><Icon name="alert" size={18} /></span>
-            <div>
-              <strong>Could not load purchase orders</strong>
-              <p>{error}</p>
-            </div>
-          </div>
+    <div className="crm-page">
+      <PageHeader title="Purchase orders" subtitle="What you buy from vendors to deliver your sales orders.">
+        {canCreate && (
+          <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}>
+            <Icon name="plus" size={17} /> New purchase order
+          </button>
         )}
+      </PageHeader>
 
-        {/* Table */}
-        <section className="table-card">
-          <div className="table-topline">
-            <div>
-              <strong>All Purchase Orders</strong>
-              <span className="result-count">{totalCount.toLocaleString()} records</span>
-              {refreshing && <span className="result-count">Updating…</span>}
-              {query && <span className="search-state">Filtered by "{query}"</span>}
-            </div>
-          </div>
-
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>PO #</th>
-                  <th>Vendor</th>
-                  <th>SO #</th>
-                  <th>Order Date</th>
-                  <th>Campaign</th>
-                  <th>Status</th>
-                  <th className="so-total-column">Total</th>
-                  <th className="actions-column">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: Math.min(pageSize, 10) }).map((_, i) => (
-                    <tr key={`po-skeleton-${i}`}>
-                      {Array.from({ length: 8 }).map((__, c) => <td key={c}><span className="skeleton skeleton-company" /></td>)}
-                    </tr>
-                  ))
-                ) : orders.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="empty-state">
-                      <div className="empty-title">No purchase orders found</div>
-                      <div className="empty-copy">{emptyCopy}</div>
-                    </td>
-                  </tr>
-                ) : (
-                  orders.map(order => {
-                    const campaign = order.campaign_start_date || order.campaign_end_date
-                      ? `${formatDate(order.campaign_start_date)} → ${formatDate(order.campaign_end_date)}`
-                      : null
-                    const dur = campaignDays(order.campaign_start_date, order.campaign_end_date)
-
-                    return (
-                      <tr key={order.id} className={selectedOrder?.id === order.id ? 'is-open' : ''} onDoubleClick={() => setSelectedOrder(order)}>
-                        <td>
-                          <span className="cell-primary so-order-cell">
-                            {order.order_color && <span className="so-color-dot" style={{ background: order.order_color }} aria-hidden="true" />}
-                            {formatValue(order.order_number)}
-                          </span>
-                          <span className="cell-secondary" title={order.crm_reference_id || ''}>{formatValue(getValue(order, ['crm_reference_id', 'unique_id']))}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary company-cell" title={order.company || ''}>{formatValue(order.company)}</span>
-                          <span className="cell-secondary" title={order.order_vendor_fullname || ''}>{formatValue(order.order_vendor_fullname || order.contact_person)}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatValue(order.order_sales_number)}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatDate(order.order_date)}</span>
-                        </td>
-                        <td>
-                          <span className="cell-primary">{formatValue(campaign)}</span>
-                          <span className="cell-secondary">{dur ? `${dur} ${dur === 1 ? 'day' : 'days'}` : '—'}</span>
-                        </td>
-                        <td>
-                          <span className={`status-pill ${statusTone(order.order_status)}`}>
-                            <span className="status-dot" />
-                            {formatValue(order.order_status)}
-                          </span>
-                        </td>
-                        <td className="so-total-column">
-                          <span className="cell-primary mono-cell">{formatMoney(order.total)}</span>
-                          <span className="cell-secondary mono-cell">Tax {formatMoney(order.tax_total)}</span>
-                        </td>
-                        <td className="actions-column">
-                          <button className="row-action" onClick={() => setSelectedOrder(order)} aria-label={`Open PO ${order.order_number || order.id}`}>
-                            <Icon name="chevron" size={17} />
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="pagination-bar">
-            <div className="page-size-control">
-              <span>Items per page</span>
-              <select value={pageSize} onChange={changePageSize} aria-label="Purchase orders per page">
-                {PO_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
-              </select>
-            </div>
-
-            <div className="pagination-meta">
-              <span className="pagination-page-label">
-                {totalCount === 0 ? 'No records' : <>Showing <strong>{pageStart}–{pageEnd}</strong> of {totalCount.toLocaleString()}</>}
-              </span>
-              <div className="pagination-buttons">
-                <button onClick={() => changePage(1)} disabled={page <= 1} aria-label="First page"><Icon name="first" size={16} /></button>
-                <button onClick={() => changePage(page - 1)} disabled={page <= 1} aria-label="Previous page"><Icon name="chevron" size={16} /></button>
-                {pageNumbers.map(n => <button key={n} className={n === page ? 'current' : ''} onClick={() => changePage(n)} aria-current={n === page ? 'page' : undefined}>{n}</button>)}
-                <button onClick={() => changePage(page + 1)} disabled={page >= totalPages} aria-label="Next page"><Icon name="chevron" size={16} /></button>
-                <button onClick={() => changePage(totalPages)} disabled={page >= totalPages} aria-label="Last page"><Icon name="last" size={16} /></button>
-              </div>
-            </div>
-          </div>
-        </section>
+      <div className="crm-toolbar">
+        <SearchField
+          value={searchInput}
+          onChange={setSearchInput}
+          placeholder={searchNarrowed ? 'Search by vendor' : 'Search by PO number, vendor, brand or CRM reference'}
+          label="Search purchase orders"
+        />
+        {!loading && <ResultCount shown={totalCount} total={totalCount} noun="purchase order" filtered={Boolean(query)} />}
+        {refreshing && <span className="crm-count" style={{ marginLeft: 0 }}>Updating…</span>}
       </div>
 
-      {/* Side panel */}
-      {selectedOrder && (
-        <aside className="so-side-panel">
-          <PurchaseOrderDetails
-            order={selectedOrder}
-            items={items}
-            itemsLoading={itemsLoading}
-            itemsError={itemsError}
-            onClose={() => setSelectedOrder(null)}
-            onEdit={can('purchase_orders.edit') ? () => openEditForm(selectedOrder) : null}
-          />
-        </aside>
+      {error && (
+        <div className="crm-note crm-note--danger" role="alert">
+          <Icon name="alert" size={17} />
+          <div><strong>Could not load purchase orders.</strong> {error}</div>
+        </div>
       )}
 
-      {/* Form modal */}
+      <section className="crm-card">
+        <div className="crm-table-scroll">
+          <table className="crm-table">
+            <thead>
+              <tr>
+                <th style={{ width: '15%' }}>Purchase order</th>
+                <th className="crm-hide-sm" style={{ width: '24%' }}>Vendor</th>
+                <th className="crm-hide-sm crm-hide-lg" style={{ width: '18%' }}>For sales order</th>
+                <th className="crm-hide-sm" style={{ width: '17%' }}>Campaign</th>
+                <th className="crm-hide-sm" style={{ width: '13%' }}>Status</th>
+                <th className="crm-num" style={{ width: '14%' }}>Total</th>
+                <th className="crm-col-tight" style={{ width: '36px' }} aria-label="Open" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonRows rows={8} columns={PO_COLUMN_COUNT} />
+              ) : orders.length === 0 ? (
+                <tr>
+                  <td colSpan={PO_COLUMN_COUNT} className="crm-empty-cell">
+                    {query ? (
+                      <EmptyState title="No purchase orders match your search">Try a PO number, a vendor, a brand or a CRM reference.</EmptyState>
+                    ) : (
+                      <EmptyState icon="file" title="No purchase orders yet"
+                        action={canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}><Icon name="plus" size={16} /> New purchase order</button>}>
+                        A purchase order records what you buy from a vendor for a sales order, so you can see the margin on it.
+                      </EmptyState>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className={`crm-row${selectedOrder?.id === order.id ? ' is-selected' : ''}`}
+                    onClick={() => setSelectedOrder(order)}
+                  >
+                    <td>
+                      <div className="crm-cell">
+                        <button type="button" className="crm-row-link crm-cell-main is-strong crm-mono" onClick={(event) => { event.stopPropagation(); setSelectedOrder(order) }}>
+                          {order.order_color && <span className="crm-swatch" style={{ background: order.order_color, marginRight: 7 }} aria-hidden="true" />}
+                          {order.order_number || `#${order.id}`}
+                        </button>
+                        <span className="crm-cell-sub crm-hide-sm">{order.order_date ? formatDisplayDate(order.order_date) : '—'}</span>
+                        <span className="crm-cell-sub crm-show-sm">{order.vendor_name || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="crm-hide-sm"><Cell main={order.vendor_name} sub={[order.city, order.state].filter(Boolean).join(', ') || order.contact_person} title={order.vendor_name || ''} /></td>
+                    <td className="crm-hide-sm crm-hide-lg"><Cell main={order.order_sales_number} sub={order.so_company} mono={false} /></td>
+                    <td className="crm-hide-sm"><Cell main={formatDateRange(order.campaign_start_date, order.campaign_end_date)} sub={order.brand_name} /></td>
+                    <td className="crm-hide-sm">
+                      {order.order_status ? <StatusPill tone={statusTone(order.order_status)}>{order.order_status}</StatusPill> : <span className="crm-empty-value">—</span>}
+                    </td>
+                    <td className="crm-num">
+                      <div className="crm-cell">
+                        <span className="crm-cell-main is-strong crm-mono">{formatRupees(order.total)}</span>
+                        <span className="crm-cell-sub crm-mono crm-hide-sm">{order.tax_total ? `${formatRupees(order.tax_total)} tax` : 'No tax'}</span>
+                        <span className="crm-cell-sub crm-show-sm">{order.order_status || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="crm-col-tight"><RowChevron /></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          start={pageStart}
+          end={pageEnd}
+          total={totalCount}
+          pageSize={pageSize}
+          pageSizes={PO_PAGE_SIZES}
+          onPage={changePage}
+          onPageSize={(size) => { setPageSize(size); setPage(1) }}
+        />
+      </section>
+
+      {selectedOrder && (
+        <PurchaseOrderDetails
+          order={selectedOrder}
+          items={items}
+          itemsLoading={itemsLoading}
+          itemsError={itemsError}
+          onClose={() => setSelectedOrder(null)}
+          onEdit={can('purchase_orders.edit') ? () => openEditForm(selectedOrder) : null}
+        />
+      )}
+
       {showForm && (
         <PurchaseOrderFormModal
           order={editingOrder}
@@ -1444,28 +1258,7 @@ export default function PurchaseOrdersPage({ session }) {
         />
       )}
 
-      {/* Delete confirmation */}
-      {deleteTarget && (
-        <div className="modal-backdrop" onMouseDown={() => !deleting && setDeleteTarget(null)}>
-          <div className="modal-card" onMouseDown={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="modal-header">
-              <div>
-                <span className="drawer-kicker">CONFIRM</span>
-                <h2>Delete Purchase Order</h2>
-              </div>
-            </div>
-            <div style={{ padding: '16px 24px' }}>
-              <p>Are you sure you want to delete <strong>{deleteTarget.order_number}</strong>? This will also remove all related PO items.</p>
-            </div>
-            <div className="form-actions" style={{ padding: '12px 24px 20px' }}>
-              <button className="secondary-button" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
-              <button className="primary-button" onClick={confirmDelete} disabled={deleting} style={{ background: 'var(--danger)' }}>
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Toast message={notice} onDone={() => setNotice('')} />
     </div>
   )
 }

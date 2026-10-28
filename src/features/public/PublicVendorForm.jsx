@@ -84,12 +84,13 @@ const STEPS = [
 /* ─── Helpers ──────────────────────────────────────────────────────── */
 const allowedDocTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 
-function FieldGroup({ label, children, hint }) {
+function FieldGroup({ label, children, hint, name, error }) {
   return (
-    <div className="pvf-field">
+    <div className={`pvf-field${error ? ' has-error' : ''}`} data-field={name}>
       <label className="pvf-label">{label}</label>
       {children}
       {hint && <span className="pvf-hint">{hint}</span>}
+      {error && <span className="pvf-field-error" role="alert">{error}</span>}
     </div>
   )
 }
@@ -262,6 +263,9 @@ export default function PublicVendorForm() {
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // A failed step check, shown under the field it belongs to: { field, message }.
+  const [fieldError, setFieldError] = useState(null)
+  const errorRef = useRef(null)
   const [captchaToken, setCaptchaToken] = useState(null)
   const captchaResetRef = useRef(null)
 
@@ -315,6 +319,7 @@ export default function PublicVendorForm() {
   function update(key, val) {
     autofilledRef.current.delete(key)
     setForm(f => ({ ...f, [key]: val }))
+    setFieldError(fe => (fe?.field === key ? null : fe))
   }
 
   // Country / state / city cascades
@@ -340,6 +345,7 @@ export default function PublicVendorForm() {
     const s = states.find(x => x.isoCode === code)
     setForm(f => ({ ...f, state_code: code, state: s?.name || '', city: '', zipcode: '' }))
     setZipStatus(null)
+    setFieldError(fe => (fe?.field === 'state' ? null : fe))
   }
 
   /* ─── GSTIN auto-fill ───────────────────────────────────────────────────
@@ -393,12 +399,14 @@ export default function PublicVendorForm() {
   useEffect(() => {
     setMediaLoading(true)
     setMediaError('')
-    supabase.from('media').select('id,name').order('name', { ascending: true })
+    // select('*') works with or without the `hidden` column; hidden media are
+    // retired choices and are not offered to new vendors.
+    supabase.from('media').select('*').order('name', { ascending: true })
       .then(({ data, error: err }) => {
         if (err) {
           setMediaError('Could not load media options. Please refresh the page.')
         } else {
-          setMediaOptions(data || [])
+          setMediaOptions((data || []).filter((item) => !item.hidden))
         }
         setMediaLoading(false)
       })
@@ -408,8 +416,8 @@ export default function PublicVendorForm() {
   useEffect(() => {
     if (!form.media_id) { setSubMediaOptions([]); return }
     setSubMediaLoading(true)
-    supabase.from('sub_media').select('id,name,media_id').eq('media_id', form.media_id).order('name', { ascending: true })
-      .then(({ data }) => { setSubMediaOptions(data || []); setSubMediaLoading(false) })
+    supabase.from('sub_media').select('*').eq('media_id', form.media_id).order('name', { ascending: true })
+      .then(({ data }) => { setSubMediaOptions((data || []).filter((item) => !item.hidden)); setSubMediaLoading(false) })
   }, [form.media_id])
 
   // Document file
@@ -444,52 +452,78 @@ export default function PublicVendorForm() {
     }
   }
 
-  // Validation per step
+  // Validation per step. Returns the first problem as { field, message }, so
+  // it can be shown under that field rather than in the banner at the top of
+  // the card, which on a phone sat off-screen above the Continue button.
   function validateStep(s) {
     if (s === 'basic') {
-      if (!form.company_name.trim()) return 'Company name is required.'
-      if (!form.media_id) return 'Please select a media type.'
-      if (!form.sub_media_id) return 'Please select a sub media type.'
-      return ''
+      if (!form.company_name.trim()) return { field: 'company_name', message: 'Enter your company name.' }
+      if (!form.media_id) return { field: 'media_id', message: 'Choose a media type.' }
+      if (!form.sub_media_id) return { field: 'sub_media_id', message: 'Choose a sub media type.' }
+      return null
+    }
+    if (s === 'tax') {
+      // Checked when leaving the step that holds both fields; it used to wait
+      // until the final step, two screens after the mistake.
+      if (form.vendor_account_number && form.vendor_account_number !== form.vendor_confirm_account_number) {
+        return { field: 'vendor_confirm_account_number', message: 'Account numbers do not match.' }
+      }
+      return null
     }
     if (s === 'address') {
-      if (!form.state.trim()) return 'State is required.'
-      if (!form.city.trim()) return 'City is required.'
-      if (!form.address.trim()) return 'Address is required.'
-      if (zipStatus?.type === 'error') return zipStatus.message
-      return ''
+      if (!form.state.trim()) return { field: 'state' }
+      if (!form.city.trim()) return { field: 'city' }
+      if (!form.address.trim()) return { field: 'address', message: 'Enter your street address.' }
+      // The PIN hint under the field already says what is wrong.
+      if (zipStatus?.type === 'error') return { field: 'zipcode' }
+      return null
     }
     if (s === 'documents') {
-      if (!captchaToken) return 'Please complete the security check.'
-      if (form.vendor_account_number && form.vendor_account_number !== form.vendor_confirm_account_number) {
-        return 'Bank account numbers do not match.'
-      }
-      return ''
+      if (!captchaToken) return { message: 'Please complete the security check.' }
+      return null
     }
-    return ''
+    return null
   }
+
+  function showProblem(problem) {
+    if (problem.field) { setFieldError(problem); setError('') } else { setFieldError(null); setError(problem.message) }
+  }
+
+  // Bring the problem to the person: scroll the field (or the banner) to the
+  // middle of the screen, clear of the sticky header, and put focus on it so
+  // the next keystroke fixes it.
+  useEffect(() => {
+    const target = fieldError
+      ? document.querySelector(`[data-field="${fieldError.field}"]`) || document.querySelector(`.pvf-card [name="${fieldError.field}"]`)
+      : error ? errorRef.current : null
+    if (!target) return
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    target.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' })
+    const control = target.matches('input, select, textarea, button') ? target : target.querySelector('input, select, textarea, button')
+    control?.focus({ preventScroll: true })
+  }, [fieldError, error])
 
   function goNext() {
     const idx = STEPS.findIndex(s => s.id === step)
-    const err = validateStep(step)
-    if (err) { setError(err); return }
-    setError('')
+    const problem = validateStep(step)
+    if (problem) { showProblem(problem); return }
+    setError(''); setFieldError(null)
     setStep(STEPS[idx + 1].id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function goBack() {
     const idx = STEPS.findIndex(s => s.id === step)
-    setError('')
+    setError(''); setFieldError(null)
     setStep(STEPS[idx - 1].id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    const err = validateStep('documents')
-    if (err) { setError(err); return }
-    setSaving(true); setError('')
+    const problem = validateStep('documents')
+    if (problem) { showProblem(problem); return }
+    setSaving(true); setError(''); setFieldError(null)
 
     try {
       const ph = form.contact.replace(/\D/g, '')
@@ -592,7 +626,7 @@ export default function PublicVendorForm() {
 
         {/* Error banner */}
         {error && (
-          <div className="pvf-error" role="alert">
+          <div className="pvf-error" role="alert" ref={errorRef}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {error}
           </div>
@@ -611,8 +645,8 @@ export default function PublicVendorForm() {
                 />
 
                 <div className="pvf-grid">
-                  <FieldGroup label="Company Name *">
-                    <input className="pvf-input" value={form.company_name} onChange={e => update('company_name', e.target.value)} placeholder="e.g. Acme Advertising Ltd." required />
+                  <FieldGroup label="Company Name *" name="company_name" error={fieldError?.field === 'company_name' ? fieldError.message : null}>
+                    <input className="pvf-input" value={form.company_name} onChange={e => update('company_name', e.target.value)} required />
                   </FieldGroup>
 
                   <FieldGroup label="Vendor Type *">
@@ -628,15 +662,15 @@ export default function PublicVendorForm() {
                   </FieldGroup>
 
                   <FieldGroup label="Alias / Trade Name">
-                    <input className="pvf-input" value={form.alias} onChange={e => update('alias', e.target.value)} placeholder="Short or trade name" />
+                    <input className="pvf-input" value={form.alias} onChange={e => update('alias', e.target.value)} />
                   </FieldGroup>
 
                   <FieldGroup label="Contact Person">
-                    <input className="pvf-input" value={form.contact_person} onChange={e => update('contact_person', e.target.value)} placeholder="Name of primary contact" />
+                    <input className="pvf-input" value={form.contact_person} onChange={e => update('contact_person', e.target.value)} />
                   </FieldGroup>
 
                   <FieldGroup label="Email">
-                    <input className="pvf-input" type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="contact@company.com" />
+                    <input className="pvf-input" type="email" value={form.email} onChange={e => update('email', e.target.value)} />
                   </FieldGroup>
 
                   <FieldGroup label="Phone Number">
@@ -644,7 +678,7 @@ export default function PublicVendorForm() {
                       <DialCodePicker countries={allCountries} value={form.country_dialcode} onChange={val => update('country_dialcode', val)} />
                       <input className="pvf-input" type="tel" inputMode="numeric" maxLength={10} value={form.contact}
                         onChange={e => update('contact', e.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="98765 43210" />
+                        />
                     </div>
                   </FieldGroup>
                 </div>
@@ -665,7 +699,7 @@ export default function PublicVendorForm() {
                 )}
 
                 <div className="pvf-grid">
-                  <FieldGroup label="Media *">
+                  <FieldGroup label="Media *" name="media_id" error={fieldError?.field === 'media_id' ? fieldError.message : null}>
                     <select
                       className="pvf-select"
                       value={form.media_id}
@@ -678,7 +712,7 @@ export default function PublicVendorForm() {
                     </select>
                   </FieldGroup>
 
-                  <FieldGroup label="Sub Media *">
+                  <FieldGroup label="Sub Media *" name="sub_media_id" error={fieldError?.field === 'sub_media_id' ? fieldError.message : null}>
                     <select
                       className="pvf-select"
                       value={form.sub_media_id}
@@ -695,7 +729,7 @@ export default function PublicVendorForm() {
 
                   <FieldGroup label="Payment Term (Days)">
                     <input className="pvf-input" type="number" min="0" step="1" value={form.payment_term_value}
-                      onChange={e => update('payment_term_value', e.target.value)} placeholder="e.g. 30" />
+                      onChange={e => update('payment_term_value', e.target.value)} />
                   </FieldGroup>
 
                   <FieldGroup label="Payment Term Type">
@@ -735,7 +769,6 @@ export default function PublicVendorForm() {
                         className="pvf-input pvf-mono"
                         value={form.gstin}
                         onChange={e => update('gstin', normalizeGstin(e.target.value))}
-                        placeholder="27AABCU9603R1ZM"
                         maxLength={GSTIN_LENGTH}
                         autoComplete="off"
                         spellCheck={false}
@@ -750,18 +783,18 @@ export default function PublicVendorForm() {
                   </FieldGroup>
 
                   <FieldGroup label="PAN Number">
-                    <input className="pvf-input pvf-mono" value={form.pan_number} onChange={e => update('pan_number', e.target.value.toUpperCase())} placeholder="ABCDE1234F" maxLength={10} />
+                    <input className="pvf-input pvf-mono" value={form.pan_number} onChange={e => update('pan_number', e.target.value.toUpperCase())} maxLength={10} />
                   </FieldGroup>
 
                   <FieldGroup label="TDS Percentage">
                     <div className="pvf-suffix-wrap">
-                      <input className="pvf-input" type="number" min="0" max="100" step="0.01" value={form.tds_percentage} onChange={e => update('tds_percentage', e.target.value)} placeholder="0.00" />
+                      <input className="pvf-input" type="number" min="0" max="100" step="0.01" value={form.tds_percentage} onChange={e => update('tds_percentage', e.target.value)} />
                       <span className="pvf-suffix">%</span>
                     </div>
                   </FieldGroup>
 
                   <FieldGroup label="TDS Section">
-                    <input className="pvf-input" value={form.tds_section} onChange={e => update('tds_section', e.target.value)} placeholder="e.g. 194C" />
+                    <input className="pvf-input" value={form.tds_section} onChange={e => update('tds_section', e.target.value)} />
                   </FieldGroup>
                 </div>
 
@@ -775,19 +808,19 @@ export default function PublicVendorForm() {
 
                 <div className="pvf-grid">
                   <FieldGroup label="Bank Name">
-                    <input className="pvf-input" value={form.vendor_bank_name} onChange={e => update('vendor_bank_name', e.target.value)} placeholder="e.g. HDFC Bank" />
+                    <input className="pvf-input" value={form.vendor_bank_name} onChange={e => update('vendor_bank_name', e.target.value)} />
                   </FieldGroup>
 
                   <FieldGroup label="IFSC Code">
-                    <input className="pvf-input pvf-mono" value={form.vendor_ifsc_code} onChange={e => update('vendor_ifsc_code', e.target.value.toUpperCase())} placeholder="HDFC0001234" />
+                    <input className="pvf-input pvf-mono" value={form.vendor_ifsc_code} onChange={e => update('vendor_ifsc_code', e.target.value.toUpperCase())} />
                   </FieldGroup>
 
                   <FieldGroup label="Account Number">
-                    <input className="pvf-input pvf-mono" value={form.vendor_account_number} onChange={e => update('vendor_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="Enter account number" />
+                    <input className="pvf-input pvf-mono" value={form.vendor_account_number} onChange={e => update('vendor_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
                   </FieldGroup>
 
-                  <FieldGroup label="Confirm Account Number">
-                    <input className="pvf-input pvf-mono" value={form.vendor_confirm_account_number} onChange={e => update('vendor_confirm_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="Re-enter to confirm" />
+                  <FieldGroup label="Confirm Account Number" name="vendor_confirm_account_number">
+                    <input className="pvf-input pvf-mono" value={form.vendor_confirm_account_number} onChange={e => update('vendor_confirm_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
                     {form.vendor_account_number && form.vendor_confirm_account_number &&
                       form.vendor_account_number !== form.vendor_confirm_account_number && (
                       <span className="pvf-hint pvf-hint-error">Account numbers do not match</span>
@@ -814,16 +847,18 @@ export default function PublicVendorForm() {
                     options={stateOptions}
                     placeholder={!form.country_code ? 'Select country first' : stateOptions.length ? 'Select state' : 'No states available'}
                     searchPlaceholder="Search states…"
-                    disabled={!form.country_code || !states.length} required />
+                    disabled={!form.country_code || !states.length} required
+                    hasError={fieldError?.field === 'state'} error={fieldError?.field === 'state'} />
 
                   <SearchableSelect label="City *" value={form.city}
                     onChange={val => { update('city', val); setZipStatus(null) }}
+                    hasError={fieldError?.field === 'city'} error={fieldError?.field === 'city'}
                     options={cityOptions}
                     placeholder={!form.state_code ? 'Select state first' : cityOptions.length ? 'Select city' : 'No cities available'}
                     searchPlaceholder="Search cities…"
                     disabled={!form.state_code || !cities.length} required />
 
-                  <FieldGroup label="Zipcode / PIN">
+                  <FieldGroup label="Zipcode / PIN" name="zipcode">
                     <input className="pvf-input" value={form.zipcode}
                       onChange={e => {
                         const raw = e.target.value
@@ -834,8 +869,7 @@ export default function PublicVendorForm() {
                         setZipStatus(null)
                       }}
                       onBlur={() => verifyPin(form.zipcode)}
-                      inputMode={form.country_code === 'IN' ? 'numeric' : 'text'}
-                      placeholder={form.country_code === 'IN' ? '380001' : 'Postal code'} />
+                      inputMode={form.country_code === 'IN' ? 'numeric' : 'text'} />
                     {zipStatus && (
                       <span className={`pvf-hint ${zipStatus.type === 'success' ? 'pvf-hint-ok' : zipStatus.type === 'error' ? 'pvf-hint-error' : 'pvf-hint-warn'}`}>
                         {zipStatus.message}
@@ -843,10 +877,10 @@ export default function PublicVendorForm() {
                     )}
                   </FieldGroup>
 
-                  <FieldGroup label="Street Address *" hint="Do not include State, City or Zipcode here">
+                  <FieldGroup label="Street Address *" hint="Do not include State, City or Zipcode here" name="address" error={fieldError?.field === 'address' ? fieldError.message : null}>
                     <textarea className="pvf-input pvf-textarea" rows={3} value={form.address}
                       onChange={e => update('address', e.target.value)}
-                      placeholder="Building, street, area, landmark…" required />
+                      required />
                   </FieldGroup>
                 </div>
               </div>
@@ -905,7 +939,7 @@ export default function PublicVendorForm() {
 
                 <div>
                   <TurnstileWidget
-                    onVerify={t => { setCaptchaToken(t); setError('') }}
+                    onVerify={t => { setCaptchaToken(t); setError(''); setFieldError(null) }}
                     onExpire={() => setCaptchaToken(null)}
                     resetRef={captchaResetRef}
                   />

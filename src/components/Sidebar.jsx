@@ -634,21 +634,26 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
   const allowed = (item) => canOpen(access, item.to)
   const whatsappItems = WHATSAPP_ITEMS.filter(allowed)
   const emailItems = EMAIL_HUB_BUILD ? EMAIL_ITEMS.filter(allowed) : []
+  // `placeholder` pages render only "This section will be added next." They
+  // stay out of the menu until they are built: half the menu leading nowhere
+  // (Dashboard first of all) cost a click each time and taught people the
+  // menu could not be trusted. The routes remain, so old links still resolve.
+  // Drop the flag when a page ships.
   const allItems = [
-    { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', placeholder: true },
     { to: '/clients', label: 'Clients', icon: 'clients' },
     { to: '/leads', label: 'Leads', icon: 'leads' },
     { to: '/vendors', label: 'Vendors', icon: 'vendors' },
     { to: '/sales-orders', label: 'Sales Orders', icon: 'so' },
     { to: '/purchase-orders', label: 'Purchase Orders', icon: 'po' },
-    { to: '/invoices', label: 'Invoice Notification', icon: 'invoice' },
-    { to: '/advance-payments', label: 'Advance Payment Receipt', icon: 'advance' },
-    { to: '/payment-receipts', label: 'Payment Receipt', icon: 'receipt' },
-    { to: '/payment-requests', label: 'Payment Request', icon: 'paymentrequest' },
-    { to: '/courier', label: 'Document Courier', icon: 'courier' },
+    { to: '/invoices', label: 'Invoice Notification', icon: 'invoice', placeholder: true },
+    { to: '/advance-payments', label: 'Advance Payment Receipt', icon: 'advance', placeholder: true },
+    { to: '/payment-receipts', label: 'Payment Receipt', icon: 'receipt', placeholder: true },
+    { to: '/payment-requests', label: 'Payment Request', icon: 'paymentrequest', placeholder: true },
+    { to: '/courier', label: 'Document Courier', icon: 'courier', placeholder: true },
     { to: '/users', label: 'User Management', icon: 'users' },
   ]
-  const items = allItems.filter(allowed)
+  const items = allItems.filter((item) => !item.placeholder && allowed(item))
 
   const navRef = useRef(null)
   const fade = useEdgeFade(navRef)
