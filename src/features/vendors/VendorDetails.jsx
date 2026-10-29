@@ -3,9 +3,9 @@ import { supabase } from '../../lib/supabase'
 import { formatDisplayDate, formatPhone, formatRupees } from '../../lib/format'
 import { isActiveStatus } from '../../lib/status'
 import { Icon } from '../../components/Icon'
-import { DetailsPanel, Section, KeyValues, StatusPill } from '../../components/crm/CrmUi'
+import { DetailsPanel, Section, KeyValues, StatusPill, MaskedValue } from '../../components/crm/CrmUi'
 
-export default function VendorDetails({ vendor, address, onClose, onEdit, mediaMap, subMediaMap }) {
+export default function VendorDetails({ vendor, address, onClose, onEdit, onNewPurchaseOrder, mediaMap, subMediaMap }) {
   const [documentBusy, setDocumentBusy] = useState(false)
   const [documentError, setDocumentError] = useState('')
 
@@ -62,10 +62,19 @@ export default function VendorDetails({ vendor, address, onClose, onEdit, mediaM
         <span>{[vendor.vendor_type, `Vendor #${vendor.id}`].filter(Boolean).join(' · ')}</span>
       </>}
       onClose={onClose}
-      actions={onEdit && (
-        <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
-          <Icon name="edit" size={15} /> Edit
-        </button>
+      actions={(onEdit || onNewPurchaseOrder) && (
+        <>
+          {onNewPurchaseOrder && (
+            <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onNewPurchaseOrder}>
+              <Icon name="plus" size={15} /> New PO
+            </button>
+          )}
+          {onEdit && (
+            <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
+              <Icon name="edit" size={15} /> Edit
+            </button>
+          )}
+        </>
       )}
     >
       {documentPath && (
@@ -119,7 +128,8 @@ export default function VendorDetails({ vendor, address, onClose, onEdit, mediaM
         <KeyValues items={[
           { label: 'Bank', value: vendor.vendor_bank_name, keep: true },
           { label: 'IFSC', value: vendor.vendor_ifsc_code, mono: true },
-          { label: 'Account number', value: vendor.vendor_account_number, mono: true, wide: true },
+          // Last four digits until someone asks: the panel is often open on a shared screen.
+          { label: 'Account number', value: vendor.vendor_account_number && <MaskedValue key={vendor.id} value={vendor.vendor_account_number} label="account number" />, wide: true },
         ]} />
       </Section>
 

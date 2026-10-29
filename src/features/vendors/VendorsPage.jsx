@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatPhone } from '../../lib/format'
 import { isActiveStatus } from '../../lib/status'
@@ -28,6 +29,7 @@ const STATUS_FILTER_OPTIONS = [
 
 export default function VendorsPage() {
   const { can } = useAccess()
+  const navigate = useNavigate()
   // ── Catalogs that both the dropdowns and the "/" chain resolve against ────
   const [mediaOptions, setMediaOptions] = useState([])
   const [subMediaOptions, setSubMediaOptions] = useState([])
@@ -660,6 +662,9 @@ export default function VendorsPage() {
           address={selectedVendorAddress}
           onClose={() => setSelectedVendor(null)}
           onEdit={canEdit ? () => setEditing(selectedVendor) : null}
+          onNewPurchaseOrder={can('purchase_orders.create')
+            ? () => navigate('/purchase-orders', { state: { newPoVendor: { id: selectedVendor.id, name: selectedVendor.company_name } } })
+            : null}
           mediaMap={mediaMap}
           subMediaMap={subMediaMap}
         />

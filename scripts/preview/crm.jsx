@@ -241,9 +241,27 @@ const PURCHASEORDERS = SALESORDER.filter((row) => row.vendor_address_id).map((ro
   }
 })
 
+// Corporate-gifting leads, and the WhatsApp confirmation status the Worker
+// keeps for some of their numbers (keyed by digits-only country code + mobile).
+const LEAD_STATUSES = ['read', 'delivered', 'sent', 'failed', null]
+const CG_LEADS = Array.from({ length: 33 }, (_, index) => ({
+  id: 9000 + index,
+  company_name: COMPANIES[(index + 5) % COMPANIES.length],
+  name: PEOPLE[(index + 2) % PEOPLE.length],
+  email: `hello${index + 1}@${COMPANIES[(index + 5) % COMPANIES.length].split(' ')[0].toLowerCase()}.example.com`,
+  country_code: '+91',
+  mobile: String(9825100000 + index * 97),
+  city: CITIES[index % CITIES.length].city,
+  created_at: `2026-10-${String(28 - (index % 27)).padStart(2, '0')}T06:30:00Z`,
+}))
+const LEAD_WA = CG_LEADS.flatMap((lead, index) => {
+  const status = LEAD_STATUSES[index % LEAD_STATUSES.length]
+  return status ? [{ phone: `91${lead.mobile}`, status, error_message: status === 'failed' ? 'Message undeliverable' : null }] : []
+})
+
 const TABLES = {
   clients: CLIENTS, vendors: VENDORS, vendor_addresses: VENDOR_ADDRESSES, media: MEDIA, sub_media: SUB_MEDIA,
-  salesorder: SALESORDER, salesorderdocument: ITEMS, purchaseorders: PURCHASEORDERS,
+  salesorder: SALESORDER, salesorderdocument: ITEMS, purchaseorders: PURCHASEORDERS, cg_leads: CG_LEADS,
 }
 let nextId = 200000
 
@@ -481,6 +499,9 @@ window.fetch = async (input, init = {}) => {
   if (url.pathname.includes('/rest/v1/rpc/')) {
     return settingsRpc(table, body || {}) ?? reply(null)
   }
+  if (url.pathname.endsWith('/api/cg-leads/whatsapp-status')) {
+    return reply({ success: true, data: { statuses: LEAD_WA } })
+  }
   if (url.pathname.endsWith('/api/users/me')) {
     return reply({ success: true, data: MEMBER })
   }
@@ -537,6 +558,7 @@ const { default: ClientsPage } = await import('../../src/features/clients/Client
 const { default: VendorsPage } = await import('../../src/features/vendors/VendorsPage.jsx')
 const { default: SalesOrdersPage } = await import('../../src/features/sales-orders/SalesOrdersPage.jsx')
 const { default: PurchaseOrdersPage } = await import('../../src/features/purchase-orders/PurchaseOrdersPage.jsx')
+const { default: LeadsPage } = await import('../../src/features/leads/LeadsPage.jsx')
 const { default: SettingsPage } = await import('../../src/features/settings/SettingsPage.jsx')
 const { loadSettings } = await import('../../src/lib/settings.js')
 // AuthenticatedLayout does this once access is granted.
@@ -579,6 +601,7 @@ function Shell() {
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/sales-orders" element={<SalesOrdersPage session={SESSION} />} />
             <Route path="/purchase-orders" element={<PurchaseOrdersPage session={SESSION} />} />
+            <Route path="/leads" element={<LeadsPage />} />
             <Route path="/settings" element={settings} />
             <Route path="/settings/:section" element={settings} />
             <Route path="*" element={<Navigate to="/clients" replace />} />

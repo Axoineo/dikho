@@ -72,9 +72,25 @@ One PR per phase, verified locally before pushing; the owner merges.
   - Sentence-case navigation and section names.
   - Table rows no longer show a monogram beside the name.
 
+- Phase B (branch `ux/redesign-crm-pages`, built on phase A):
+  - Leads moved onto the shared CRM components: metric tiles, search,
+    table, pagination, status pills, rows-per-page preference. Its own
+    stylesheet is deleted.
+  - Sales orders: a status filter beside the search box.
+  - "New order" in a client's panel opens a new sales order with that
+    client and contact chosen. "New PO" in a vendor's panel opens a new
+    purchase order with that vendor (and its only address) chosen. Each
+    shows only to people who can create that order.
+  - The vendor panel shows the bank account number as its last four
+    digits, with Show and Hide.
+  - The Vendors filter panel, "/" suggestions and filter chips use the new
+    style.
+  - Shared `MetricTile`/`Metrics` and `MaskedValue` in `CrmUi.jsx`.
+  - Preview harness: Leads route with sample leads and WhatsApp statuses.
+
 ## Remaining work
 
-- Phases B to G.
+- Phases C to G.
 
 ## Verification
 
@@ -84,3 +100,6 @@ One PR per phase, verified locally before pushing; the owner merges.
 | Screenshots (phase A) | pass | Clients, Vendors, Sales orders form, Settings at 1440 and 390, light and dark; collapsed sidebar; compact density |
 | Contrast (phase A) | pass | text and muted at least 5:1 on every light and dark surface; placeholder 4.5:1 or better on input fills |
 | Client edit and save (phase A) | pass | preview harness: toast "Client saved", record updated |
+| `npm run check` (phase B) | pass | lint 0 errors, 228/228 tests, build, secret scan |
+| Phase B flows | pass | status filter (only Completed rows, count, empty state); New order from a client saves with client and contact; New PO from a vendor picks vendor and address; account number masked, Show reveals it; viewer sees neither shortcut |
+| Screenshots (phase B) | pass | Leads light, dark and phone; Vendors panel, filters (light and dark) and "/" suggestions; Sales orders panel (dark); new purchase order form |
