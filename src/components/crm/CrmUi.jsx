@@ -190,6 +190,37 @@ export function SkeletonRows({ rows = 8, columns }) {
   ))
 }
 
+/** One figure with its label, in a row of them: "Delivered 301". */
+export function MetricTile({ label, value, hint, tone }) {
+  return (
+    <div className={`crm-metric${tone ? ` is-${tone}` : ''}`}>
+      <span className="crm-metric-label">{label}</span>
+      <span className="crm-metric-value">{value}</span>
+      {hint && <span className="crm-metric-hint">{hint}</span>}
+    </div>
+  )
+}
+
+export function Metrics({ label, children }) {
+  return <div className="crm-metrics" role="group" aria-label={label}>{children}</div>
+}
+
+/** A number shown as its last four digits until someone asks to see it. */
+export function MaskedValue({ value, label }) {
+  const [shown, setShown] = useState(false)
+  const text = String(value ?? '')
+  return (
+    <span className="crm-masked">
+      <span className="crm-mono">{shown || text.length <= 4 ? text : `•••• ${text.slice(-4)}`}</span>
+      {text.length > 4 && (
+        <button type="button" className="crm-masked-toggle" onClick={() => setShown((current) => !current)} aria-label={`${shown ? 'Hide' : 'Show'} ${label}`}>
+          {shown ? 'Hide' : 'Show'}
+        </button>
+      )}
+    </span>
+  )
+}
+
 export function EmptyState({ icon = 'search', title, children, action }) {
   return (
     <div className="crm-empty">

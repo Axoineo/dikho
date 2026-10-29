@@ -3,7 +3,7 @@ import { isActiveStatus } from '../../lib/status'
 import { Icon } from '../../components/Icon'
 import { DetailsPanel, Section, KeyValues, StatusPill } from '../../components/crm/CrmUi'
 
-export default function ClientDetails({ client, onClose, onEdit }) {
+export default function ClientDetails({ client, onClose, onEdit, onNewOrder }) {
   if (!client) return null
 
   const active = isActiveStatus(client.status)
@@ -18,10 +18,19 @@ export default function ClientDetails({ client, onClose, onEdit }) {
       monogram={client.company_name}
       meta={<><StatusPill tone={active ? 'active' : 'inactive'}>{active ? 'Active' : 'Inactive'}</StatusPill><span>Client #{client.id}</span></>}
       onClose={onClose}
-      actions={onEdit && (
-        <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
-          <Icon name="edit" size={15} /> Edit
-        </button>
+      actions={(onEdit || onNewOrder) && (
+        <>
+          {onNewOrder && (
+            <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onNewOrder}>
+              <Icon name="plus" size={15} /> New order
+            </button>
+          )}
+          {onEdit && (
+            <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={onEdit}>
+              <Icon name="edit" size={15} /> Edit
+            </button>
+          )}
+        </>
       )}
     >
       <Section title="Contact">

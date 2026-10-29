@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Icon } from '../../components/Icon'
 import { SearchableSelect } from '../../components/SearchableSelect'
@@ -530,11 +531,11 @@ function PurchaseOrderDetails({ order, items, itemsLoading, itemsError, onClose,
    ADD / EDIT FORM MODAL
    ═══════════════════════════════════════════════════════════════════════ */
 
-function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
+function PurchaseOrderFormModal({ order, initial, session, onClose, onSaved }) {
   const isEdit = Boolean(order?.id)
 
   useSettings()
-  const [form, setForm] = useState(() => isEdit ? poToForm(order) : blankPOForm())
+  const [form, setForm] = useState(() => isEdit ? poToForm(order) : { ...blankPOForm(), ...initial })
   const keyRef = useRef(1)
   const [items, setItems] = useState(() => isEdit ? [] : [blankPOItem('item-1')])
   const [removedItemIds, setRemovedItemIds] = useState([])
@@ -997,6 +998,7 @@ function PurchaseOrderFormModal({ order, session, onClose, onSaved }) {
 
 export default function PurchaseOrdersPage({ session }) {
   const { can } = useAccess()
+  const [formInitial, setFormInitial] = useState(null)
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
 
@@ -1106,9 +1108,20 @@ export default function PurchaseOrdersPage({ session }) {
   const pageEnd = Math.min(page * pageSize, totalCount)
 
   function changePage(next) { setPage(Math.max(1, Math.min(next, totalPages))) }
-  function openAddForm() { setEditingOrder(null); setShowForm(true) }
+  function openAddForm(initial = null) { setEditingOrder(null); setFormInitial(initial); setShowForm(true) }
   function openEditForm(order) { setEditingOrder(order); setShowForm(true) }
-  function closeForm() { setShowForm(false); setEditingOrder(null) }
+  function closeForm() { setShowForm(false); setEditingOrder(null); setFormInitial(null) }
+
+  // "New PO" in a vendor's panel lands here with that vendor chosen; its
+  // address is picked for you when it has only one. Cleared after use.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const startFrom = location.state?.newPoVendor
+  useEffect(() => {
+    if (!startFrom) return
+    if (can('purchase_orders.create')) openAddForm({ vendor_id: String(startFrom.id), vendor_name: startFrom.name || '' })
+    navigate(location.pathname, { replace: true, state: null })
+  }, [startFrom]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function afterSaved(saved) {
     const wasEdit = Boolean(editingOrder?.id)
@@ -1133,7 +1146,7 @@ export default function PurchaseOrdersPage({ session }) {
     <div className="crm-page">
       <PageHeader title="Purchase orders" subtitle="What you buy from vendors to deliver your sales orders.">
         {canCreate && (
-          <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}>
+          <button type="button" className="crm-btn crm-btn--primary" onClick={() => openAddForm()}>
             <Icon name="plus" size={17} /> New purchase order
           </button>
         )}
@@ -1181,7 +1194,7 @@ export default function PurchaseOrdersPage({ session }) {
                       <EmptyState title="No purchase orders match your search">Try a PO number, a vendor, a brand or a CRM reference.</EmptyState>
                     ) : (
                       <EmptyState icon="file" title="No purchase orders yet"
-                        action={canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}><Icon name="plus" size={16} /> New purchase order</button>}>
+                        action={canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={() => openAddForm()}><Icon name="plus" size={16} /> New purchase order</button>}>
                         A purchase order records what you buy from a vendor for a sales order, so you can see the margin on it.
                       </EmptyState>
                     )}
@@ -1252,6 +1265,7 @@ export default function PurchaseOrdersPage({ session }) {
       {showForm && (
         <PurchaseOrderFormModal
           order={editingOrder}
+          initial={formInitial}
           session={session}
           onClose={closeForm}
           onSaved={afterSaved}
