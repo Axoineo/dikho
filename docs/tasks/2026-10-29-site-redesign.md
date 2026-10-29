@@ -88,9 +88,19 @@ One PR per phase, verified locally before pushing; the owner merges.
   - Shared `MetricTile`/`Metrics` and `MaskedValue` in `CrmUi.jsx`.
   - Preview harness: Leads route with sample leads and WhatsApp statuses.
 
+- Phase C (branch `ux/redesign-settings`):
+  - Card names sit above their cards in small grey type.
+  - Company and Bank are label-left rows with the input on the right
+    (`FieldRow` in `SettingsParts.jsx`). Errors show under the label.
+  - Regional uses two segmented rows whose choices are written the way
+    they will look ("29 Oct 2026", "₹1,00,000"). The large choice cards
+    are gone.
+  - Lists and media, the Settings navigation and the sessions cards use
+    smaller rows and controls.
+
 ## Remaining work
 
-- Phases C to G.
+- Phases D to G.
 
 ## Verification
 
@@ -103,3 +113,6 @@ One PR per phase, verified locally before pushing; the owner merges.
 | `npm run check` (phase B) | pass | lint 0 errors, 228/228 tests, build, secret scan |
 | Phase B flows | pass | status filter (only Completed rows, count, empty state); New order from a client saves with client and contact; New PO from a vendor picks vendor and address; account number masked, Show reveals it; viewer sees neither shortcut |
 | Screenshots (phase B) | pass | Leads light, dark and phone; Vendors panel, filters (light and dark) and "/" suggestions; Sales orders panel (dark); new purchase order form |
+| `npm run check` (phase C) | pass | lint 0 errors, 228/228 tests, build, secret scan |
+| Phase C flows | pass | Company: bad GSTIN blocked with the reason under its label, focus moved, valid GSTIN fills the state code and saves; Regional: date and number style save; Lists: add and hide |
+| Screenshots (phase C) | pass | all six sections at 1440; Company, Regional, Lists in dark; Company and Regional at 390; Company at 820 |

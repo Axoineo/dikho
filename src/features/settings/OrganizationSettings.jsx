@@ -6,8 +6,8 @@ import { supabase } from '../../lib/supabase'
 import { loadSettings, settingsApi, useSettings } from '../../lib/settings'
 import { formatDayAs } from '../../lib/format'
 import { Icon } from '../../components/Icon'
-import { Field, Toast } from '../../components/crm/CrmUi'
-import { SectionHead, SettingsCard, SaveBar, StatusLine } from './SettingsParts'
+import { Segmented, Toast } from '../../components/crm/CrmUi'
+import { SectionHead, SettingsCard, SettingRow, FieldRow, SaveBar, StatusLine } from './SettingsParts'
 
 const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
 const PAN = /^[A-Z]{5}[0-9]{4}[A-Z]$/
@@ -115,10 +115,10 @@ export function CompanySettings() {
   }
 
   const field = (key, label, input, options = {}) => (
-    <Field label={label} htmlFor={`company-${key}`} required={options.required} optional={options.optional}
-      className={options.wide ? 'crm-span-all' : ''} hint={problems[key] || options.hint} hintTone={problems[key] ? 'error' : undefined}>
+    <FieldRow label={label} htmlFor={`company-${key}`} required={options.required} optional={options.optional}
+      error={problems[key]} hint={options.hint}>
       {input}
-    </Field>
+    </FieldRow>
   )
 
   return (
@@ -126,35 +126,26 @@ export function CompanySettings() {
       <SectionHead title="Company">The business details printed on tax invoices, and where customers pay you.</SectionHead>
 
       <SettingsCard title="Business details" description="Invoices already issued keep the details they were issued with.">
-        <div className="set-card-body">
-          <div className="crm-grid">
-            {field('legal_name', 'Legal name', <input id="company-legal_name" className="crm-input" value={form.legal_name} onChange={text('legal_name')} maxLength={200} aria-invalid={Boolean(problems.legal_name)} />, { required: true, wide: true })}
-            {field('gstin', 'GSTIN', <input id="company-gstin" className="crm-input crm-mono-input" value={form.gstin} onChange={upper('gstin')} maxLength={15} aria-invalid={Boolean(problems.gstin)} />)}
-            {field('pan', 'PAN', <input id="company-pan" className="crm-input crm-mono-input" value={form.pan} onChange={upper('pan')} maxLength={10} aria-invalid={Boolean(problems.pan)} />)}
-            {derivedState
-              ? field('state_code', 'GST state code', <div className="crm-readout">{derivedState}</div>, { hint: 'Taken from the GSTIN.' })
-              : field('state_code', 'GST state code', <input id="company-state_code" className="crm-input crm-mono-input" inputMode="numeric" value={form.state_code} onChange={digits('state_code', 2)} aria-invalid={Boolean(problems.state_code)} />, { required: true, hint: problems.state_code ? null : 'Two digits; filled in by itself once you enter a GSTIN.' })}
-            <div className="crm-hide-sm" />
-            {field('address_line1', 'Address', <input id="company-address_line1" className="crm-input" value={form.address_line1} onChange={text('address_line1')} maxLength={200} aria-invalid={Boolean(problems.address_line1)} />, { required: true, wide: true })}
-            {field('address_line2', 'Address line 2', <input id="company-address_line2" className="crm-input" value={form.address_line2} onChange={text('address_line2')} maxLength={200} />, { optional: true, wide: true })}
-            {field('city', 'City', <input id="company-city" className="crm-input" value={form.city} onChange={text('city')} maxLength={200} aria-invalid={Boolean(problems.city)} />, { required: true })}
-            {field('state', 'State', <input id="company-state" className="crm-input" value={form.state} onChange={text('state')} maxLength={200} aria-invalid={Boolean(problems.state)} />, { required: true })}
-            {field('pincode', 'PIN code', <input id="company-pincode" className="crm-input crm-mono-input" inputMode="numeric" value={form.pincode} onChange={(event) => update('pincode', event.target.value.replace(/[^0-9A-Za-z -]/g, '').slice(0, 10))} aria-invalid={Boolean(problems.pincode)} />, { required: true })}
-            {field('country', 'Country', <input id="company-country" className="crm-input" value={form.country} onChange={text('country')} maxLength={80} />)}
-          </div>
-        </div>
+        {field('legal_name', 'Legal name', <input id="company-legal_name" className="crm-input" value={form.legal_name} onChange={text('legal_name')} maxLength={200} aria-invalid={Boolean(problems.legal_name)} />, { required: true })}
+        {field('gstin', 'GSTIN', <input id="company-gstin" className="crm-input crm-mono-input" value={form.gstin} onChange={upper('gstin')} maxLength={15} aria-invalid={Boolean(problems.gstin)} />)}
+        {field('pan', 'PAN', <input id="company-pan" className="crm-input crm-mono-input" value={form.pan} onChange={upper('pan')} maxLength={10} aria-invalid={Boolean(problems.pan)} />)}
+        {derivedState
+          ? field('state_code', 'GST state code', <div className="set-readout">{derivedState}</div>, { hint: 'Taken from the GSTIN.' })
+          : field('state_code', 'GST state code', <input id="company-state_code" className="crm-input crm-mono-input" inputMode="numeric" value={form.state_code} onChange={digits('state_code', 2)} aria-invalid={Boolean(problems.state_code)} />, { required: true, hint: problems.state_code ? null : 'Two digits; filled in by itself once you enter a GSTIN.' })}
+        {field('address_line1', 'Address', <input id="company-address_line1" className="crm-input" value={form.address_line1} onChange={text('address_line1')} maxLength={200} aria-invalid={Boolean(problems.address_line1)} />, { required: true })}
+        {field('address_line2', 'Address line 2', <input id="company-address_line2" className="crm-input" value={form.address_line2} onChange={text('address_line2')} maxLength={200} />, { optional: true })}
+        {field('city', 'City', <input id="company-city" className="crm-input" value={form.city} onChange={text('city')} maxLength={200} aria-invalid={Boolean(problems.city)} />, { required: true })}
+        {field('state', 'State', <input id="company-state" className="crm-input" value={form.state} onChange={text('state')} maxLength={200} aria-invalid={Boolean(problems.state)} />, { required: true })}
+        {field('pincode', 'PIN code', <input id="company-pincode" className="crm-input crm-mono-input" inputMode="numeric" value={form.pincode} onChange={(event) => update('pincode', event.target.value.replace(/[^0-9A-Za-z -]/g, '').slice(0, 10))} aria-invalid={Boolean(problems.pincode)} />, { required: true })}
+        {field('country', 'Country', <input id="company-country" className="crm-input" value={form.country} onChange={text('country')} maxLength={80} />)}
       </SettingsCard>
 
       <SettingsCard title="Bank account" description="Printed on invoices so customers know where to pay.">
-        <div className="set-card-body">
-          <div className="crm-grid">
-            {field('bank_name', 'Bank', <input id="company-bank_name" className="crm-input" value={form.bank_name} onChange={text('bank_name')} maxLength={200} />)}
-            {field('bank_branch', 'Branch', <input id="company-bank_branch" className="crm-input" value={form.bank_branch} onChange={text('bank_branch')} maxLength={200} />, { optional: true })}
-            {field('bank_account_name', 'Account holder', <input id="company-bank_account_name" className="crm-input" value={form.bank_account_name} onChange={text('bank_account_name')} maxLength={200} />, { wide: true })}
-            {field('bank_account_number', 'Account number', <input id="company-bank_account_number" className="crm-input crm-mono-input" inputMode="numeric" value={form.bank_account_number} onChange={digits('bank_account_number', 18)} aria-invalid={Boolean(problems.bank_account_number)} />)}
-            {field('bank_ifsc', 'IFSC', <input id="company-bank_ifsc" className="crm-input crm-mono-input" value={form.bank_ifsc} onChange={upper('bank_ifsc')} maxLength={11} aria-invalid={Boolean(problems.bank_ifsc)} />)}
-          </div>
-        </div>
+        {field('bank_name', 'Bank', <input id="company-bank_name" className="crm-input" value={form.bank_name} onChange={text('bank_name')} maxLength={200} />)}
+        {field('bank_branch', 'Branch', <input id="company-bank_branch" className="crm-input" value={form.bank_branch} onChange={text('bank_branch')} maxLength={200} />, { optional: true })}
+        {field('bank_account_name', 'Account holder', <input id="company-bank_account_name" className="crm-input" value={form.bank_account_name} onChange={text('bank_account_name')} maxLength={200} />)}
+        {field('bank_account_number', 'Account number', <input id="company-bank_account_number" className="crm-input crm-mono-input" inputMode="numeric" value={form.bank_account_number} onChange={digits('bank_account_number', 18)} aria-invalid={Boolean(problems.bank_account_number)} />)}
+        {field('bank_ifsc', 'IFSC', <input id="company-bank_ifsc" className="crm-input crm-mono-input" value={form.bank_ifsc} onChange={upper('bank_ifsc')} maxLength={11} aria-invalid={Boolean(problems.bank_ifsc)} />)}
       </SettingsCard>
 
       {saveError && <div className="crm-note crm-note--danger" role="alert" style={{ marginBottom: 18 }}><Icon name="alert" size={17} /><div>{saveError}</div></div>}
@@ -166,28 +157,12 @@ export function CompanySettings() {
 
 /* ── Regional ───────────────────────────────────────────────────────────── */
 
-const DATE_CHOICES = [
-  { value: 'd MMM yyyy', title: 'Day, month name, year' },
-  { value: 'dd/MM/yyyy', title: 'Day/month/year' },
-  { value: 'yyyy-MM-dd', title: 'Year-month-day' },
-]
+// Each choice is shown as what it looks like, so nobody has to decode a pattern.
+const DATE_FORMATS = ['d MMM yyyy', 'dd/MM/yyyy', 'yyyy-MM-dd']
 const NUMBER_CHOICES = [
-  { value: 'en-IN', title: 'Indian', example: '₹1,00,000.00' },
-  { value: 'en-US', title: 'International', example: '₹100,000.00' },
+  { value: 'en-IN', label: '₹1,00,000', name: 'Indian (lakh and crore)' },
+  { value: 'en-US', label: '₹100,000', name: 'International (thousands)' },
 ]
-
-function ChoiceCards({ label, value, choices, onChange }) {
-  return (
-    <div className="set-choices" role="radiogroup" aria-label={label}>
-      {choices.map((choice) => (
-        <button key={choice.value} type="button" role="radio" aria-checked={value === choice.value} className="set-choice" onClick={() => onChange(choice.value)}>
-          <span className="set-choice-title">{choice.title}</span>
-          <span className="set-choice-example">{choice.example}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
 
 export function RegionalSettings() {
   const { organization, available, loaded } = useSettings()
@@ -221,18 +196,15 @@ export function RegionalSettings() {
   return (
     <>
       <SectionHead title="Regional">How dates and amounts appear on everyone's screens. Exports and invoices are not affected.</SectionHead>
-      <SettingsCard title="Dates">
-        <div className="set-card-body">
-          <ChoiceCards label="Date format" value={form.date_format} onChange={(value) => setForm((f) => ({ ...f, date_format: value }))}
-            choices={DATE_CHOICES.map((choice) => ({ ...choice, example: formatDayAs(choice.value, today) }))} />
-          <div style={{ height: 14 }} />
-        </div>
-      </SettingsCard>
-      <SettingsCard title="Amounts">
-        <div className="set-card-body">
-          <ChoiceCards label="Number style" value={form.number_format} onChange={(value) => setForm((f) => ({ ...f, number_format: value }))} choices={NUMBER_CHOICES} />
-          <div style={{ height: 14 }} />
-        </div>
+      <SettingsCard>
+        <SettingRow title="Date format" hint={`Today reads ${formatDayAs(form.date_format, today)}.`} id="regional-date">
+          <Segmented label="Date format" value={form.date_format} onChange={(value) => setForm((f) => ({ ...f, date_format: value }))}
+            options={DATE_FORMATS.map((value) => ({ value, label: formatDayAs(value, today) }))} />
+        </SettingRow>
+        <SettingRow title="Number style" hint={NUMBER_CHOICES.find((choice) => choice.value === form.number_format)?.name} id="regional-number">
+          <Segmented label="Number style" value={form.number_format} onChange={(value) => setForm((f) => ({ ...f, number_format: value }))}
+            options={NUMBER_CHOICES.map(({ value, label }) => ({ value, label }))} />
+        </SettingRow>
       </SettingsCard>
       <StatusLine status={status} />
       {dirty && <SaveBar busy={busy} onSave={save} onCancel={() => setForm(current)} />}
