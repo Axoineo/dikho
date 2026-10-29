@@ -128,6 +128,10 @@ incident details or unreleased vulnerability exploitation instructions here.
   - Details panels show label-left, value-right rows.
   - The sidebar uses neutral text and a softer highlight.
   - Navigation and section names are in sentence case.
+- Redesign phase C: Settings in the mockup's row style. Company and bank
+  details are rows with the input on the right; Regional is two rows of
+  small choices written as they will look; lists, navigation and sessions
+  are tighter.
 - Redesign phase B: Leads uses the same layout as Clients and Vendors.
   Sales orders can be filtered by status. A client's panel has "New order"
   and a vendor's panel "New PO", which start the order with that client or

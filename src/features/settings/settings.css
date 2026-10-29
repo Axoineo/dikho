@@ -4,7 +4,7 @@
 .set-shell {
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
-  gap: 28px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -16,18 +16,17 @@
   gap: 2px;
 }
 .set-nav-group {
-  margin: 16px 10px 6px;
+  margin: 14px 10px 4px;
   color: var(--muted);
   font-size: var(--crm-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-weight: 400;
 }
 .set-nav-group:first-child { margin-top: 2px; }
 .set-nav-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 38px;
+  gap: 9px;
+  height: 34px;
   padding: 0 10px;
   border-radius: var(--crm-radius-sm);
   color: var(--text);
@@ -37,7 +36,7 @@
 }
 .set-nav-link svg { color: var(--muted); flex: none; }
 .set-nav-link:hover { background: var(--crm-subtle); }
-.set-nav-link.active { background: var(--brand-blue-soft); color: var(--brand-ink); font-weight: 600; }
+.set-nav-link.active { background: var(--brand-blue-soft); color: var(--brand-ink); font-weight: 500; }
 .set-nav-link.active svg { color: var(--brand-ink); }
 .set-nav-link .set-nav-out { margin-left: auto; opacity: 0.7; }
 /* Phones only: the list opens each section on its own page. */
@@ -46,73 +45,70 @@
 .set-content { min-width: 0; max-width: 780px; }
 .set-back { display: none; }
 
-.set-head { margin: 0 0 18px; }
+.set-head { margin: 0 0 16px; }
 .set-head h2 {
   margin: 0;
   font-family: var(--crm-font-display);
   font-size: var(--crm-text-xl);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--crm-strong);
 }
-.set-head p { margin: 4px 0 0; color: var(--muted); font-size: var(--crm-text-md); line-height: 1.5; }
+.set-head p { margin: 2px 0 0; color: var(--muted); font-size: var(--crm-text-md); line-height: 1.5; }
 
 .set-card {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--crm-radius-md);
   background: var(--surface);
-  box-shadow: var(--crm-shadow-sm);
 }
-.set-card-head { padding: 16px 20px 2px; }
-.set-card-title { margin: 0; color: var(--crm-strong); font-size: var(--crm-text-md); font-weight: 600; }
+/* A card's name sits above it in small grey type, as in the mockup. */
+.set-group { margin: 0 0 16px; }
+.set-group > .set-card { margin: 0; }
+.set-group-head { margin: 0 2px 6px; }
+.set-group-title { margin: 0; color: var(--muted); font-size: var(--crm-text-xs); font-weight: 400; }
+.set-group-copy { margin: 1px 0 0; color: var(--muted); font-size: var(--crm-text-xs); line-height: 1.45; }
 .set-card-copy { margin: 3px 0 0; color: var(--muted); font-size: var(--crm-text-sm); line-height: 1.5; }
-.set-card-body { padding: 14px 20px 6px; }
-.set-card-body > .crm-grid:last-child { margin-bottom: 14px; }
 
 .set-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 14px 20px;
+  gap: 16px;
+  min-height: 52px;
+  padding: 9px 14px;
 }
-.set-card-head + .set-row { padding-top: 12px; }
 .set-row + .set-row { border-top: 1px solid var(--line-soft); }
 .set-row-text { min-width: 0; }
-.set-row-title { color: var(--text); font-size: var(--crm-text-md); font-weight: 500; }
-.set-row-hint { margin-top: 2px; color: var(--muted); font-size: var(--crm-text-sm); line-height: 1.45; }
+.set-row-title { display: block; color: var(--text); font-size: var(--crm-text-md); font-weight: 400; }
+.set-row-hint { margin-top: 1px; color: var(--muted); font-size: var(--crm-text-sm); line-height: 1.45; }
+.set-row-hint.is-error { color: var(--crm-danger-ink); }
 .set-row-control { flex: none; display: flex; align-items: center; gap: 8px; }
 .set-row-control .crm-select { width: 240px; }
 .set-value { color: var(--text); font-size: var(--crm-text-md); text-align: right; overflow-wrap: anywhere; }
 
+/* Editable rows (Company): the input takes a fixed share on the right. */
+.set-field-row { min-height: 50px; }
+.set-field-control { flex: 0 1 320px; min-width: 0; }
+.set-field-control > * { width: 100%; }
+.set-readout {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--crm-radius-sm);
+  background: var(--crm-subtle);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 .set-status { min-height: 20px; margin: -6px 2px 14px; color: var(--muted); font-size: var(--crm-text-sm); }
 .set-status.is-ok { color: var(--crm-success-ink); }
 .set-status.is-error { color: var(--crm-danger-ink); }
-.set-status a { color: var(--brand-ink); font-weight: 600; text-decoration: none; }
+.set-status a { color: var(--brand-ink); font-weight: 500; text-decoration: none; }
 .set-status a:hover { text-decoration: underline; }
 .set-sessions { margin-bottom: 18px; }
-
-/* Choice cards with an example of what each choice looks like. */
-.set-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-.set-choice {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
-  border: 1px solid var(--crm-border-strong);
-  border-radius: var(--crm-radius-md);
-  background: var(--crm-input-bg);
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.12s ease, background-color 0.12s ease;
-}
-.set-choice:hover { border-color: var(--brand-blue); }
-.set-choice[aria-checked="true"] { border-color: var(--brand-blue); background: var(--brand-blue-soft); box-shadow: inset 0 0 0 1px var(--brand-blue); }
-.set-choice-title { font-size: var(--crm-text-md); font-weight: 600; color: var(--crm-strong); }
-.set-choice-example { font-size: var(--crm-text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Unsaved changes on an organization page. */
 .set-savebar {
@@ -122,8 +118,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 4px 0 18px;
-  padding: 10px 12px 10px 18px;
+  margin: 4px 0 16px;
+  padding: 8px 10px 8px 16px;
   border: 1px solid var(--line);
   border-radius: var(--crm-radius-md);
   background: var(--surface);
@@ -139,13 +135,13 @@
 .set-lists { columns: 2; column-gap: 18px; }
 .set-lists-item { padding-bottom: 18px; break-inside: avoid; }
 .set-lists .set-card { margin: 0; }
-.set-list { margin: 0; padding: 6px 0; list-style: none; }
+.set-list { margin: 0; padding: 0; list-style: none; }
 .set-list-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 2px 10px 2px 20px;
+  min-height: 36px;
+  padding: 2px 8px 2px 14px;
 }
 .set-list-item + .set-list-item { border-top: 1px solid var(--line-soft); }
 .set-list-item.is-hidden .set-list-value { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
@@ -153,28 +149,28 @@
 .set-list-actions { display: flex; align-items: center; gap: 2px; opacity: 0.75; transition: opacity 0.12s ease; }
 .set-list-item:hover .set-list-actions,
 .set-list-item:focus-within .set-list-actions { opacity: 1; }
-.set-list-actions .crm-icon-btn { width: 30px; height: 30px; }
-.set-list-add { display: flex; gap: 8px; padding: 10px 20px 16px; border-top: 1px solid var(--line-soft); }
-.set-list-add .crm-input { height: 36px; }
-.set-list-add .crm-btn { height: 36px; }
+.set-list-actions .crm-icon-btn { width: 28px; height: 28px; }
+.set-list-add { display: flex; gap: 6px; padding: 8px 10px 8px 14px; border-top: 1px solid var(--line-soft); }
+.set-list-add .crm-input { height: 30px; }
+.set-list-add .crm-btn { height: 30px; }
 .set-color-input {
   flex: none;
-  width: 44px;
-  height: 36px;
-  padding: 3px;
+  width: 40px;
+  height: 30px;
+  padding: 2px;
   border: 1px solid var(--crm-border-strong);
   border-radius: var(--crm-radius-sm);
   background: var(--crm-input-bg);
   cursor: pointer;
 }
 .set-media-group + .set-media-group { border-top: 1px solid var(--line); }
-.set-media-head { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 20px; }
-.set-media-name { flex: 1; min-width: 0; color: var(--crm-strong); font-weight: 600; }
-.set-media .set-list { padding: 0 0 6px 18px; }
-.set-media .set-list-add { padding-left: 38px; border-top: 0; }
-.set-media .set-media-add { padding-left: 20px; border-top: 1px solid var(--line); }
+.set-media-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 8px 4px 14px; }
+.set-media-name { flex: 1; min-width: 0; color: var(--crm-strong); font-weight: 500; }
+.set-media .set-list { padding: 0 0 4px 14px; }
+.set-media .set-list-add { padding-left: 28px; border-top: 0; }
+.set-media .set-media-add { padding-left: 14px; border-top: 1px solid var(--line); }
 .set-inline-edit { display: flex; flex: 1; gap: 6px; min-width: 0; }
-.set-inline-edit .crm-input { height: 32px; }
+.set-inline-edit .crm-input { height: 30px; }
 
 /* Settings answers to the room it has rather than the window's width: with
    the sidebar open, a tablet leaves it less space than a large phone. */
@@ -186,7 +182,7 @@
 @container settings (max-width: 819px) {
   .set-shell { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .set-nav { position: static; }
-  .set-nav-link { height: 46px; }
+  .set-nav-link { height: 44px; }
   .is-section .set-nav { display: none; }
   .is-index .set-content { display: none; }
   /* On the list nothing is open yet, so nothing is highlighted. */
@@ -203,10 +199,15 @@
 
 /* A setting's control moves under its name once both no longer fit. */
 @container settings-content (max-width: 539px) {
-  .set-row { flex-direction: column; align-items: stretch; gap: 10px; padding-left: 16px; padding-right: 16px; }
+  .set-row { flex-direction: column; align-items: stretch; gap: 8px; padding-left: 14px; padding-right: 14px; }
+  .set-field-control { flex-basis: auto; }
   .set-row-control .crm-select { width: 100%; }
   .set-row-control .crm-segmented { width: 100%; }
   .set-row-control .crm-segmented button { flex: 1; }
   .set-value { text-align: left; }
-  .set-card-head, .set-card-body { padding-left: 16px; padding-right: 16px; }
 }
+
+/* The sessions cards come from User management (users.css); here they sit
+   among Settings cards, so they take the same corners and type. */
+.set-sessions .um-card { border-color: var(--line); border-radius: var(--crm-radius-md); padding: 12px 14px; }
+.set-sessions .um-card h3 { font-size: var(--crm-text-md); font-weight: 500; }

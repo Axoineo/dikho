@@ -10,16 +10,16 @@ export function SectionHead({ title, children }) {
   )
 }
 
+/** A card of rows, its name and note in small grey type above it. */
 export function SettingsCard({ title, description, children }) {
+  if (!title && !description) return <section className="set-card">{children}</section>
   return (
-    <section className="set-card">
-      {(title || description) && (
-        <div className="set-card-head">
-          {title && <h3 className="set-card-title">{title}</h3>}
-          {description && <p className="set-card-copy">{description}</p>}
-        </div>
-      )}
-      {children}
+    <section className="set-group">
+      <div className="set-group-head">
+        {title && <h3 className="set-group-title">{title}</h3>}
+        {description && <p className="set-group-copy">{description}</p>}
+      </div>
+      <div className="set-card">{children}</div>
     </section>
   )
 }
@@ -33,6 +33,24 @@ export function SettingRow({ title, hint, children, id }) {
         {hint && <div className="set-row-hint">{hint}</div>}
       </div>
       <div className="set-row-control">{children}</div>
+    </div>
+  )
+}
+
+/** An editable setting: its label (and hint, or what is wrong) on the left, the input on the right. */
+export function FieldRow({ label, htmlFor, required, optional, hint, error, children }) {
+  const noteId = htmlFor ? `${htmlFor}-note` : undefined
+  return (
+    <div className="set-row set-field-row">
+      <div className="set-row-text">
+        <label className="set-row-title" htmlFor={htmlFor}>
+          {label}
+          {required && <span className="crm-required" aria-hidden="true">*</span>}
+          {optional && <span className="crm-optional">(optional)</span>}
+        </label>
+        {(error || hint) && <div id={noteId} className={`set-row-hint${error ? ' is-error' : ''}`} role={error ? 'alert' : undefined}>{error || hint}</div>}
+      </div>
+      <div className="set-row-control set-field-control">{children}</div>
     </div>
   )
 }
