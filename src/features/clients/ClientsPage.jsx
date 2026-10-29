@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatPhone } from '../../lib/format'
 import { isActiveStatus } from '../../lib/status'
@@ -17,6 +18,7 @@ const COLUMNS = 6
 
 export default function ClientsPage() {
   const { can } = useAccess()
+  const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
@@ -216,6 +218,9 @@ export default function ClientsPage() {
           client={selectedClient}
           onClose={() => setSelectedClient(null)}
           onEdit={canEdit ? () => setEditing(selectedClient) : null}
+          onNewOrder={can('sales_orders.create')
+            ? () => navigate('/sales-orders', { state: { newOrderFor: { company: selectedClient.company_name, contact: selectedClient.contact_person } } })
+            : null}
         />
       )}
 

@@ -240,10 +240,23 @@
   font-weight: 500;
 }
 .crm-btn.is-open { border-color: var(--brand-blue); color: var(--brand-ink); }
-/* The vendor page's filter panel and active-criteria chips, on this scale. */
-.crm-page .filter-panel { margin: 0; padding: 16px; border-radius: var(--crm-radius-md); box-shadow: var(--crm-shadow-sm); }
+/* The vendor page's filter panel, "/" suggestions and active-criteria chips,
+   on this scale (their base rules are the older ones in src/index.css). */
+.crm-page .filter-panel { margin: 0; padding: 14px; border-radius: var(--crm-radius-md); box-shadow: none; }
+.crm-page .filter-panel .search-select-wrap > label { margin-bottom: 4px; color: var(--muted); font-size: var(--crm-text-sm); font-weight: 400; letter-spacing: 0; text-transform: none; }
+.crm-page .filter-panel .search-select-trigger { height: 34px; padding: 0 10px; border: 1px solid var(--crm-border-strong); border-radius: var(--crm-radius-sm); background: var(--crm-input-bg); color: var(--text); font-size: var(--crm-text-md); }
+.crm-page .filter-panel-note { color: var(--muted); }
 .crm-page .criteria-row { margin: -6px 0 0; }
-.crm-page .criteria-chip { height: 28px; background: var(--surface); font-size: var(--crm-text-xs); }
+.crm-page .criteria-chip { height: 26px; background: var(--surface); color: var(--text); font-size: var(--crm-text-xs); }
+.crm-page .criteria-chip-key { color: var(--muted); font-size: var(--crm-text-xs); font-weight: 400; text-transform: none; letter-spacing: 0; }
+.crm-page .criteria-chip-value { font-weight: 500; }
+.crm-page .slash-suggestions { border-color: var(--line); border-radius: var(--crm-radius-md); background: var(--surface); box-shadow: var(--crm-shadow-lg); }
+.crm-page .slash-suggestions-step { color: var(--muted); font-size: var(--crm-text-xs); font-weight: 400; }
+.crm-page .slash-suggestions-path { color: var(--muted); }
+.crm-page .slash-suggestion { color: var(--text); font-size: var(--crm-text-md); }
+.crm-page .slash-suggestion.is-active { background: var(--crm-selected); color: var(--crm-strong); }
+.crm-page .slash-suggestion-hint,
+.crm-page .slash-suggestion.is-active .slash-suggestion-hint { color: var(--muted); }
 
 /* ── Table ────────────────────────────────────────────────────────────── */
 
@@ -990,6 +1003,55 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
 [data-theme="dark"] .crm-toast { background: #f2f4f7; color: #16223a; }
 .crm-toast-icon { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #2f9e6f; color: #fff; }
 @keyframes crm-toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* ── Figures, row actions, toolbar filters ────────────────────────────── */
+
+.crm-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.crm-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--crm-radius-sm);
+  background: var(--crm-subtle);
+}
+.crm-metric-label { color: var(--muted); font-size: var(--crm-text-xs); }
+.crm-metric-value { color: var(--crm-strong); font-size: var(--crm-text-xl); font-weight: 500; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.crm-metric-hint { color: var(--muted); font-size: var(--crm-text-xs); }
+.crm-metric.is-danger .crm-metric-value { color: var(--crm-danger-ink); }
+.crm-metrics-note { margin: 0 2px -8px; color: var(--muted); font-size: var(--crm-text-xs); }
+
+/* Small square links beside a value in a row: call, WhatsApp, email. */
+.crm-acts { display: flex; align-items: center; gap: 5px; min-width: 0; line-height: 20px; }
+.crm-acts > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-act {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.crm-act:hover { background: var(--crm-subtle); color: var(--text); }
+
+/* A dropdown that narrows the list, sitting beside the search box. */
+.crm-select.crm-toolbar-select { width: auto; max-width: 220px; height: 32px; }
+
+.crm-masked { display: inline-flex; align-items: baseline; gap: 8px; }
+.crm-masked-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-ink);
+  font-size: var(--crm-text-sm);
+  cursor: pointer;
+}
+.crm-masked-toggle:hover { text-decoration: underline; }
 
 /* ── Narrow screens ───────────────────────────────────────────────────── */
 

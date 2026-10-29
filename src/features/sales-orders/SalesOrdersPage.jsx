@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { formatDisplayDate, formatDateRange, formatRupees } from '../../lib/format'
 import { round2, toAmount } from '../../lib/money'
@@ -182,11 +183,11 @@ function SalesOrderItemEditor({ item, index, onChange, onRemove, onToggle, canRe
   )
 }
 
-function SalesOrderFormModal({ order, session, facets, onClose, onSaved }) {
+function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved }) {
   const isEdit = Boolean(order?.id)
 
   useSettings()
-  const [form, setForm] = useState(() => (isEdit ? salesOrderToForm(order) : newOrderForm()))
+  const [form, setForm] = useState(() => (isEdit ? salesOrderToForm(order) : { ...newOrderForm(), ...initial }))
   // Existing rows key off their database id, new ones off a counter, so the two
   // can never collide while a row is being added and removed.
   const keyRef = useRef(1)
@@ -605,6 +606,9 @@ export default function SalesOrdersPage({ session }) {
   // ── Search: `searchInput` drives the UI, `query` drives the request ──────
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
+  // '' shows every status.
+  const [statusFilter, setStatusFilter] = useState('')
+  useSettings()
 
   const [orders, setOrders] = useState([])
   const [page, setPage] = useState(1)
@@ -624,6 +628,8 @@ export default function SalesOrdersPage({ session }) {
 
   const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
+  // Prefilled fields when a new order starts from a client's panel.
+  const [formInitial, setFormInitial] = useState(null)
   const [facets, setFacets] = useState(null)
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('')
@@ -689,7 +695,7 @@ export default function SalesOrdersPage({ session }) {
           .is('vendor_address_id', null)   // exclude Purchase Orders (they have vendor_address_id set)
           .order('id', { ascending: false })
           .range(from, from + pageSize - 1)
-        return soSearchFilter(request, query, columns)
+        return soSearchFilter(statusFilter ? request.eq('order_status', statusFilter) : request, query, columns)
       }
 
       let result = await runQuery(searchColumnsRef.current)
@@ -718,7 +724,7 @@ export default function SalesOrdersPage({ session }) {
 
     loadOrders()
     return () => { cancelled = true }
-  }, [page, pageSize, query, refresh])
+  }, [page, pageSize, query, statusFilter, refresh])
 
   /* ── Child items for the open order ───────────────────────────────────── */
 
@@ -764,10 +770,22 @@ export default function SalesOrdersPage({ session }) {
     setPage(Math.max(1, Math.min(nextPage, totalPages)))
   }
 
-  function openAddForm() {
+  function openAddForm(initial = null) {
     setEditingOrder(null)
+    setFormInitial(initial)
     setShowForm(true)
   }
+
+  // "New order" in a client's panel lands here with that client chosen. The
+  // state is cleared so going back or reloading does not open it again.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const startFrom = location.state?.newOrderFor
+  useEffect(() => {
+    if (!startFrom) return
+    if (can('sales_orders.create')) openAddForm({ company: startFrom.company || '', order_client_fullname: startFrom.contact || '' })
+    navigate(location.pathname, { replace: true, state: null })
+  }, [startFrom]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function openEditForm(order) {
     setEditingOrder(order)
@@ -777,6 +795,7 @@ export default function SalesOrdersPage({ session }) {
   function closeForm() {
     setShowForm(false)
     setEditingOrder(null)
+    setFormInitial(null)
   }
 
   // The saved row goes straight into the list so the change is visible without a
@@ -817,12 +836,15 @@ export default function SalesOrdersPage({ session }) {
   }
 
   const canCreate = can('sales_orders.create')
+  // Every status the list can hold: the ones Settings offers plus any already in the data.
+  const statusFilterOptions = uniqueOptions([...listValues('order_status', ORDER_STATUS_OPTIONS), ...(facets?.order_status || [])])
+  const filtered = Boolean(query || statusFilter)
 
   return (
     <div className="crm-page">
       <PageHeader title="Sales orders" subtitle="What clients have ordered: campaigns, line items, invoices and payments.">
         {canCreate && (
-          <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}>
+          <button type="button" className="crm-btn crm-btn--primary" onClick={() => openAddForm()}>
             <Icon name="plus" size={17} /> New sales order
           </button>
         )}
@@ -835,7 +857,12 @@ export default function SalesOrdersPage({ session }) {
           placeholder={searchNarrowed ? 'Search by client' : 'Search by order number, client or CRM reference'}
           label="Search sales orders"
         />
-        {!loading && <ResultCount shown={totalCount} total={totalCount} noun="order" filtered={Boolean(query)} />}
+        <select className="crm-select crm-toolbar-select" value={statusFilter} aria-label="Show orders with this status"
+          onChange={(event) => { setStatusFilter(event.target.value); setPage(1) }}>
+          <option value="">All statuses</option>
+          {statusFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        {!loading && <ResultCount shown={totalCount} total={totalCount} noun="order" filtered={filtered} />}
         {refreshing && <span className="crm-count" style={{ marginLeft: 0 }}>Updating…</span>}
       </div>
 
@@ -866,11 +893,13 @@ export default function SalesOrdersPage({ session }) {
               ) : orders.length === 0 ? (
                 <tr>
                   <td colSpan={SO_COLUMN_COUNT} className="crm-empty-cell">
-                    {query ? (
-                      <EmptyState title="No sales orders match your search">Try an order number, a client or a CRM reference.</EmptyState>
+                    {filtered ? (
+                      <EmptyState title="No sales orders match">
+                        {statusFilter && !query ? `No order is ${statusFilter} right now. Choose another status, or All statuses.` : 'Try an order number, a client or a CRM reference, or another status.'}
+                      </EmptyState>
                     ) : (
                       <EmptyState icon="file" title="No sales orders yet"
-                        action={canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={openAddForm}><Icon name="plus" size={16} /> New sales order</button>}>
+                        action={canCreate && <button type="button" className="crm-btn crm-btn--primary" onClick={() => openAddForm()}><Icon name="plus" size={16} /> New sales order</button>}>
                         A sales order records what a client bought, for which campaign, and what they have paid.
                       </EmptyState>
                     )}
@@ -958,6 +987,7 @@ export default function SalesOrdersPage({ session }) {
       {showForm && (
         <SalesOrderFormModal
           order={editingOrder}
+          initial={formInitial}
           session={session}
           facets={facets}
           onClose={closeForm}

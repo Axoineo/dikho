@@ -128,6 +128,11 @@ incident details or unreleased vulnerability exploitation instructions here.
   - Details panels show label-left, value-right rows.
   - The sidebar uses neutral text and a softer highlight.
   - Navigation and section names are in sentence case.
+- Redesign phase B: Leads uses the same layout as Clients and Vendors.
+  Sales orders can be filtered by status. A client's panel has "New order"
+  and a vendor's panel "New PO", which start the order with that client or
+  vendor chosen. The vendor panel shows only the last four digits of the
+  bank account number until Show is pressed.
 - Input boxes no longer show example text ("e.g. …", sample numbers, "0.00",
   "https://…", "Enter your email"): every labelled box starts empty, and the
   few instructions worth keeping moved below the box as hints. Search bars,
