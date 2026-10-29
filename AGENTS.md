@@ -22,6 +22,7 @@ explicit owner decision and license.
 
 - Product intent and non-goals: `docs/PRODUCT.md`
 - Visual system and workflow map: `VISUALIZE.md`
+- Interface design rules: `docs/DESIGN.md`
 - Cross-cutting invariants: `docs/INVARIANTS.md`
 - Technical boundaries: `docs/ARCHITECTURE.md`
 - Databases, RLS and Storage: `docs/DATABASE.md`

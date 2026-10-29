@@ -144,7 +144,7 @@ export function Cell({ main, sub, strong, mono, title }) {
 }
 
 /** The row's name: a real button, so a row opens from the keyboard too. */
-export function RowTitle({ name, sub, onOpen, monogram = true }) {
+export function RowTitle({ name, sub, onOpen, monogram = false }) {
   return (
     <div className="crm-entity">
       {monogram && <Monogram name={name} />}

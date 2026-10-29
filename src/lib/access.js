@@ -119,13 +119,13 @@ export function sectionFor(pathname) {
 }
 
 export const SECTION_LABELS = {
-  clients: 'Clients', leads: 'Leads', vendors: 'Vendors', 'sales-orders': 'Sales Orders',
-  'purchase-orders': 'Purchase Orders', invoices: 'Invoices', payments: 'Payments', courier: 'Document Courier',
-  whatsapp: 'WhatsApp Dashboard', 'whatsapp-inbox': 'WhatsApp Inbox', 'whatsapp-contacts': 'WhatsApp Contacts',
-  'whatsapp-campaigns': 'WhatsApp Campaigns', 'whatsapp-templates': 'WhatsApp Templates', users: 'User Management',
-  email: 'Email Overview', 'email-inbox': 'Email Inbox', 'email-settings': 'Email Settings',
-  'email-campaigns': 'Email Campaigns', 'email-templates': 'Email Templates', 'email-consent': 'Email Consent',
-  'email-analytics': 'Email Analytics',
+  clients: 'Clients', leads: 'Leads', vendors: 'Vendors', 'sales-orders': 'Sales orders',
+  'purchase-orders': 'Purchase orders', invoices: 'Invoices', payments: 'Payments', courier: 'Document courier',
+  whatsapp: 'WhatsApp overview', 'whatsapp-inbox': 'WhatsApp inbox', 'whatsapp-contacts': 'WhatsApp contacts',
+  'whatsapp-campaigns': 'WhatsApp campaigns', 'whatsapp-templates': 'WhatsApp templates', users: 'User management',
+  email: 'Email overview', 'email-inbox': 'Email inbox', 'email-settings': 'Email settings',
+  'email-campaigns': 'Email campaigns', 'email-templates': 'Email templates', 'email-consent': 'Email consent',
+  'email-analytics': 'Email analytics',
   dashboard: 'Dashboard', settings: 'Settings',
 }
 

@@ -644,14 +644,14 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
     { to: '/clients', label: 'Clients', icon: 'clients' },
     { to: '/leads', label: 'Leads', icon: 'leads' },
     { to: '/vendors', label: 'Vendors', icon: 'vendors' },
-    { to: '/sales-orders', label: 'Sales Orders', icon: 'so' },
-    { to: '/purchase-orders', label: 'Purchase Orders', icon: 'po' },
+    { to: '/sales-orders', label: 'Sales orders', icon: 'so' },
+    { to: '/purchase-orders', label: 'Purchase orders', icon: 'po' },
     { to: '/invoices', label: 'Invoice Notification', icon: 'invoice', placeholder: true },
     { to: '/advance-payments', label: 'Advance Payment Receipt', icon: 'advance', placeholder: true },
     { to: '/payment-receipts', label: 'Payment Receipt', icon: 'receipt', placeholder: true },
     { to: '/payment-requests', label: 'Payment Request', icon: 'paymentrequest', placeholder: true },
     { to: '/courier', label: 'Document Courier', icon: 'courier', placeholder: true },
-    { to: '/users', label: 'User Management', icon: 'users' },
+    { to: '/users', label: 'User management', icon: 'users' },
   ]
   const items = allItems.filter((item) => !item.placeholder && allowed(item))
 

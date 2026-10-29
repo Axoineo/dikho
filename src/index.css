@@ -13,16 +13,16 @@
   --brand-ink: #185494;
   --brand-ink-strong: #123f72;    /* hover / emphasis, = --brand-blue-dark */
   --accent: #f9af1b;
-  --page: #f6f8fb;
+  --page: #f7f7f8;
   --surface: #ffffff;
-  --text: #263247;
+  --text: #1e2329;
   /* #718098 rendered at 3.5:1 on --line-soft and 4.0:1 on white, under the
      4.5:1 WCAG AA needs for body text — every muted label in the app was
      failing. This is the lightest step of the same blue-grey that clears 4.5
      on white, --page, --surface and --line-soft alike (worst case 4.65). */
-  --muted: #5f6c82;
-  --line: #dfe5ed;
-  --line-soft: #edf0f4;
+  --muted: #5c626c;
+  --line: #e3e5e8;
+  --line-soft: #eef0f2;
   --success: #647997;
   --danger: #b23b43;
   --shadow: 0 16px 44px rgba(24, 40, 65, 0.12);
@@ -56,8 +56,8 @@
   --chat-bubble-out-text: #111b21;
   --chat-raised: #ffffff;         /* day chips, system notices, popovers    */
   --chat-ring: rgba(24, 84, 148, 0.10);   /* the rail's hairline, not WA's   */
-  --chat-text: #263247;           /* = --text, so thread copy matches the app */
-  --chat-sub: #5f6c82;            /* = --muted. Chosen to clear 4.5:1 on the
+  --chat-text: #1e2329;           /* = --text, so thread copy matches the app */
+  --chat-sub: #5c626c;            /* = --muted. Chosen to clear 4.5:1 on the
                                      app's own light surfaces, which is what
                                      the canvas is made of now.              */
   --chat-accent: #008069;         /* WhatsApp's LIGHT-theme green (it uses
@@ -175,17 +175,17 @@ button, input, textarea, select { border: 0; }
    with the surfaces rather than showing raw OS chrome. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(24, 84, 148, 0.22) transparent;
+  scrollbar-color: rgba(30, 35, 41, 0.2) transparent;
 }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background: rgba(24, 84, 148, 0.20);
+  background: rgba(30, 35, 41, 0.18);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(24, 84, 148, 0.34); background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(30, 35, 41, 0.32); background-clip: content-box; }
 /* The sidebar deliberately hides its own scrollbar (see .sidebar-nav). */
 .sidebar-nav { scrollbar-width: none; }
 
@@ -201,10 +201,10 @@ button, input, textarea, select { border: 0; }
      light values for this subtree, and tell native controls to match. */
   color-scheme: light;
   --surface: #ffffff;
-  --text: #263247;
-  --muted: #5f6c82;
-  --line: #dfe5ed;
-  --line-soft: #edf0f4;
+  --text: #1e2329;
+  --muted: #5c626c;
+  --line: #e3e5e8;
+  --line-soft: #eef0f2;
   --brand-blue-soft: #eaf1fa;
   --brand-blue-dark: #123f72;
   --brand-ink: #185494;
@@ -549,7 +549,7 @@ button, input, textarea, select { border: 0; }
   flex: 0 0 var(--sidebar-w);
   height: 100vh;
   background: #ffffff;
-  color: rgba(24, 84, 148, 0.85);
+  color: var(--muted);
   display: flex;
   flex-direction: column;
   border: 0;
@@ -646,7 +646,7 @@ button, input, textarea, select { border: 0; }
   height: 40px;
   border: 0;
   background: transparent;
-  color: rgba(24, 84, 148, 0.6);
+  color: var(--muted);
   border-radius: 50%;         /* the faint circle that shows up under hover */
   display: grid;
   place-items: center;
@@ -657,8 +657,8 @@ button, input, textarea, select { border: 0; }
               background 0.15s ease, color 0.15s ease;
 }
 .sidebar-toggle:hover {
-  background: rgba(24, 84, 148, 0.08);
-  color: rgba(24, 84, 148, 0.92);
+  background: rgba(30, 35, 41, 0.05);
+  color: var(--text);
 }
 
 /* Collapsed: no permanent button on the rail. The toggle lies transparent on
@@ -733,10 +733,10 @@ button, input, textarea, select { border: 0; }
   width: 100%;
   border: 0;
   background: transparent;
-  color: rgba(24, 84, 148, 0.68);
-  min-height: 38px;
+  color: var(--muted);
+  min-height: 34px;
   padding: 0 10px;            /* fixed in both states — this pins the icons */
-  border-radius: 999px;       /* full pill when open, like the rail it copies */
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -750,18 +750,18 @@ button, input, textarea, select { border: 0; }
   overflow: hidden;
   transition: background 0.18s ease, color 0.15s ease;
 }
-.nav-item:hover { color: rgba(24, 84, 148, 0.85); }
-.nav-item.active { color: #185494; font-weight: 500; }
+.nav-item:hover { color: var(--text); }
+.nav-item.active { color: var(--brand-ink); font-weight: 500; }
 /* Light needs more alpha than dark to read at the same strength: these sit on
    white, where 0.04/0.07 all but vanished, while the dark theme's equivalents
    sit on #1a1d23 and carry fine. Tuned per theme rather than shared. */
-.nav-item:hover        { background: rgba(24, 84, 148, 0.055); }
-.nav-item.active       { background: rgba(24, 84, 148, 0.10); }
+.nav-item:hover        { background: rgba(30, 35, 41, 0.05); }
+.nav-item.active       { background: var(--brand-blue-soft); }
 /* A disclosed group is NOT a selected page. No fill — only the label lifts
    toward the active colour, which together with the rotated caret and the
    visible sub-list is plenty. A fill here competes with the one row that
    really is current. */
-.nav-item.is-open      { color: rgba(24, 84, 148, 0.92); font-weight: 500; }
+.nav-item.is-open      { color: var(--text); font-weight: 500; }
 
 /* Collapsed the pill has no text to wrap, so the highlight becomes a disc
    around the icon instead. The disc lives on .nav-icon, not on .nav-item, so
@@ -807,8 +807,8 @@ button, input, textarea, select { border: 0; }
 /* Identical alphas to the pill above — the disc was mixed a shade stronger
    (0.07/0.11 against 0.05/0.09) and so read as a brighter highlight on the
    rail than the same row shows when open. */
-.sidebar-is-collapsed .nav-item:hover  .nav-icon::before { background: rgba(24, 84, 148, 0.055); }
-.sidebar-is-collapsed .nav-item.active .nav-icon::before { background: rgba(24, 84, 148, 0.10); }
+.sidebar-is-collapsed .nav-item:hover  .nav-icon::before { background: rgba(30, 35, 41, 0.05); }
+.sidebar-is-collapsed .nav-item.active .nav-icon::before { background: var(--brand-blue-soft); }
 
 /* Label — fades only. No width or flex change: a layout change here lands in
    one frame while the rail is still 300ms from closing, which is exactly the
@@ -816,8 +816,8 @@ button, input, textarea, select { border: 0; }
 .nav-label {
   flex: 0 1 auto;
   min-width: 0;
-  font-size: 13.5px;
-  letter-spacing: 0.05px;
+  font-size: 13px;
+  letter-spacing: 0;
   overflow: hidden;
   text-overflow: clip;
   opacity: 1;
@@ -859,13 +859,13 @@ button, input, textarea, select { border: 0; }
   top: 50%;
   display: inline-flex;
   align-items: center;
-  color: rgba(24, 84, 148, 0.35);
+  color: var(--muted);
   transform: translateY(-50%);
   opacity: 1;
   transition: opacity var(--rail-fade), transform 0.2s ease;
 }
 .nav-caret.is-open { transform: translateY(-50%) rotate(90deg); }
-.nav-item.active .nav-caret { color: rgba(24, 84, 148, 0.55); }
+.nav-item.active .nav-caret { color: var(--muted); }
 .sidebar-is-collapsed .nav-badge,
 .sidebar-is-collapsed .nav-caret {
   opacity: 0;
@@ -891,7 +891,7 @@ button, input, textarea, select { border: 0; }
   gap: 2px;
   margin-left: 19px;
   padding-left: 10px;
-  border-left: 1px solid rgba(24, 84, 148, 0.14);
+  border-left: 1px solid var(--line);
   /* Both required for the 0fr end of that animation to actually clip. */
   min-height: 0;
   overflow: hidden;
@@ -905,20 +905,20 @@ button, input, textarea, select { border: 0; }
   border-radius: 999px;
   font-size: 12.8px;
   font-weight: 500;
-  color: rgba(24, 84, 148, 0.58);
+  color: var(--muted);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .nav-subitem:hover {
-  background: rgba(24, 84, 148, 0.05);
-  color: rgba(24, 84, 148, 0.85);
+  background: rgba(30, 35, 41, 0.05);
+  color: var(--muted);
 }
 .nav-subitem.active {
-  background: rgba(24, 84, 148, 0.10);
+  background: var(--brand-blue-soft);
   font-weight: 600;
-  color: #185494;
+  color: var(--brand-ink);
 }
 .nav-subicon {
   flex: 0 0 17px;
@@ -1103,17 +1103,17 @@ button, input, textarea, select { border: 0; }
   border-radius: 9px;
   font-size: 13px;
   font-weight: 500;
-  color: rgba(24, 84, 148, 0.72);
+  color: var(--muted);
   text-decoration: none;
   white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .sidebar-flyout-item:hover {
-  background: rgba(24, 84, 148, 0.06);
+  background: rgba(30, 35, 41, 0.05);
   color: var(--brand-ink);
 }
 .sidebar-flyout-item.active {
-  background: rgba(24, 84, 148, 0.10);
+  background: var(--brand-blue-soft);
   font-weight: 600;
   color: var(--brand-ink);
 }
@@ -1133,7 +1133,7 @@ button, input, textarea, select { border: 0; }
 }
 .sidebar-footer-divider {
   height: 1px;
-  background: rgba(24, 84, 148, 0.11);
+  background: var(--brand-blue-soft);
   margin: 0 4px 8px;
 }
 
@@ -1175,7 +1175,7 @@ button, input, textarea, select { border: 0; }
 }
 /* Collapsed the gear has moved above, so the button may use the full row. */
 .sidebar-is-collapsed .sidebar-account-main { width: 100%; }
-.sidebar-account-main:hover { background: rgba(24, 84, 148, 0.06); }
+.sidebar-account-main:hover { background: rgba(30, 35, 41, 0.05); }
 /* No backing behind the avatar on the rail, hover included: it is already a
    filled circle, so a pill around it just drew a second one — and in dark
    mode that pill is white, which is the ring you saw. Hovering opens the
@@ -1207,7 +1207,7 @@ button, input, textarea, select { border: 0; }
   font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
-  color: rgba(24, 84, 148, 0.9);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -1223,7 +1223,7 @@ button, input, textarea, select { border: 0; }
   height: 44px;
   border: 0;
   background: transparent;
-  color: rgba(24, 84, 148, 0.55);
+  color: var(--muted);
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -1234,11 +1234,11 @@ button, input, textarea, select { border: 0; }
               height 0.3s ease-in-out, background 0.15s ease, color 0.15s ease;
 }
 .sidebar-account-settings:hover {
-  background: rgba(24, 84, 148, 0.08);
-  color: rgba(24, 84, 148, 0.92);
+  background: rgba(30, 35, 41, 0.05);
+  color: var(--text);
 }
 .sidebar-account-settings.active {
-  background: rgba(24, 84, 148, 0.10);
+  background: var(--brand-blue-soft);
   color: var(--brand-ink);
 }
 /* Collapsed, the gear travels to sit above the avatar. -48px lifts it clear of
@@ -1312,7 +1312,7 @@ button, input, textarea, select { border: 0; }
   width: 100%;
   border: 0;
   background: transparent;
-  color: rgba(24, 84, 148, 0.75);
+  color: var(--muted);
   min-height: 36px;
   padding: 0 10px;
   border-radius: 9px;
@@ -1327,7 +1327,7 @@ button, input, textarea, select { border: 0; }
   transition: background 0.15s ease, color 0.15s ease;
 }
 .sidebar-account-menu-item:hover {
-  background: rgba(24, 84, 148, 0.06);
+  background: rgba(30, 35, 41, 0.05);
   color: var(--brand-ink);
 }
 .sidebar-account-menu-item.is-danger { color: var(--danger); }
@@ -1364,7 +1364,7 @@ button, input, textarea, select { border: 0; }
   border-radius: 14px 0 0 14px;
   /* The separator lives here, not on .sidebar's border-right, so it follows
      the rounded corners instead of running straight past them. */
-  border-left: 1px solid rgba(24, 84, 148, 0.14);
+  border-left: 1px solid var(--line);
   overflow: hidden;
   transition: width 0.3s ease-in-out;
 }
@@ -1530,7 +1530,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
     border-radius: 0;
     transform: translateX(0);
     transition: transform 0.3s ease-in-out;
-    box-shadow: 4px 0 32px rgba(24, 84, 148, 0.12);
+    box-shadow: 4px 0 32px rgba(17, 20, 24, 0.12);
   }
   .sidebar.sidebar-is-collapsed {
     transform: translateX(-100%);
@@ -1808,12 +1808,12 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   --brand-ink: #8fc2f0;
   --brand-ink-strong: #b8d8f6;
   --accent: #f9af1b;
-  --page: #111318;
-  --surface: #1a1d23;
-  --text: #e2e5ea;
-  --muted: #8b919c;
-  --line: #2a2e36;
-  --line-soft: #22252c;
+  --page: #121314;
+  --surface: #1b1c1e;
+  --text: #e7e8ea;
+  --muted: #9da1a8;
+  --line: #2d2f33;
+  --line-soft: #242528;
   --success: #4a8f6a;
   --danger: #d9534f;
   --shadow: 0 16px 44px rgba(0, 0, 0, 0.4);
@@ -1879,25 +1879,25 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 /* Sidebar */
 [data-theme="dark"] .sidebar {
-  background: #1a1d23;
-  color: rgba(200, 210, 225, 0.85);
+  background: var(--surface);
+  color: var(--muted);
 }
 [data-theme="dark"] .app-main {
   border-left-color: #2a2e36;
 }
 [data-theme="dark"] .nav-item {
-  color: rgba(180, 195, 215, 0.65);
+  color: var(--muted);
 }
 [data-theme="dark"] .nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(200, 215, 230, 0.9);
+  color: var(--text);
 }
 [data-theme="dark"] .nav-item.active {
-  background: rgba(24, 84, 148, 0.2);
-  color: #5ba0e0;
+  background: var(--brand-blue-soft);
+  color: var(--brand-ink);
 }
 [data-theme="dark"] .nav-item.is-open {
-  color: rgba(200, 215, 230, 0.95);
+  color: var(--text);
 }
 /* The collapsed rail's disc carries the highlight instead of the pill, so it
    needs the same dark treatment the pill got. */
@@ -1913,9 +1913,9 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   background: rgba(255, 255, 255, 0.04);
 }
 [data-theme="dark"] .sidebar-is-collapsed .nav-item.active .nav-icon::before {
-  background: rgba(24, 84, 148, 0.15);
+  background: var(--brand-blue-soft);
 }
-[data-theme="dark"] .nav-item.active { background: rgba(24, 84, 148, 0.15); }
+[data-theme="dark"] .nav-item.active { background: var(--brand-blue-soft); }
 [data-theme="dark"] .nav-item:hover  { background: rgba(255, 255, 255, 0.04); }
 /* A near-black bubble would sink into the dark page behind it. */
 [data-theme="dark"] .sidebar-tip {
@@ -1924,21 +1924,21 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .sidebar-flyout-item {
-  color: rgba(200, 215, 230, 0.8);
+  color: var(--muted);
 }
 [data-theme="dark"] .sidebar-flyout-item:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #5ba0e0;
+  color: var(--brand-ink);
 }
 [data-theme="dark"] .sidebar-flyout-item.active {
-  background: rgba(24, 84, 148, 0.26);
-  color: #5ba0e0;
+  background: var(--brand-blue-soft);
+  color: var(--brand-ink);
 }
 [data-theme="dark"] .nav-item.active .nav-caret {
   color: rgba(91, 160, 224, 0.5);
 }
 [data-theme="dark"] .nav-caret {
-  color: rgba(180, 195, 215, 0.25);
+  color: var(--muted);
 }
 /* #25d366 as text is 1.98:1 on white, so light mode uses a deeper green of
    the same family; on the dark rail the brand green itself clears AA. */
@@ -1954,15 +1954,15 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   border-left-color: rgba(255, 255, 255, 0.08);
 }
 [data-theme="dark"] .nav-subitem {
-  color: rgba(180, 195, 215, 0.55);
+  color: var(--muted);
 }
 [data-theme="dark"] .nav-subitem:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(200, 215, 230, 0.9);
+  color: var(--text);
 }
 [data-theme="dark"] .nav-subitem.active {
-  background: rgba(24, 84, 148, 0.22);
-  color: #5ba0e0;
+  background: var(--brand-blue-soft);
+  color: var(--brand-ink);
 }
 [data-theme="dark"] .sidebar-footer-divider {
   background: rgba(255, 255, 255, 0.06);
@@ -1971,16 +1971,16 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 /* Sidebar toggle + account block */
 [data-theme="dark"] .sidebar-toggle,
 [data-theme="dark"] .sidebar-account-settings {
-  color: rgba(200, 210, 225, 0.55);
+  color: var(--muted);
 }
 [data-theme="dark"] .sidebar-toggle:hover,
 [data-theme="dark"] .sidebar-account-settings:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: rgba(200, 210, 225, 0.9);
+  color: var(--text);
 }
 [data-theme="dark"] .sidebar-account-settings.active {
-  background: rgba(24, 84, 148, 0.24);
-  color: #5ba0e0;
+  background: var(--brand-blue-soft);
+  color: var(--brand-ink);
 }
 [data-theme="dark"] .sidebar-account-main:hover {
   background: rgba(255, 255, 255, 0.05);
@@ -1991,10 +1991,10 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   background: transparent;
 }
 [data-theme="dark"] .sidebar-account-name {
-  color: rgba(200, 215, 230, 0.92);
+  color: var(--text);
 }
 [data-theme="dark"] .sidebar-account-menu-item {
-  color: rgba(200, 215, 230, 0.8);
+  color: var(--muted);
 }
 /* Restated for dark: the rule above shares .is-danger's specificity and comes
    later, so without this Log out loses its red and reads as a normal item. */
@@ -2003,7 +2003,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 }
 [data-theme="dark"] .sidebar-account-menu-item:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #5ba0e0;
+  color: var(--brand-ink);
 }
 [data-theme="dark"] .sidebar-account-menu-item.is-danger:hover {
   background: rgba(178, 59, 67, 0.16);

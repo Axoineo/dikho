@@ -120,6 +120,14 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Changed
 
+- One look across the dashboard, phase A of the redesign
+  (`docs/DESIGN.md`, `docs/tasks/2026-10-29-site-redesign.md`):
+  - Neutral greys in light and dark, with Dikho blue as the only accent.
+  - A smaller, calmer type scale and controls on Clients, Vendors, Sales
+    orders, Purchase orders and Settings.
+  - Details panels show label-left, value-right rows.
+  - The sidebar uses neutral text and a softer highlight.
+  - Navigation and section names are in sentence case.
 - Input boxes no longer show example text ("e.g. …", sample numbers, "0.00",
   "https://…", "Enter your email"): every labelled box starts empty, and the
   few instructions worth keeping moved below the box as hints. Search bars,
