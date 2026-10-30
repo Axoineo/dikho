@@ -114,9 +114,9 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
       {/* Header — same 64px as the thread header opposite, so the two bars
           line up across the divider. */}
       <header className="flex h-16 shrink-0 items-center justify-between px-5">
-        <h1 className="text-[17px] font-semibold tracking-[-0.2px] text-ink">Inbox</h1>
+        <h1 className="text-[17px] font-medium tracking-[-0.2px] text-ink">Inbox</h1>
         {unreadTotal > 0 && (
-          <span className="rounded-full bg-brand px-2 py-[3px] text-[11.5px] font-bold leading-none text-white">
+          <span className="rounded-full bg-brand px-2 py-[3px] text-[11.5px] font-medium leading-none text-white">
             {unreadTotal}
           </span>
         )}
@@ -162,7 +162,7 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
               onClick={() => setFilter(f.key)}
               className={`h-7 rounded-full px-3.5 text-[12.5px] transition-all
                 ${filter === f.key
-                  ? 'bg-inbox-chip font-semibold text-brand-ink'
+                  ? 'bg-inbox-chip font-medium text-brand-ink'
                   : 'font-medium text-muted hover:text-ink'}`}
             >
               {f.label}{f.key === 'unread' && unreadTotal > 0 ? ` ${unreadTotal}` : ''}
@@ -180,12 +180,12 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
         {/* A failed load is NOT an empty inbox, and must not read like one. */}
         {!loading && error && conversations.length === 0 && (
           <div className="mx-1 mt-2 rounded-2xl bg-tint-danger px-4 py-4 text-center">
-            <p className="text-[13px] font-semibold text-ink">Couldn&rsquo;t load conversations</p>
+            <p className="text-[13px] font-medium text-ink">Couldn&rsquo;t load conversations</p>
             <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{error}</p>
             <button
               type="button"
               onClick={onRetry}
-              className="mt-3 rounded-full bg-brand px-4 py-1.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+              className="mt-3 rounded-full bg-brand px-4 py-1.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
             >
               Try again
             </button>
@@ -216,10 +216,10 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
               <Avatar name={conv.wa_name || conv.contact_name} phone={conv.phone} avatarUrl={conv.avatar_url} size={44} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2.5">
-                  <span className={`truncate text-[14.5px] ${unread || active ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>
+                  <span className={`truncate text-[14.5px] ${unread || active ? 'font-medium text-ink' : 'font-normal text-ink'}`}>
                     {displayName(conv)}
                   </span>
-                  <span className={`shrink-0 text-[11.5px] tabular-nums ${unread ? 'font-semibold text-brand-ink' : 'text-muted'}`}>
+                  <span className={`shrink-0 text-[11.5px] tabular-nums ${unread ? 'font-medium text-brand-ink' : 'text-muted'}`}>
                     {formatListTime(conv.last_message_at)}
                   </span>
                 </span>
@@ -234,7 +234,7 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
                     <span className="truncate">{preview.text}</span>
                   </span>
                   {unread && (
-                    <span className="ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-bold leading-none text-white">
+                    <span className="ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-medium leading-none text-white">
                       {conv.unread_count}
                     </span>
                   )}

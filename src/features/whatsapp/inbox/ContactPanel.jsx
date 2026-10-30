@@ -17,7 +17,7 @@ function Block({ label, value, onCopy }) {
   return (
     <div className="group flex items-start gap-2 rounded-2xl bg-inbox-panel px-4 py-3">
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.5px] text-muted">{label}</div>
+        <div className="text-[12px] text-muted">{label}</div>
         <div className="mt-1 break-words text-[13.5px] text-ink">{value || '—'}</div>
       </div>
       {onCopy && (
@@ -62,25 +62,25 @@ export function ContactPanel({ conversation, messages, onOpenMedia, onChatAction
 
   return (
     <aside className="hidden w-[320px] shrink-0 flex-col border-l border-inbox-divider bg-inbox-list xl:flex">
-      <div className="flex h-16 shrink-0 items-center border-b border-line px-5 text-[14.5px] font-semibold text-ink">
+      <div className="flex h-16 shrink-0 items-center border-b border-line px-5 text-[14.5px] font-medium text-ink">
         Contact info
       </div>
 
       <div className="inbox-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
         <div className="flex flex-col items-center rounded-2xl bg-inbox-panel px-5 pb-5 pt-6 text-center">
           <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={88} />
-          <div className="mt-3 text-[16px] font-semibold text-ink">{displayName(conversation)}</div>
+          <div className="mt-3 text-[16px] font-medium text-ink">{displayName(conversation)}</div>
           <div className="mt-0.5 text-[13px] text-muted">+{conversation.phone}</div>
           {blocked ? (
-            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-danger px-3 py-1 text-[12px] font-semibold text-danger">
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-danger px-3 py-1 text-[12px] font-medium text-danger">
               <ActionIcon action="block" className="h-3.5 w-3.5" /> Blocked
             </span>
           ) : msLeft > 0 ? (
-            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-semibold text-brand-ink">
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-medium text-brand-ink">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Replies open · {formatCountdown(msLeft)} left
             </span>
           ) : (
-            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-warn px-3 py-1 text-[12px] font-semibold text-amber-700 dark:text-amber-300">
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-warn px-3 py-1 text-[12px] font-medium text-amber-700 dark:text-amber-300">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Window closed · templates only
             </span>
           )}
@@ -91,7 +91,7 @@ export function ContactPanel({ conversation, messages, onOpenMedia, onChatAction
 
         {media.length > 0 && (
           <div className="rounded-2xl bg-inbox-panel px-4 py-3.5">
-            <div className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.5px] text-muted">
+            <div className="mb-2 text-[12px] text-muted">
               Media · {media.length}
             </div>
             <div className="grid grid-cols-3 gap-1.5">

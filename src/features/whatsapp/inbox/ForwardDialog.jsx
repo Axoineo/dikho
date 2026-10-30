@@ -58,7 +58,7 @@ export function ForwardDialog({ message, conversations, currentId, onForward, on
       <div role="dialog" aria-modal="true" aria-labelledby="forward-title" onMouseDown={(e) => e.stopPropagation()}
         className="flex max-h-[min(640px,calc(100vh-32px))] w-full max-w-[420px] flex-col rounded-2xl border border-line bg-surface shadow-[0_17px_50px_rgba(11,20,26,0.19)]">
         <div className="border-b border-line px-5 pb-3 pt-5">
-          <h2 id="forward-title" className="m-0 text-[17px] font-semibold text-ink">Forward message</h2>
+          <h2 id="forward-title" className="m-0 text-[17px] font-medium text-ink">Forward message</h2>
           <p className="m-0 mt-1 truncate text-[12.5px] text-muted">“{snippet(message)}”</p>
           <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search chats" aria-label="Search chats"
             className="mt-3 w-full rounded-full bg-inbox-field px-4 py-2 text-[13.5px] text-ink outline-none focus:ring-2 focus:ring-inbox-focus" />
@@ -83,7 +83,7 @@ export function ForwardDialog({ message, conversations, currentId, onForward, on
                   {result && result !== 'sending' && result !== 'sent' && <span className="block text-[12px] text-danger">{result}</span>}
                 </span>
                 {result === 'sending' && <span className="text-[12px] text-muted">Sending…</span>}
-                {result === 'sent' && <span className="text-[12px] font-semibold text-chat-accent-ink">Sent</span>}
+                {result === 'sent' && <span className="text-[12px] font-medium text-chat-accent-ink">Sent</span>}
               </button>
             )
           })}
@@ -92,10 +92,10 @@ export function ForwardDialog({ message, conversations, currentId, onForward, on
           <span className="text-[12.5px] text-muted">{selected.length} of {MAX_TARGETS} selected</span>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} disabled={running}
-              className="h-9 rounded-full border border-line px-4 text-[13px] font-semibold text-ink hover:bg-inbox-control disabled:opacity-50">{done ? 'Done' : 'Cancel'}</button>
+              className="h-9 rounded-full border border-line px-4 text-[13px] font-medium text-ink hover:bg-inbox-control disabled:opacity-50">{done ? 'Done' : 'Cancel'}</button>
             {!done && (
               <button type="button" onClick={run} disabled={running || selected.length === 0}
-                className="h-9 rounded-full border-0 bg-brand px-4 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50">{running ? 'Forwarding…' : 'Forward'}</button>
+                className="h-9 rounded-full border-0 bg-brand px-4 text-[13px] font-medium text-white hover:opacity-90 disabled:opacity-50">{running ? 'Forwarding…' : 'Forward'}</button>
             )}
           </div>
         </div>

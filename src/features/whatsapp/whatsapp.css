@@ -1,0 +1,28 @@
+/* WhatsApp pages (overview, contacts, campaigns, templates) in the shared
+   look (docs/DESIGN.md). They still use the app's older .primary-button and
+   .secondary-button; inside .wa-page those take the same size and type as
+   the CRM buttons, without touching other screens. The inbox is styled in
+   its components and the --inbox-* tokens. */
+.wa-page .primary-button,
+.wa-page .secondary-button {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+.wa-page .primary-button { border: 1px solid transparent; background: var(--brand-blue); color: #fff; }
+.wa-page .primary-button:hover:not(:disabled) { background: var(--brand-blue-dark); box-shadow: none; }
+.wa-page .secondary-button { border: 1px solid var(--crm-border-strong, var(--line)); background: var(--surface); color: var(--text); }
+.wa-page .secondary-button:hover:not(:disabled) { background: var(--crm-subtle, var(--line-soft)); }
+
+/* The app's global table rules (src/index.css) set positional column widths
+   for the Clients list and capitalised headers; neither fits these tables.
+   Columns size to their content here, and tight ones shrink to fit. */
+.wa-page table .wa-cell { width: auto; }
+.wa-page table .wa-cell.wa-tight { width: 1%; }
+.wa-page table th.wa-cell { text-transform: none; letter-spacing: 0; }

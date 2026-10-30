@@ -86,7 +86,7 @@ export default function WhatsAppContacts() {
   }
 
   return (
-    <>
+    <div className="wa-page">
       <PageHeader
         title="Contacts"
         subtitle="The audience pool for every campaign. Import from Excel, CSV or JSON."
@@ -108,7 +108,7 @@ export default function WhatsAppContacts() {
           bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
           {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
         </div>
-        <div className="mb-1 text-sm font-semibold">
+        <div className="mb-1 text-sm font-medium">
           {uploading ? 'Importing…' : 'Drop an Excel, CSV or JSON file here'}
         </div>
         <div className="text-[12.5px] text-muted">
@@ -146,7 +146,7 @@ export default function WhatsAppContacts() {
                 type="button"
                 onClick={() => handleDelete('selected')}
                 disabled={deleting}
-                className="font-semibold text-red-400 underline hover:text-red-300"
+                className="font-medium text-red-400 underline hover:text-red-300"
               >
                 {deleting ? 'Deleting…' : 'Delete selected'}
               </button>
@@ -154,14 +154,14 @@ export default function WhatsAppContacts() {
                 type="button"
                 onClick={() => handleDelete('all')}
                 disabled={deleting}
-                className="font-semibold text-red-400 underline hover:text-red-300"
+                className="font-medium text-red-400 underline hover:text-red-300"
               >
                 Delete all
               </button></>}
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}
-                className="font-semibold text-brand-ink underline dark:text-[#5ba0e0]"
+                className="font-medium text-brand-ink underline dark:text-[#5ba0e0]"
               >
                 Clear
               </button>
@@ -200,8 +200,8 @@ export default function WhatsAppContacts() {
               <tr
                 key={contact.id}
                 onClick={() => toggle(contact.id)}
-                className={`cursor-pointer transition-colors hover:bg-brand-soft
-                  ${selected.has(contact.id) ? 'bg-brand-soft' : ''}`}
+                className={`cursor-pointer transition-colors
+                  ${selected.has(contact.id) ? 'bg-brand-soft' : 'hover:bg-line-soft'}`}
               >
                 <Td tight onClick={(e) => e.stopPropagation()}>
                   <input
@@ -231,6 +231,6 @@ export default function WhatsAppContacts() {
           </Table>
         )}
       </Panel>
-    </>
+    </div>
   )
 }

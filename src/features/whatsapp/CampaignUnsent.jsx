@@ -94,7 +94,7 @@ export function CampaignUnsent({ campaign, onChanged }) {
               type="button"
               onClick={() => setReconciled(true)}
               className="rounded-full border border-line px-2.5 py-0.5 text-[11px]
-                font-semibold text-brand-ink transition hover:border-brand hover:bg-brand-soft"
+                font-medium text-brand-ink transition hover:border-brand hover:bg-brand-soft"
             >
               Check all contacts
             </button>
@@ -126,7 +126,7 @@ export function CampaignUnsent({ campaign, onChanged }) {
                 disabled={campaign.status === 'sending'}
                 title="Resend only to the contacts listed below"
                 className="inline-flex items-center gap-1.5 rounded-full border border-line px-3
-                  py-1 text-[11.5px] font-semibold text-brand-ink transition hover:border-brand
+                  py-1 text-[11.5px] font-medium text-brand-ink transition hover:border-brand
                   hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50
                   dark:text-[#5ba0e0]"
               >

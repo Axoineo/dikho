@@ -116,9 +116,29 @@ One PR per phase, verified locally before pushing; the owner merges.
     departments and audit entries; `/assist` and `/assist/incoming` show
     the Live Assist pieces.
 
+- Phase E (branch `ux/redesign-whatsapp`):
+  - The shared WhatsApp pieces (`ui.jsx`) follow the design rules: the
+    common page header (no "WHATSAPP MARKETING" label), sentence-case
+    table headers, round badges, smaller panels, alerts and inputs.
+    Sentence-case labels for Meta's capitalised statuses come from
+    `labels.js`.
+  - Overview totals are the shared metric tiles; the coloured edge on
+    each card is gone.
+  - Overview, Contacts, Campaigns (with the new-campaign steps) and
+    Templates sit in `.wa-page`, where the older buttons take the shared
+    size and the app's positional table widths no longer apply
+    (`whatsapp.css`).
+  - Inbox frame (`--inbox-*`) in neutral greys in light and dark; the
+    chat keeps WhatsApp's bubbles and wallpaper. Unread chats stay
+    medium weight against regular for read ones.
+  - Weights 400 and 500 only, outside the message bubbles and the
+    template preview.
+  - Preview harness: WhatsApp overview, contacts, campaigns and templates
+    with sample data.
+
 ## Remaining work
 
-- Phases E to G.
+- Phases F and G.
 
 ## Verification
 
@@ -136,3 +156,5 @@ One PR per phase, verified locally before pushing; the owner merges.
 | Screenshots (phase C) | pass | all six sections at 1440; Company, Regional, Lists in dark; Company and Regional at 390; Company at 820 |
 | `npm run check` (phase D) | pass | lint 0 errors, 228/228 tests, build, secret scan |
 | Screenshots (phase D) | pass | People (light, dark, phone), templates, departments, audit log, profile overview, access grid (light and dark), sessions, Add user and Suspend dialogs, profile on a phone (dark); Live Assist ask dialog (light and dark), pill, helper toast, consent dialog. Phone people table measured: no overflow |
+| `npm run check` (phase E) | pass | lint 0 errors (no new warnings), 228/228 tests, build, secret scan |
+| Screenshots (phase E) | pass | overview (light, dark, phone), contacts with a selection, campaigns with the not-delivered panel open, new campaign step 1, templates (light and dark), inbox list and an open chat with contact info (light and dark), inbox on a phone |

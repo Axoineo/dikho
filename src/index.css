@@ -42,7 +42,7 @@
      consistent — that trade was reversed on 2026-09-27 by product decision.
      Scoped to --chat-* so no other screen moves. */
   --chat-shell: #ffffff;          /* list + info panels                     */
-  --chat-bar: #f1f4f8;            /* = --inbox-field                        */
+  --chat-bar: #f2f3f4;            /* = --inbox-field                        */
   /* The thread sits on WhatsApp's own wallpaper: its beige, with the doodle
      tile over it (.chat-canvas). Asked for on 2026-10-07 after the cool
      #eef1f6 and its dot grid read as "weird" next to the real app. Bubbles
@@ -96,16 +96,18 @@
      cannot apply an alpha channel to a var() colour, so `bg-brand/10` would
      silently emit nothing (see the note in tailwind.config.js). Values match
      the rail's own highlights. */
-  --inbox-row-hover: rgba(24, 84, 148, 0.055);
-  --inbox-row-active: rgba(24, 84, 148, 0.10);
-  --inbox-control: rgba(24, 84, 148, 0.06);   /* icon-button hover disc      */
-  --inbox-chip: rgba(24, 84, 148, 0.10);      /* selected filter pill        */
-  --inbox-field: #f1f4f8;                     /* search + composer input     */
-  --inbox-panel: #fbfcfe;                     /* contact-panel block fill    */
+  /* Neutral greys since the 2026-10 redesign (docs/DESIGN.md): brand blue
+     is kept for focus, the unread count and the selected filter's text. */
+  --inbox-row-hover: rgba(30, 35, 41, 0.035);
+  --inbox-row-active: rgba(30, 35, 41, 0.065);
+  --inbox-control: rgba(30, 35, 41, 0.05);    /* icon-button hover disc      */
+  --inbox-chip: rgba(30, 35, 41, 0.07);       /* selected filter pill        */
+  --inbox-field: #f2f3f4;                     /* search + composer input     */
+  --inbox-panel: #fafafb;                     /* contact-panel block fill    */
   --inbox-focus: rgba(24, 84, 148, 0.30);     /* keyboard focus ring         */
-  --inbox-scroll: rgba(24, 84, 148, 0.22);    /* scrollbar thumb, on hover   */
-  --inbox-divider: rgba(24, 84, 148, 0.13);   /* list | thread boundary      */
-  --inbox-list: #f7f9fc;                      /* list pane, a step off white */
+  --inbox-scroll: rgba(30, 35, 41, 0.2);      /* scrollbar thumb, on hover   */
+  --inbox-divider: #e3e5e8;                   /* list | thread boundary      */
+  --inbox-list: #f7f7f8;                      /* list pane, a step off white */
   --inbox-hit: rgba(24, 84, 148, 0.16);       /* search-match highlight      */
 }
 
@@ -1827,7 +1829,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
      intentionally the one screen that does NOT sit on the app's neutral-cool
      ramp; see the note on --chat-* in :root. */
   --chat-shell: #111b21;
-  --chat-bar: #23272f;            /* = --inbox-field                        */
+  --chat-bar: #242528;            /* = --inbox-field                        */
   /* Same ladder in the app's blacks rather than WhatsApp's:
      list #1a1d23 -> canvas #101318, incoming bubble #232831 so it lifts off
      the canvas the way the light one lifts off #eef1f6. */
@@ -1860,15 +1862,15 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
   /* Inbox chrome — dark. Lifted off #1a1d23 the same way the rail's are. */
   --inbox-row-hover: rgba(255, 255, 255, 0.04);
-  --inbox-row-active: rgba(24, 84, 148, 0.24);
+  --inbox-row-active: rgba(255, 255, 255, 0.07);
   --inbox-control: rgba(255, 255, 255, 0.06);
-  --inbox-chip: rgba(24, 84, 148, 0.28);
-  --inbox-field: #23272f;
-  --inbox-panel: #1e222a;
+  --inbox-chip: rgba(255, 255, 255, 0.09);
+  --inbox-field: #242528;
+  --inbox-panel: #1f2022;
   --inbox-focus: rgba(91, 160, 224, 0.45);
   --inbox-scroll: rgba(255, 255, 255, 0.16);
-  --inbox-divider: rgba(255, 255, 255, 0.09);
-  --inbox-list: #171a20;
+  --inbox-divider: #2d2f33;
+  --inbox-list: #17181a;
   --inbox-hit: rgba(91, 160, 224, 0.30);
 }
 

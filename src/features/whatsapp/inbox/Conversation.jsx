@@ -159,7 +159,7 @@ export function Conversation({
             <path d="M20.4 11.8a8.3 8.3 0 0 1-12.4 7.2l-4.5 1.2 1.3-4.4A8.3 8.3 0 1 1 20.4 11.8Z" />
           </svg>
         </div>
-        <p className="text-[15.5px] font-semibold text-ink">WhatsApp Inbox</p>
+        <p className="text-[15.5px] font-medium text-ink">WhatsApp Inbox</p>
         <p className="mt-1.5 max-w-[16rem] text-[13px] leading-relaxed text-muted">
           Pick a conversation on the left to read the thread and reply.
         </p>
@@ -255,7 +255,7 @@ export function Conversation({
           title={infoOpen ? 'Hide contact details' : 'Show contact details'}
           className="-ml-2 min-w-0 flex-1 rounded-xl px-2 py-1 text-left transition-colors hover:bg-inbox-control"
         >
-          <div className="truncate text-[14.5px] font-semibold leading-tight text-ink">{displayName(conversation)}</div>
+          <div className="truncate text-[14.5px] font-medium leading-tight text-ink">{displayName(conversation)}</div>
           <div className="truncate text-[12.5px] text-muted">+{conversation.phone}</div>
         </button>
 
@@ -313,7 +313,7 @@ export function Conversation({
           )}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted"><path d="M9 4h6l-1 6 3 3H7l3-3-1-6z" /><path d="M12 16v5" /></svg>
           <span className="min-w-0 flex-1">
-            <span className="block text-[11.5px] font-semibold uppercase tracking-[.3px] text-muted">Pinned{pinned.length > 1 ? ` · ${(pinIndex % pinned.length) + 1} of ${pinned.length}` : ''}</span>
+            <span className="block text-[12px] text-muted">Pinned{pinned.length > 1 ? ` · ${(pinIndex % pinned.length) + 1} of ${pinned.length}` : ''}</span>
             <span className="block truncate text-[13px] text-ink">{snippet(currentPin)}</span>
           </span>
         </button>
@@ -431,7 +431,7 @@ export function Conversation({
         {msLeft > 0 && !matches && !blocked && (
           <div className="flex justify-center pt-3">
             <span className={`${CANVAS_CHIP} max-w-[78%] text-center leading-relaxed`}>
-              Replies are open for <b className="font-semibold text-chat-text">{formatCountdown(msLeft)}</b>. After that, only approved templates can be sent.
+              Replies are open for <b className="font-medium text-chat-text">{formatCountdown(msLeft)}</b>. After that, only approved templates can be sent.
             </span>
           </div>
         )}
@@ -456,7 +456,7 @@ export function Conversation({
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
           {unseen > 0 && (
-            <span className="absolute -top-1.5 -right-1 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-chat-accent px-1.5 text-[11px] font-bold leading-none text-chat-on-accent">
+            <span className="absolute -top-1.5 -right-1 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-chat-accent px-1.5 text-[11px] font-medium leading-none text-chat-on-accent">
               {unseen > 99 ? '99+' : unseen}
             </span>
           )}
@@ -476,7 +476,7 @@ export function Conversation({
             <button
               type="button"
               onClick={() => onChatAction?.('unblock')}
-              className="shrink-0 rounded-full bg-brand px-4 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+              className="shrink-0 rounded-full bg-brand px-4 py-1.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
             >
               Unblock
             </button>

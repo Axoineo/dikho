@@ -128,6 +128,11 @@ incident details or unreleased vulnerability exploitation instructions here.
   - Details panels show label-left, value-right rows.
   - The sidebar uses neutral text and a softer highlight.
   - Navigation and section names are in sentence case.
+- Redesign phase E: WhatsApp in the same style. The overview's totals are
+  plain figures, tables have sentence-case headers and size to their
+  content, statuses read "Approved" or "Completed", buttons match the rest
+  of the app, and the inbox frame is neutral grey. Chats keep WhatsApp's
+  bubbles and wallpaper.
 - Redesign phase D: User management and Live Assist in the same style:
   quieter tabs and tiles, round pills, label-left profile rows, a lighter
   permission grid, and matching dialogs and buttons. The people list fits a

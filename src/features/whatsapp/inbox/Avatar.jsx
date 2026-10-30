@@ -30,7 +30,7 @@ export function Avatar({ name, phone, avatarUrl, size = 40, className = '' }) {
       style={{ ...dim, backgroundColor: avatarColor(name || phone || '') }}
       /* leading-none matters: initials otherwise sit on a text baseline and
          render a pixel or two below the circle's true centre. */
-      className={`flex shrink-0 items-center justify-center rounded-full font-semibold leading-none text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full font-medium leading-none text-white ${className}`}
     >
       {initials(name, phone)}
     </span>

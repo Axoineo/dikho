@@ -4,6 +4,7 @@ import { apiGet } from '../../lib/api'
 import { CampaignWizard } from './CampaignWizard'
 import { CampaignUnsent } from './CampaignUnsent'
 import { Alert, Badge, EmptyState, PageHeader, Panel, Table, Td, Th } from './ui'
+import { sentenceCase } from './labels'
 import { useAccess } from '../../lib/access'
 
 const STATUS_TONE = {
@@ -44,18 +45,18 @@ export default function WhatsAppCampaigns() {
 
   if (creating) {
     return (
-      <>
+      <div className="wa-page">
         <PageHeader
           title="New campaign"
           subtitle="Pick an audience, choose an approved template, preview it, then send."
         />
         <CampaignWizard onDone={() => { setCreating(false); load() }} />
-      </>
+      </div>
     )
   }
 
   return (
-    <>
+    <div className="wa-page">
       <PageHeader title="Campaigns" subtitle="Every bulk send, with live delivery and read counts.">
         {can('campaigns.send') && (
           <button type="button" className="primary-button" onClick={() => setCreating(true)}>
@@ -97,11 +98,11 @@ export default function WhatsAppCampaigns() {
 
               return (
                 <Fragment key={campaign.id}>
-                  <tr className="transition-colors hover:bg-brand-soft">
-                    <Td className="font-semibold">{campaign.name}</Td>
+                  <tr className="transition-colors hover:bg-line-soft">
+                    <Td className="font-medium">{campaign.name}</Td>
                     <Td className="text-muted">{campaign.template_name}</Td>
                     <Td tight>
-                      <Badge tone={STATUS_TONE[campaign.status] ?? 'neutral'}>{campaign.status}</Badge>
+                      <Badge tone={STATUS_TONE[campaign.status] ?? 'neutral'}>{sentenceCase(campaign.status)}</Badge>
                     </Td>
                     <Td tight>{campaign.sent_count} / {campaign.total_count}</Td>
                     <Td tight className={outstanding > 0 ? 'text-danger' : 'text-muted'}>
@@ -114,7 +115,7 @@ export default function WhatsAppCampaigns() {
                           aria-expanded={isOpen}
                           title="Show who hasn't received this campaign"
                           className="inline-flex items-center gap-1 rounded-full border border-line
-                            px-2 py-0.5 text-[11px] font-semibold text-brand-ink transition
+                            px-2 py-0.5 text-[11px] font-medium text-brand-ink transition
                             hover:border-brand hover:bg-brand-soft dark:text-[#5ba0e0]"
                         >
                           {outstanding}
@@ -137,6 +138,6 @@ export default function WhatsAppCampaigns() {
           </Table>
         )}
       </Panel>
-    </>
+    </div>
   )
 }
