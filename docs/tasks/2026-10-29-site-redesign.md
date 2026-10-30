@@ -1,9 +1,9 @@
 # Task: One look for every screen
 
-Status: active
+Status: complete when phase G is merged (all phases built)
 Owner: Dikho Global Media LLP (owner) with a coding agent
 Started: 2026-10-29
-Last updated: 2026-10-29
+Last updated: 2026-10-30
 
 ## Goal
 
@@ -147,9 +147,23 @@ One PR per phase, verified locally before pushing; the owner merges.
   - Preview harness (`email-hub.html`): Overview, Templates, Consent and
     Analytics with sample data.
 
+- Phase G (branch `ux/redesign-entry`):
+  - The older shared `.primary-button` and `.secondary-button` take the
+    shared size and type everywhere.
+  - Sign-in: flat page, plain card, segmented Email/WhatsApp switch, muted
+    labels, 40px inputs and button (no accent stripe), lighter code boxes.
+  - Vendor registration: neutral page, plain top bar, quieter steps,
+    cards, labels and inputs, outlined segmented choice; copy in sentence
+    case and the "— Select —" prompts reworded ("Choose media").
+  - Account-problem and idle dialogs, "no access", placeholder ("MODULE"
+    label removed) and loading screens on the same type.
+  - Preview harness: `/denied`, `/dashboard` (placeholder), `/idle`; its
+    preview components are exported so lint has no new warnings.
+
 ## Remaining work
 
-- Phase G.
+- The owner reviews each merged phase on the live site and says what to
+  change. The corporate gifting page was left as it is on purpose.
 
 ## Verification
 
@@ -171,3 +185,6 @@ One PR per phase, verified locally before pushing; the owner merges.
 | Screenshots (phase E) | pass | overview (light, dark, phone), contacts with a selection, campaigns with the not-delivered panel open, new campaign step 1, templates (light and dark), inbox list and an open chat with contact info (light and dark), inbox on a phone |
 | `npm run check` (phase F) | pass | lint 0 errors (no new warnings), 228/228 tests, build, secret scan |
 | Screenshots (phase F) | pass | Email overview (light and dark), settings (desktop and phone), campaigns, campaign editor, templates, consent with a looked-up address, analytics (light and dark), inbox with an open conversation (light and dark) |
+| `npm run check` (phase G) | pass | lint 0 errors (6 warnings, one fewer than before the redesign), 228/228 tests, build, secret scan |
+| Screenshots (phase G) | pass | sign-in (desktop, phone, and with the computer in dark mode), vendor registration step 1 (desktop and phone), no-access page (light and dark), placeholder page, idle warning (light and dark) |
+| Corporate gifting page | untouched | `git diff` empty for its four files |

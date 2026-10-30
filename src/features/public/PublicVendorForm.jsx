@@ -75,8 +75,8 @@ function TurnstileWidget({ onVerify, onExpire, resetRef }) {
 
 /* ─── Step definitions ─────────────────────────────────────────────── */
 const STEPS = [
-  { id: 'basic',       label: 'Basic Info'   },
-  { id: 'tax',         label: 'Tax & Bank'   },
+  { id: 'basic',       label: 'Basic info'   },
+  { id: 'tax',         label: 'Tax and bank' },
   { id: 'address',     label: 'Address'      },
   { id: 'documents',   label: 'Documents'    },
 ]
@@ -148,7 +148,7 @@ function SuccessScreen() {
           <path d="M20 6L9 17l-5-5" />
         </svg>
       </div>
-      <h2 className="pvf-success-title">Registration submitted!</h2>
+      <h2 className="pvf-success-title">Registration submitted</h2>
       <p className="pvf-success-body">Thank you for registering. Our team will review your details and reach out to you soon.</p>
       <p className="pvf-success-note">You may close this tab.</p>
     </div>
@@ -446,7 +446,7 @@ export default function PublicVendorForm() {
       })
       setZipStatus(match
         ? { type: 'success', message: 'PIN code matches.' }
-        : { type: 'warning', message: `PIN ${zip} may not match ${form.city} — please verify.` })
+        : { type: 'warning', message: `PIN ${zip} may not match ${form.city}. Please check it.` })
     } catch {
       setZipStatus({ type: 'warning', message: 'PIN verification unavailable. You can still continue.' })
     }
@@ -616,7 +616,7 @@ export default function PublicVendorForm() {
       <header className="pvf-topbar">
         <img src="/dikho-logo.svg" alt="Dikho" className="pvf-logo" />
         <div className="pvf-topbar-text">
-          <div className="pvf-topbar-title">Vendor Registration</div>
+          <div className="pvf-topbar-title">Vendor registration</div>
           <div className="pvf-topbar-sub">Fill in your details below. Our team will review and onboard you shortly.</div>
         </div>
       </header>
@@ -640,32 +640,32 @@ export default function PublicVendorForm() {
               <div className="pvf-step-body">
                 <SectionTitle
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}
-                  title="Basic Information"
+                  title="Basic information"
                   subtitle="Tell us about your business"
                 />
 
                 <div className="pvf-grid">
-                  <FieldGroup label="Company Name *" name="company_name" error={fieldError?.field === 'company_name' ? fieldError.message : null}>
+                  <FieldGroup label="Company name *" name="company_name" error={fieldError?.field === 'company_name' ? fieldError.message : null}>
                     <input className="pvf-input" value={form.company_name} onChange={e => update('company_name', e.target.value)} required />
                   </FieldGroup>
 
-                  <FieldGroup label="Vendor Type *">
+                  <FieldGroup label="Vendor type *">
                     <div className="pvf-type-cards">
                       {['Individual', 'Organization'].map(t => (
                         <label key={t} className={`pvf-type-card ${form.vendor_type === t ? 'selected' : ''}`}>
                           <input type="radio" name="pvf-type" value={t} checked={form.vendor_type === t} onChange={() => update('vendor_type', t)} />
                           <strong>{t}</strong>
-                          <small>{t === 'Individual' ? 'Person / Proprietor' : 'Company / Agency'}</small>
+                          <small>{t === 'Individual' ? 'Person or proprietor' : 'Company or agency'}</small>
                         </label>
                       ))}
                     </div>
                   </FieldGroup>
 
-                  <FieldGroup label="Alias / Trade Name">
+                  <FieldGroup label="Alias or trade name">
                     <input className="pvf-input" value={form.alias} onChange={e => update('alias', e.target.value)} />
                   </FieldGroup>
 
-                  <FieldGroup label="Contact Person">
+                  <FieldGroup label="Contact person">
                     <input className="pvf-input" value={form.contact_person} onChange={e => update('contact_person', e.target.value)} />
                   </FieldGroup>
 
@@ -673,7 +673,7 @@ export default function PublicVendorForm() {
                     <input className="pvf-input" type="email" value={form.email} onChange={e => update('email', e.target.value)} />
                   </FieldGroup>
 
-                  <FieldGroup label="Phone Number">
+                  <FieldGroup label="Phone number">
                     <div className="pvf-phone">
                       <DialCodePicker countries={allCountries} value={form.country_dialcode} onChange={val => update('country_dialcode', val)} />
                       <input className="pvf-input" type="tel" inputMode="numeric" maxLength={10} value={form.contact}
@@ -687,7 +687,7 @@ export default function PublicVendorForm() {
 
                 <SectionTitle
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>}
-                  title="Media Classification"
+                  title="Media classification"
                   subtitle="Which media type does your business operate in?"
                 />
 
@@ -707,12 +707,12 @@ export default function PublicVendorForm() {
                       required
                       disabled={mediaLoading}
                     >
-                      <option value="">{mediaLoading ? 'Loading…' : '— Select Media —'}</option>
+                      <option value="">{mediaLoading ? 'Loading…' : 'Choose media'}</option>
                       {mediaOptions.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </FieldGroup>
 
-                  <FieldGroup label="Sub Media *" name="sub_media_id" error={fieldError?.field === 'sub_media_id' ? fieldError.message : null}>
+                  <FieldGroup label="Sub media *" name="sub_media_id" error={fieldError?.field === 'sub_media_id' ? fieldError.message : null}>
                     <select
                       className="pvf-select"
                       value={form.sub_media_id}
@@ -721,18 +721,18 @@ export default function PublicVendorForm() {
                       disabled={!form.media_id || subMediaLoading}
                     >
                       <option value="">
-                        {!form.media_id ? 'Select media first' : subMediaLoading ? 'Loading…' : '— Select Sub Media —'}
+                        {!form.media_id ? 'Select media first' : subMediaLoading ? 'Loading…' : 'Choose sub media'}
                       </option>
                       {subMediaOptions.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                     </select>
                   </FieldGroup>
 
-                  <FieldGroup label="Payment Term (Days)">
+                  <FieldGroup label="Payment term (days)">
                     <input className="pvf-input" type="number" min="0" step="1" value={form.payment_term_value}
                       onChange={e => update('payment_term_value', e.target.value)} />
                   </FieldGroup>
 
-                  <FieldGroup label="Payment Term Type">
+                  <FieldGroup label="Payment term type">
                     <div className="pvf-seg">
                       {['Invoice Date', 'Campaign End Date'].map(t => (
                         <button key={t} type="button" className={form.payment_term_type === t ? 'active' : ''} onClick={() => update('payment_term_type', t)}>{t}</button>
@@ -748,14 +748,14 @@ export default function PublicVendorForm() {
               <div className="pvf-step-body">
                 <SectionTitle
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>}
-                  title="Tax Information"
+                  title="Tax information"
                   subtitle="GST, PAN and TDS details"
                 />
 
                 <div className="pvf-grid">
-                  <FieldGroup label="Registration Type">
+                  <FieldGroup label="Registration type">
                     <select className="pvf-select" value={form.registration} onChange={e => update('registration', e.target.value)}>
-                      <option value="">— Select —</option>
+                      <option value="">Choose</option>
                       <option>Registered</option>
                       <option>Unregistered</option>
                       <option>Composition</option>
@@ -778,22 +778,22 @@ export default function PublicVendorForm() {
                     <GstinStatus lookup={gstinLookup} />
                   </FieldGroup>
 
-                  <FieldGroup label="GSTIN Date">
+                  <FieldGroup label="GSTIN date">
                     <input className="pvf-input" type="date" value={form.gstin_date} onChange={e => update('gstin_date', e.target.value)} />
                   </FieldGroup>
 
-                  <FieldGroup label="PAN Number">
+                  <FieldGroup label="PAN number">
                     <input className="pvf-input pvf-mono" value={form.pan_number} onChange={e => update('pan_number', e.target.value.toUpperCase())} maxLength={10} />
                   </FieldGroup>
 
-                  <FieldGroup label="TDS Percentage">
+                  <FieldGroup label="TDS percentage">
                     <div className="pvf-suffix-wrap">
                       <input className="pvf-input" type="number" min="0" max="100" step="0.01" value={form.tds_percentage} onChange={e => update('tds_percentage', e.target.value)} />
                       <span className="pvf-suffix">%</span>
                     </div>
                   </FieldGroup>
 
-                  <FieldGroup label="TDS Section">
+                  <FieldGroup label="TDS section">
                     <input className="pvf-input" value={form.tds_section} onChange={e => update('tds_section', e.target.value)} />
                   </FieldGroup>
                 </div>
@@ -802,24 +802,24 @@ export default function PublicVendorForm() {
 
                 <SectionTitle
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}
-                  title="Bank Details"
+                  title="Bank details"
                   subtitle="For payment processing"
                 />
 
                 <div className="pvf-grid">
-                  <FieldGroup label="Bank Name">
+                  <FieldGroup label="Bank name">
                     <input className="pvf-input" value={form.vendor_bank_name} onChange={e => update('vendor_bank_name', e.target.value)} />
                   </FieldGroup>
 
-                  <FieldGroup label="IFSC Code">
+                  <FieldGroup label="IFSC code">
                     <input className="pvf-input pvf-mono" value={form.vendor_ifsc_code} onChange={e => update('vendor_ifsc_code', e.target.value.toUpperCase())} />
                   </FieldGroup>
 
-                  <FieldGroup label="Account Number">
+                  <FieldGroup label="Account number">
                     <input className="pvf-input pvf-mono" value={form.vendor_account_number} onChange={e => update('vendor_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
                   </FieldGroup>
 
-                  <FieldGroup label="Confirm Account Number" name="vendor_confirm_account_number">
+                  <FieldGroup label="Confirm account number" name="vendor_confirm_account_number">
                     <input className="pvf-input pvf-mono" value={form.vendor_confirm_account_number} onChange={e => update('vendor_confirm_account_number', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
                     {form.vendor_account_number && form.vendor_confirm_account_number &&
                       form.vendor_account_number !== form.vendor_confirm_account_number && (
@@ -835,7 +835,7 @@ export default function PublicVendorForm() {
               <div className="pvf-step-body">
                 <SectionTitle
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>}
-                  title="Business Address"
+                  title="Business address"
                   subtitle="Your primary operating address"
                 />
 
@@ -858,7 +858,7 @@ export default function PublicVendorForm() {
                     searchPlaceholder="Search cities…"
                     disabled={!form.state_code || !cities.length} required />
 
-                  <FieldGroup label="Zipcode / PIN" name="zipcode">
+                  <FieldGroup label="PIN or ZIP code" name="zipcode">
                     <input className="pvf-input" value={form.zipcode}
                       onChange={e => {
                         const raw = e.target.value
@@ -877,7 +877,7 @@ export default function PublicVendorForm() {
                     )}
                   </FieldGroup>
 
-                  <FieldGroup label="Street Address *" hint="Do not include State, City or Zipcode here" name="address" error={fieldError?.field === 'address' ? fieldError.message : null}>
+                  <FieldGroup label="Street address *" hint="Leave out the state, city and PIN; they have their own fields." name="address" error={fieldError?.field === 'address' ? fieldError.message : null}>
                     <textarea className="pvf-input pvf-textarea" rows={3} value={form.address}
                       onChange={e => update('address', e.target.value)}
                       required />
@@ -891,7 +891,7 @@ export default function PublicVendorForm() {
               <div className="pvf-step-body">
                 <SectionTitle
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
-                  title="Vendor Document"
+                  title="Vendor document"
                   subtitle="Upload your GST certificate, PAN card or any relevant document (optional)"
                 />
 
@@ -930,7 +930,7 @@ export default function PublicVendorForm() {
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
                       </div>
                       <div className="pvf-drop-text">
-                        <strong>Drag & drop a file here</strong>
+                        <strong>Drag and drop a file here</strong>
                         <small>or click to browse · PDF, JPG, PNG, WEBP · Max 10 MB</small>
                       </div>
                     </>
@@ -965,7 +965,7 @@ export default function PublicVendorForm() {
                 </button>
               ) : (
                 <button type="submit" className="pvf-btn-submit" disabled={saving || !captchaToken}>
-                  {saving ? 'Submitting…' : 'Submit Registration'}
+                  {saving ? 'Submitting…' : 'Submit registration'}
                 </button>
               )}
             </div>

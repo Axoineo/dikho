@@ -693,11 +693,26 @@ const { default: WhatsAppCampaigns } = await import('../../src/features/whatsapp
 const { default: WhatsAppTemplates } = await import('../../src/features/whatsapp/WhatsAppTemplates.jsx')
 const { AskHelpDialog, MyHelpPill, HelpToasts } = await import('../../src/features/live-assist/HelpWidgets.jsx')
 const { IncomingDialog } = await import('../../src/features/live-assist/EmployeeAssist.jsx')
+const { default: AccessDenied } = await import('../../src/components/AccessDenied.jsx')
+const { PlaceholderPage } = await import('../../src/components/PlaceholderPage.jsx')
+
+// The idle warning as AuthenticatedLayout renders it (same markup), to look at.
+export function IdlePreview() {
+  return (
+    <div className="session-warning-overlay" role="dialog" aria-modal="true" aria-label="Session expiry warning">
+      <div className="session-warning-box">
+        <strong>Still there?</strong>
+        <p>You'll be signed out in <span className="session-warning-timer">4:32</span> due to inactivity.</p>
+        <button className="primary-button" type="button">Stay signed in</button>
+      </div>
+    </div>
+  )
+}
 await import('../../src/features/live-assist/liveAssist.css')
 
 // Live Assist's pieces on their own, to look at: ?page=/assist (ask dialog,
 // pending pill, helper toasts) or ?page=/assist/incoming (the consent dialog).
-function AssistPreview({ incoming }) {
+export function AssistPreview({ incoming }) {
   const noop = () => {}
   if (incoming) {
     return <IncomingDialog session={{ helper_name: 'Meera Iyer', expires_at: new Date(Date.now() + 45000).toISOString() }} onAccept={noop} onDecline={noop} />
@@ -735,7 +750,7 @@ const ACCESS = {
 const SESSION = { user: { id: 'preview-user', email: 'priya@dikho.example.com', user_metadata: { full_name: 'Priya Sharma' } } }
 const START = PARAMS.get('page') || '/clients'
 
-function Shell() {
+export function Shell() {
   // Phones start with the rail closed, as AuthenticatedLayout does.
   const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 768px)').matches)
   const [themeMode, setThemeMode] = useState(PARAMS.get('theme') || 'light')
@@ -761,6 +776,9 @@ function Shell() {
             <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
             <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
             <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
+            <Route path="/denied" element={<AccessDenied />} />
+            <Route path="/dashboard" element={<PlaceholderPage title="Dashboard" />} />
+            <Route path="/idle" element={<IdlePreview />} />
             <Route path="/assist" element={<AssistPreview />} />
             <Route path="/assist/incoming" element={<AssistPreview incoming />} />
             <Route path="/settings" element={settings} />
