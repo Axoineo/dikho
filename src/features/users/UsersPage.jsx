@@ -23,6 +23,9 @@ export default function UsersPage() {
   const tab = params.get('tab') ?? 'people'
   const [catalog, setCatalog] = useState(null)
   const [catalogError, setCatalogError] = useState('')
+  // Lives here so Add user can sit in the page header, top right, as on
+  // every other page; the dialog itself stays with the People list.
+  const [adding, setAdding] = useState(false)
 
   const loadCatalog = useCallback(() => {
     usersApi.catalog().then(setCatalog, (err) => setCatalogError(err.message))
@@ -38,9 +41,15 @@ export default function UsersPage() {
 
   return (
     <div className="crm-page um-page">
-      <PageHeader title="User management" subtitle="Who can use Dikho, and what each person can see and change." />
+      <PageHeader title="Users" subtitle="Who can use Dikho, and what each person can see and change.">
+        {tab === 'people' && can('users.create') && (
+          <button className="primary-button" onClick={() => setAdding(true)} disabled={!catalog}>
+            <Icon name="plus" size={16} /> Add user
+          </button>
+        )}
+      </PageHeader>
 
-      <div className="um-tabs" role="tablist" aria-label="User management sections">
+      <div className="um-tabs" role="tablist" aria-label="User sections">
         {tabs.map(([key, label]) => (
           <button
             key={key}
@@ -62,7 +71,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {tab === 'people' && <PeopleTab catalog={catalog} />}
+      {tab === 'people' && <PeopleTab catalog={catalog} adding={adding} setAdding={setAdding} />}
       {tab === 'templates' && catalog && <TemplatesTab catalog={catalog} onCatalog={setCatalog} />}
       {tab === 'departments' && catalog && <DepartmentsTab catalog={catalog} onCatalog={setCatalog} />}
       {tab === 'audit' && can('audit_logs.view') && <AuditTimeline catalog={catalog} />}
@@ -75,8 +84,7 @@ const FILTERS = {
   role: ['owner', 'admin', 'manager', 'staff', 'developer'],
 }
 
-function PeopleTab({ catalog }) {
-  const { can } = useAccess()
+function PeopleTab({ catalog, adding, setAdding }) {
   const liveAssist = useLiveAssist()
   const navigate = useNavigate()
   const [members, setMembers] = useState(null)
@@ -86,7 +94,6 @@ function PeopleTab({ catalog }) {
   const [role, setRole] = useState('')
   const [department, setDepartment] = useState('')
   const [template, setTemplate] = useState('')
-  const [adding, setAdding] = useState(false)
 
   const load = useCallback(() => {
     usersApi.list().then((rows) => { setMembers(rows); setError('') }, (err) => setError(err.message))
@@ -165,11 +172,6 @@ function PeopleTab({ catalog }) {
           <option value="none">Custom (no template)</option>
           {(catalog?.templates ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
-        {can('users.create') && (
-          <button className="primary-button add-button" onClick={() => setAdding(true)} disabled={!catalog}>
-            <Icon name="plus" size={18} /> Add user
-          </button>
-        )}
       </div>
 
       {error && (

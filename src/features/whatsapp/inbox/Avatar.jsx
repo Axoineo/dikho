@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useMediaSrc } from './MediaTicketContext'
-import { avatarColor, initials } from './inboxUtils'
+import { initials } from './inboxUtils'
 
 // Circular contact avatar. Shows the agent-uploaded photo when present
-// (avatar_url, streamed via a signed ticket URL), otherwise hash-colored
-// initials — what WhatsApp itself shows when a contact has no photo. The Cloud
+// (avatar_url, streamed via a signed ticket URL), otherwise initials on the
+// soft brand tint every other page uses for people. The Cloud
 // API cannot provide real WhatsApp profile pictures, so uploads are the source.
 export function Avatar({ name, phone, avatarUrl, size = 40, className = '' }) {
   const { srcFor } = useMediaSrc()
@@ -27,10 +27,10 @@ export function Avatar({ name, phone, avatarUrl, size = 40, className = '' }) {
 
   return (
     <span
-      style={{ ...dim, backgroundColor: avatarColor(name || phone || '') }}
+      style={dim}
       /* leading-none matters: initials otherwise sit on a text baseline and
          render a pixel or two below the circle's true centre. */
-      className={`flex shrink-0 items-center justify-center rounded-full font-medium leading-none text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full bg-brand-soft font-medium leading-none text-brand-ink ${className}`}
     >
       {initials(name, phone)}
     </span>

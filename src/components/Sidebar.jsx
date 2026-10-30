@@ -409,9 +409,8 @@ function readAccount(session, staffName) {
   return { name, initials, avatarUrl: meta.avatar_url || meta.picture || '' }
 }
 
-/* Bottom of the rail: avatar + name, with the settings gear beside it — and
-   above it once collapsed. The popover holds log out and nothing else;
-   settings already has a permanent control right here. */
+/* Bottom of the rail: Ask for help, then avatar + name. The popover holds
+   log out and nothing else; Settings is in the list above. */
 function SidebarAccount({ collapsed, session, onLogout, onShowTip, onHideTip }) {
   const access = useContext(AccessContext)
   const liveAssist = useLiveAssist()
@@ -525,16 +524,6 @@ function SidebarAccount({ collapsed, session, onLogout, onShowTip, onHideTip }) 
             : <span className="sidebar-avatar" aria-hidden="true">{initials}</span>}
           <span className="sidebar-account-name nav-label">{name}</span>
         </button>
-        <NavLink
-          to="/settings"
-          className={({ isActive }) => `sidebar-account-settings${isActive ? ' active' : ''}`}
-          data-tip="Settings"
-          onMouseEnter={onShowTip}
-          onMouseLeave={onHideTip}
-          aria-label="Settings"
-        >
-          <SidebarIcon name="settings" size={19} />
-        </NavLink>
       </div>
     </div>
   )
@@ -643,17 +632,22 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
     { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', placeholder: true },
     { to: '/clients', label: 'Clients', icon: 'clients' },
     { to: '/leads', label: 'Leads', icon: 'leads' },
-    { to: '/vendors', label: 'Vendors', icon: 'vendors' },
     { to: '/sales-orders', label: 'Sales orders', icon: 'so' },
+    { to: '/vendors', label: 'Vendors', icon: 'vendors' },
     { to: '/purchase-orders', label: 'Purchase orders', icon: 'po' },
     { to: '/invoices', label: 'Invoice Notification', icon: 'invoice', placeholder: true },
     { to: '/advance-payments', label: 'Advance Payment Receipt', icon: 'advance', placeholder: true },
     { to: '/payment-receipts', label: 'Payment Receipt', icon: 'receipt', placeholder: true },
     { to: '/payment-requests', label: 'Payment Request', icon: 'paymentrequest', placeholder: true },
     { to: '/courier', label: 'Document Courier', icon: 'courier', placeholder: true },
-    { to: '/users', label: 'User management', icon: 'users' },
   ]
   const items = allItems.filter((item) => !item.placeholder && allowed(item))
+  // Below the messaging groups, as in the agreed layout: selling, buying,
+  // messaging, then the admin pages. Settings opens for everyone.
+  const adminItems = [
+    { to: '/users', label: 'Users', icon: 'users' },
+    { to: '/settings', label: 'Settings', icon: 'settings' },
+  ].filter(allowed)
 
   const navRef = useRef(null)
   const fade = useEdgeFade(navRef)
@@ -706,6 +700,25 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
     if (onOverlayClick) onOverlayClick()
   }
 
+  function renderItem(item) {
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+        onClick={handleNav}
+        data-tip={item.label}
+        onMouseEnter={showTip}
+        onMouseLeave={hideTip}
+      >
+        <span className="nav-icon">
+          <SidebarIcon name={item.icon} size={20} />
+        </span>
+        <span className="nav-label">{item.label}</span>
+      </NavLink>
+    )
+  }
+
   return (
     <>
       {/* Mobile overlay backdrop */}
@@ -746,29 +759,25 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
         </div>
 
         <nav className="sidebar-nav" ref={navRef} data-fade={fade}>
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-              onClick={handleNav}
-              data-tip={item.label}
-              onMouseEnter={showTip}
-              onMouseLeave={hideTip}
-            >
-              <span className="nav-icon">
-                <SidebarIcon name={item.icon} size={20} />
-              </span>
-              <span className="nav-label">{item.label}</span>
-            </NavLink>
-          ))}
+          {items.map(renderItem)}
+
+          {whatsappItems.length > 0 && <NavGroup
+            label="WhatsApp"
+            icon="whatsapp"
+            base="/whatsapp"
+            items={whatsappItems}
+            collapsed={collapsed}
+            onNavigate={handleNav}
+            onShowTip={showTip}
+            onHideTip={hideTip}
+            onOpenFlyout={openFlyout}
+            onCloseFlyout={closeFlyout}
+          />}
 
           {emailItems.length > 0 && <NavGroup
             label="Email"
             icon="mail"
             base="/email"
-            badge="Beta"
-            badgeTone="brand"
             items={emailItems}
             collapsed={collapsed}
             onNavigate={handleNav}
@@ -778,19 +787,7 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
             onCloseFlyout={closeFlyout}
           />}
 
-          {whatsappItems.length > 0 && <NavGroup
-            label="WhatsApp"
-            icon="whatsapp"
-            base="/whatsapp"
-            badge="Beta"
-            items={whatsappItems}
-            collapsed={collapsed}
-            onNavigate={handleNav}
-            onShowTip={showTip}
-            onHideTip={hideTip}
-            onOpenFlyout={openFlyout}
-            onCloseFlyout={closeFlyout}
-          />}
+          {adminItems.map(renderItem)}
         </nav>
 
         <SidebarAccount

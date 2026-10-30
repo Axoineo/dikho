@@ -160,6 +160,20 @@ One PR per phase, verified locally before pushing; the owner merges.
   - Preview harness: `/denied`, `/dashboard` (placeholder), `/idle`; its
     preview components are exported so lint has no new warnings.
 
+- Matching the mockups (branch `ux/match-mockups`, 2026-10-30). The owner
+  checked the live site after phase G and found it did not look like the
+  mockups. A side-by-side of all 18 mockups against the app showed Clients,
+  Vendors, the orders pages, Settings and Email close, and these off:
+  - Sign-in kept the blue welcome half; now one plain card.
+  - Sidebar order, Settings as a footer gear, "Beta" tags; now the
+    mockup's flat list with Users and Settings at the end.
+  - Every Tailwind border on the WhatsApp screens drew nothing (preflight
+    off), so panels, tables and inbox columns had no lines. One rule in
+    `src/tailwind.css` fixes all of them.
+  - WhatsApp overview title and delivery health card, the contacts drop
+    box and search, the inbox's bright avatars, pill search and filter.
+  - Users: title and Add user position.
+
 ## Remaining work
 
 - The owner reviews each merged phase on the live site and says what to
@@ -187,4 +201,6 @@ One PR per phase, verified locally before pushing; the owner merges.
 | Screenshots (phase F) | pass | Email overview (light and dark), settings (desktop and phone), campaigns, campaign editor, templates, consent with a looked-up address, analytics (light and dark), inbox with an open conversation (light and dark) |
 | `npm run check` (phase G) | pass | lint 0 errors (6 warnings, one fewer than before the redesign), 228/228 tests, build, secret scan |
 | Screenshots (phase G) | pass | sign-in (desktop, phone, and with the computer in dark mode), vendor registration step 1 (desktop and phone), no-access page (light and dark), placeholder page, idle warning (light and dark) |
+| `npm run check` (matching mockups) | pass | lint 0 errors (same 6 warnings), 228/228 tests, build, secret scan |
+| Screenshots (matching mockups) | pass | sign-in (desktop and phone), WhatsApp overview (light and dark), contacts, campaigns, inbox list, thread and contact panel, Users, collapsed sidebar; phone widths measured, no sideways scroll |
 | Corporate gifting page | untouched | `git diff` empty for its four files |

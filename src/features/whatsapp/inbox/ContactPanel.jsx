@@ -68,7 +68,7 @@ export function ContactPanel({ conversation, messages, onOpenMedia, onChatAction
 
       <div className="inbox-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
         <div className="flex flex-col items-center rounded-2xl bg-inbox-panel px-5 pb-5 pt-6 text-center">
-          <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={88} />
+          <Avatar name={conversation.wa_name || conversation.contact_name} phone={conversation.phone} avatarUrl={conversation.avatar_url} size={64} />
           <div className="mt-3 text-[16px] font-medium text-ink">{displayName(conversation)}</div>
           <div className="mt-0.5 text-[13px] text-muted">+{conversation.phone}</div>
           {blocked ? (

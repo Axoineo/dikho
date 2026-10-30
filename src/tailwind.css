@@ -4,3 +4,17 @@
    Imported after index.css in main.jsx so utilities win on specificity ties. */
 @tailwind components;
 @tailwind utilities;
+
+/* The one piece of preflight these screens need. Tailwind's border-width
+   classes only set a width; preflight is what gives every element a zero
+   width, a solid style and a default colour. Without it `border`,
+   `border-b` and the rest drew nothing, so panels, table rows and the inbox
+   columns had no lines. The zero width matters too: once a style is set,
+   the sides a class does not name would otherwise be 3px wide.
+   :where() keeps this at zero specificity, so any stylesheet rule and the
+   width, border-dashed and colour utilities still win. */
+:where(.border, .border-t, .border-b, .border-l, .border-r, .border-2, .border-\[1\.5px\], .divide-y > * + *) {
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--line);
+}
