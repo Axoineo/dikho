@@ -128,6 +128,11 @@ incident details or unreleased vulnerability exploitation instructions here.
   - Details panels show label-left, value-right rows.
   - The sidebar uses neutral text and a softer highlight.
   - Navigation and section names are in sentence case.
+- Redesign phase G, the last: sign-in, vendor registration, the account
+  and idle dialogs, the no-access page, placeholders and loading screens
+  in the same style. Vendor registration labels are in sentence case and
+  its dropdown prompts read "Choose media" instead of "— Select Media —".
+  The corporate gifting page is unchanged.
 - Redesign phase F: Email in the same style (no all-capitals labels,
   two weights, shared button and input sizes, figures as grey tiles).
   Email is still off unless switched on.

@@ -3168,3 +3168,122 @@ select.pvf-input.has-error:focus,
 
 /* "Ask for help" row at the top of the sidebar footer (Live Assist). */
 .sidebar-help { margin-bottom: 6px; }
+
+/* ============================================================
+   REDESIGN, PHASE G: screens outside the CRM layer
+   (docs/DESIGN.md). Sign-in, vendor registration, the account and idle
+   dialogs, "no access", placeholders and the loading screens. The rules
+   above stay as the base; these come last so they win at equal weight.
+   The corporate gifting page has its own stylesheet and is not touched.
+   ============================================================ */
+
+/* The older shared buttons, now the same size and type as the CRM ones. */
+.primary-button,
+.secondary-button {
+  min-height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.primary-button:hover:not(:disabled) { box-shadow: none; }
+.secondary-button { border-color: var(--line); background: var(--surface); color: var(--text); }
+.secondary-button:hover { background: var(--line-soft); }
+
+/* Sign-in (light only; the page pins the light tokens). */
+.login-page { background: #f7f7f8; }
+.login-box {
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.login-box h1 { font-size: 20px; font-weight: 500; letter-spacing: 0; }
+.login-subtitle { font-size: 13px; }
+.login-method-toggle { gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: transparent; }
+.login-method-btn { height: 32px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+.login-method-btn.active { background: #eceef0; color: var(--text); box-shadow: none; }
+.login-box label { font-size: 12px; font-weight: 400; color: var(--muted); }
+.login-box input { height: 40px; border-radius: 8px; font-size: 14px; background: #fff; }
+.login-box input:not(:placeholder-shown) { font-weight: 400; }
+.login-button { height: 40px; min-height: 40px; border-bottom: 0; border-radius: 8px; font-size: 14px; font-weight: 500; }
+.otp-input { height: 46px; border-radius: 8px; font-size: 20px; font-weight: 500; }
+.auth-error { border-radius: 8px; padding: 10px 12px; }
+.auth-error strong { font-weight: 500; }
+.background-logo { font-weight: 500; }
+.welcome-content h2 { font-size: 40px; letter-spacing: -0.5px; }
+.welcome-content p { font-size: 15px; }
+
+/* Account problems and the idle warning. */
+.session-warning-box {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.session-warning-box strong { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+.session-warning-box p { font-size: 13px; }
+.session-warning-timer { font-weight: 500; }
+
+/* "You don't have access to this page", placeholders, loading screens. */
+.access-denied-icon { width: 40px; height: 40px; border-radius: 10px; margin-bottom: 12px; }
+.access-denied h1 { font-size: 18px; font-weight: 500; }
+.access-denied p { font-size: 13px; }
+.placeholder { min-height: 240px; border-radius: 12px; padding: 24px; background: var(--surface); }
+.placeholder h1 { font-size: 20px; font-weight: 500; }
+.brand-loader-stall { font-size: 13px; }
+.route-boundary strong { font-size: 15px; font-weight: 500; }
+.route-boundary p { font-size: 13px; }
+
+/* Vendor registration (public, light only). */
+.pvf-shell { background: #f7f7f8; }
+.pvf-topbar {
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.pvf-topbar-title { font-size: 15px; font-weight: 500; color: #1e2329; }
+.pvf-topbar-sub { font-size: 12px; color: #5c626c; }
+.pvf-steps { border-color: #e3e5e8; padding: 12px 16px; }
+.pvf-step { color: #6f7580; font-size: 12px; }
+.pvf-step.is-active { color: #185494; font-weight: 500; }
+.pvf-step.is-done { color: #1f7a45; }
+.pvf-step-circle { width: 22px; height: 22px; border-width: 1px; font-size: 11px; font-weight: 500; }
+.pvf-step.is-done .pvf-step-circle { background: #1f7a45; border-color: #1f7a45; }
+.pvf-step-line { background: #e3e5e8; }
+.pvf-card { border-color: #e3e5e8; border-radius: 12px; box-shadow: none; }
+.pvf-error { border-radius: 8px; font-size: 13px; }
+.pvf-section-icon { width: 32px; height: 32px; border-radius: 8px; }
+.pvf-section-title { color: #1e2329; font-size: 15px; font-weight: 500; letter-spacing: 0; }
+.pvf-section-subtitle { color: #5c626c; font-size: 13px; }
+.pvf-step-body { padding: 20px 20px 0; }
+.pvf-grid { gap: 12px; }
+.pvf-label { color: #5c626c; font-size: 12px; font-weight: 400; }
+.pvf-grid .search-select-wrap label { color: #5c626c; font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.pvf-grid .search-select-trigger { height: 36px; border-color: #d4d7dc; font-size: 13px; }
+.pvf-input, .pvf-select { height: 36px; border-color: #d4d7dc; background: #fff; font-size: 13px; color: #1e2329; }
+.pvf-field-error { font-weight: 400; }
+.pvf-type-card { border-width: 1px; border-color: #d4d7dc; border-radius: 8px; }
+.pvf-type-card strong { font-weight: 500; font-size: 13px; color: #1e2329; }
+.pvf-type-card.selected { background: #eaf1fa; }
+.pvf-seg { gap: 2px; padding: 2px; border-width: 1px; border-color: #e3e5e8; }
+.pvf-seg button { height: 30px; border-right: 0; border-radius: 6px; font-size: 13px; color: #5c626c; }
+.pvf-seg button.active { background: #eceef0; color: #1e2329; }
+.pvf-dropzone { border-width: 1px; border-color: #d4d7dc; border-radius: 12px; }
+.pvf-drop-icon { width: 40px; height: 40px; border-radius: 10px; }
+.pvf-drop-text strong { font-size: 13px; font-weight: 500; }
+.pvf-drop-btn { border-width: 1px; border-color: #d4d7dc; border-radius: 8px; }
+.pvf-btn-back { height: 36px; border-width: 1px; border-color: #d4d7dc; color: #1e2329; font-size: 13px; font-weight: 500; }
+.pvf-btn-next,
+.pvf-btn-submit { height: 36px; font-size: 13px; font-weight: 500; }
+.pvf-success-title { font-weight: 500; }
+@media (max-width: 600px) {
+  /* Phones keep larger touch targets, but the same corners as everything else. */
+  .pvf-btn-next,
+  .pvf-btn-submit,
+  .pvf-btn-back { height: 44px; border-radius: 8px !important; }
+}
