@@ -79,7 +79,7 @@ export function ChatActionDialog({ action, conversation, onConfirm, onClose }) {
         onMouseDown={(e) => e.stopPropagation()}
         className="w-full max-w-[420px] rounded-2xl border border-line bg-surface p-6 shadow-[0_17px_50px_rgba(11,20,26,0.19)]"
       >
-        <h2 id="chat-action-title" className="m-0 text-[17px] font-semibold leading-snug text-ink">{copy.title(name)}</h2>
+        <h2 id="chat-action-title" className="m-0 text-[17px] font-medium leading-snug text-ink">{copy.title(name)}</h2>
         <p id="chat-action-body" className="m-0 mt-2 text-[13.5px] leading-relaxed text-muted">{copy.body(name)}</p>
         {error && (
           <p role="alert" className="m-0 mt-3 rounded-xl bg-tint-danger px-3 py-2 text-[13px] leading-snug text-ink">{error}</p>
@@ -90,7 +90,7 @@ export function ChatActionDialog({ action, conversation, onConfirm, onClose }) {
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="h-9 rounded-full border border-line px-4 text-[13px] font-semibold text-ink transition-colors hover:bg-inbox-control disabled:opacity-50"
+            className="h-9 rounded-full border border-line px-4 text-[13px] font-medium text-ink transition-colors hover:bg-inbox-control disabled:opacity-50"
           >
             Cancel
           </button>
@@ -98,7 +98,7 @@ export function ChatActionDialog({ action, conversation, onConfirm, onClose }) {
             type="button"
             onClick={confirm}
             disabled={busy}
-            className={`h-9 rounded-full border-0 px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60
+            className={`h-9 rounded-full border-0 px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60
               ${copy.danger ? 'bg-danger' : 'bg-brand'}`}
           >
             {busy ? 'Working…' : copy.confirm}

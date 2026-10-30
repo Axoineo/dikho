@@ -73,13 +73,13 @@ export function Composer({
       <div className="m-3 flex shrink-0 items-center gap-3 rounded-2xl border border-inbox-divider bg-surface px-4 py-3 text-[13px] leading-relaxed text-muted shadow-[0_2px_10px_rgba(16,26,44,0.08)]">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3 2" /></svg>
         <span className="min-w-0">
-          The 24-hour reply window has closed. <b className="font-semibold text-ink">{displayName(conversation)}</b> must message first, or {canTemplate ? 'you can' : 'someone who can send campaigns can'} send an approved template.
+          The 24-hour reply window has closed. <b className="font-medium text-ink">{displayName(conversation)}</b> must message first, or {canTemplate ? 'you can' : 'someone who can send campaigns can'} send an approved template.
         </span>
         {canTemplate && (
           <button
             type="button"
             onClick={() => onCompose('template')}
-            className="ml-auto shrink-0 rounded-full border-0 bg-brand px-4 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="ml-auto shrink-0 rounded-full border-0 bg-brand px-4 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
           >
             Send a template
           </button>
@@ -228,7 +228,7 @@ export function Composer({
           <div className="mx-1.5 mt-1.5 flex items-stretch overflow-hidden rounded-xl bg-chat-quote">
             <span className={`w-1 shrink-0 ${replyMine ? 'bg-chat-quote-you' : 'bg-chat-quote-them'}`} />
             <div className="min-w-0 flex-1 px-3 py-1.5">
-              <div className={`truncate text-[12.8px] font-semibold ${replyMine ? 'text-chat-quote-you' : 'text-chat-quote-them'}`}>Replying to {replyAuthor}</div>
+              <div className={`truncate text-[12.8px] font-medium ${replyMine ? 'text-chat-quote-you' : 'text-chat-quote-them'}`}>Replying to {replyAuthor}</div>
               <div className="truncate text-[13px] text-muted">{snippet(replyTo)}</div>
             </div>
             <button type="button" onClick={onCancelReply} aria-label="Cancel reply" title="Cancel reply" className={`${discBtn} m-1 self-center`}>

@@ -196,7 +196,7 @@ function TemplateForm({ input, set, setReady }) {
           ))}
           <div className="rounded-xl bg-chat-canvas p-3">
             <div className="max-w-[90%] rounded-bubble bg-chat-bubble-out px-[9px] py-[5px] text-[13.5px] leading-[19px] text-chat-bubble-out-text shadow-bubble">
-              {chosen.headerText && <p className="m-0 font-semibold">{chosen.headerText}</p>}
+              {chosen.headerText && <p className="m-0 font-medium">{chosen.headerText}</p>}
               <p className="m-0 whitespace-pre-wrap">{preview}</p>
               {chosen.footerText && <p className="m-0 mt-0.5 text-[12px] opacity-70">{chosen.footerText}</p>}
             </div>
@@ -283,7 +283,7 @@ export function ComposeDialog({ kind, conversation, onSend, onClose }) {
         className="flex max-h-[min(720px,calc(100vh-32px))] w-full max-w-[480px] flex-col rounded-2xl border border-line bg-surface shadow-[0_17px_50px_rgba(11,20,26,0.19)]"
       >
         <div className="border-b border-line px-6 pb-3 pt-5">
-          <h2 id="compose-title" className="m-0 text-[17px] font-semibold text-ink">{TITLES[kind]}</h2>
+          <h2 id="compose-title" className="m-0 text-[17px] font-medium text-ink">{TITLES[kind]}</h2>
           <p className="m-0 mt-0.5 text-[12.5px] text-muted">To {displayName(conversation)}</p>
         </div>
         <div ref={firstRef} className="inbox-scroll grid min-h-0 flex-1 gap-3 overflow-y-auto px-6 py-4">
@@ -299,9 +299,9 @@ export function ComposeDialog({ kind, conversation, onSend, onClose }) {
         </div>
         <div className="flex justify-end gap-2 border-t border-line px-6 py-3.5">
           <button type="button" onClick={onClose} disabled={busy}
-            className="h-9 rounded-full border border-line px-4 text-[13px] font-semibold text-ink transition-colors hover:bg-inbox-control disabled:opacity-50">Cancel</button>
+            className="h-9 rounded-full border border-line px-4 text-[13px] font-medium text-ink transition-colors hover:bg-inbox-control disabled:opacity-50">Cancel</button>
           <button type="submit" disabled={busy || !ready}
-            className="h-9 rounded-full border-0 bg-brand px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50">
+            className="h-9 rounded-full border-0 bg-brand px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50">
             {busy ? 'Sending…' : 'Send'}
           </button>
         </div>

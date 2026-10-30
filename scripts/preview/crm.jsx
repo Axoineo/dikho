@@ -458,6 +458,42 @@ function usersApiReply(path, method) {
   return id ? ok(umMember(id)) : null
 }
 
+/* ── WhatsApp stand-in (/api/campaigns, /api/contacts, /api/templates) ─── */
+
+const WA_CONTACTS = PEOPLE.map((name, i) => ({
+  id: 700 + i, name, phone: `91982510${String(i * 37 + 11).padStart(4, '0')}`, company: COMPANIES[(i + 3) % COMPANIES.length],
+  email: `${name.split(' ')[0].toLowerCase()}@example.com`, opted_out: i === 4,
+}))
+const WA_CAMPAIGNS = [
+  { id: 41, name: 'Diwali hampers · Gujarat', template_name: 'diwali_offer_2026', status: 'completed', sent_count: 1980, total_count: 2000, created_at: '2026-10-28 09:00:00' },
+  { id: 40, name: 'Corporate follow-up', template_name: 'client_conformation_', status: 'completed', sent_count: 412, total_count: 412, created_at: '2026-10-21 09:00:00' },
+  { id: 39, name: 'Rate card October', template_name: 'rate_card', status: 'sending', sent_count: 180, total_count: 640, created_at: '2026-10-20 09:00:00' },
+]
+const WA_TEMPLATES = [
+  { name: 'diwali_offer_2026', status: 'APPROVED', language: 'en', category: 'MARKETING', hasVariables: true,
+    headerText: 'Diwali gifting is here', bodyText: 'Hi {{1}}, our Diwali gifting range for {{2}} is ready to view.', footerText: 'Dikho', buttons: [{ text: 'View catalogue' }] },
+  { name: 'client_conformation_', status: 'APPROVED', language: 'en', category: 'UTILITY', hasVariables: false,
+    headerText: null, bodyText: 'Thanks for your enquiry. Our team will call you shortly.', footerText: null, buttons: [] },
+]
+function whatsappApiReply(url) {
+  const ok = (data) => reply({ success: true, data })
+  const path = url.pathname
+  if (path.endsWith('/api/campaigns/stats')) return ok({ contacts: 8412, campaigns: 36, accepted: 61230, delivered: 58904, read: 41377, failed: 1412, awaiting: 914 })
+  if (path.endsWith('/api/campaigns')) return ok({ campaigns: WA_CAMPAIGNS })
+  if (/\/api\/campaigns\/\d+\/unsent$/.test(path)) {
+    return ok({ audienceSource: 'recorded', unaccounted: 0, counts: { total: 43, failed: 23, neverAttempted: 20 }, contacts: [
+      { id: 1, name: 'Nisha Rao', phone: '919825100011', reason: 'failed', errorMessage: 'Message undeliverable' },
+      { id: 2, name: 'Kabir Shah', phone: '919825100048', reason: 'never_attempted', errorMessage: null },
+    ] })
+  }
+  if (path.endsWith('/api/contacts')) {
+    const term = (url.searchParams.get('search') || '').toLowerCase()
+    return ok({ contacts: WA_CONTACTS.filter((c) => !term || `${c.name} ${c.phone} ${c.company}`.toLowerCase().includes(term)) })
+  }
+  if (path.endsWith('/api/templates')) return ok({ templates: WA_TEMPLATES, source: 'meta' })
+  return null
+}
+
 // Read-only handles for automated checks of what a save actually wrote.
 window.__crmDb = TABLES
 window.__settingsDb = { OPTION_LISTS, ORGANIZATION, PROFILE, MEMBER, preferences: () => PREFERENCES }
@@ -578,6 +614,10 @@ window.fetch = async (input, init = {}) => {
   if (url.pathname.endsWith('/api/cg-leads/whatsapp-status')) {
     return reply({ success: true, data: { statuses: LEAD_WA } })
   }
+  if (/\/api\/(campaigns|contacts|templates)/.test(url.pathname)) {
+    const answer = whatsappApiReply(url)
+    if (answer) return answer
+  }
   if (url.pathname.endsWith('/api/assist/helpers')) {
     return reply({ success: true, data: [
       { user_id: 'u-meera', full_name: 'Meera Iyer', online: true, in_session: false },
@@ -647,6 +687,10 @@ const { default: PurchaseOrdersPage } = await import('../../src/features/purchas
 const { default: LeadsPage } = await import('../../src/features/leads/LeadsPage.jsx')
 const { default: UsersPage } = await import('../../src/features/users/UsersPage.jsx')
 const { default: UserProfilePage } = await import('../../src/features/users/UserProfilePage.jsx')
+const { default: WhatsAppDashboard } = await import('../../src/features/whatsapp/WhatsAppDashboard.jsx')
+const { default: WhatsAppContacts } = await import('../../src/features/whatsapp/WhatsAppContacts.jsx')
+const { default: WhatsAppCampaigns } = await import('../../src/features/whatsapp/WhatsAppCampaigns.jsx')
+const { default: WhatsAppTemplates } = await import('../../src/features/whatsapp/WhatsAppTemplates.jsx')
 const { AskHelpDialog, MyHelpPill, HelpToasts } = await import('../../src/features/live-assist/HelpWidgets.jsx')
 const { IncomingDialog } = await import('../../src/features/live-assist/EmployeeAssist.jsx')
 await import('../../src/features/live-assist/liveAssist.css')
@@ -680,6 +724,7 @@ for (const module of MODULES) {
   }
 }
 for (const key of ['leads.view', 'users.view', 'inbox.view', 'campaigns.view', 'wa_contacts.view', 'wa_templates.view']) permissions[key] = 'all'
+for (const key of ['campaigns.send', 'wa_contacts.import', 'wa_contacts.delete']) permissions[key] = VIEW_ONLY ? 'none' : 'all'
 permissions['settings.manage'] = VIEW_ONLY ? 'none' : 'all'
 for (const key of ['users.create', 'users.edit', 'users.roles', 'users.permissions', 'users.suspend', 'users.sessions', 'audit_logs.view', 'templates.manage', 'departments.manage', 'live_assist.use']) permissions[key] = VIEW_ONLY ? 'none' : 'all'
 
@@ -712,6 +757,10 @@ function Shell() {
             <Route path="/leads" element={<LeadsPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/users/:userId" element={<UserProfilePage />} />
+            <Route path="/whatsapp" element={<WhatsAppDashboard />} />
+            <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
+            <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
+            <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
             <Route path="/assist" element={<AssistPreview />} />
             <Route path="/assist/incoming" element={<AssistPreview incoming />} />
             <Route path="/settings" element={settings} />

@@ -1,4 +1,6 @@
 import { Icon } from '../../components/Icon'
+import { PageHeader as CrmPageHeader } from '../../components/crm/CrmUi'
+import './whatsapp.css'
 
 // Shared Tailwind primitives for the WhatsApp Marketing screens. Colours come
 // from the token-backed palette in tailwind.config.js, so every one of these
@@ -14,10 +16,10 @@ export function Panel({ className = '', children }) {
 
 export function PanelHead({ title, subtitle, children }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-[18px] py-[15px]">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-3.5 py-3">
       <div>
-        <h2 className="m-0 text-[15px] font-semibold tracking-[-0.1px]">{title}</h2>
-        {subtitle && <p className="mb-0 mt-[3px] text-[12.5px] text-muted">{subtitle}</p>}
+        <h2 className="m-0 text-[13px] font-medium text-ink">{title}</h2>
+        {subtitle && <p className="mb-0 mt-0.5 text-[12px] text-muted">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -25,17 +27,17 @@ export function PanelHead({ title, subtitle, children }) {
 }
 
 const BADGE_TONES = {
-  neutral: 'bg-line-soft text-muted border-line',
-  success: 'bg-tint-ok text-ok border-tint-ok-line',
-  info: 'bg-brand-soft text-brand-ink border-tint-brand-line dark:text-[#5ba0e0]',
-  warn: 'bg-tint-warn text-[#b8830f] border-tint-warn-line dark:text-accent',
-  danger: 'bg-tint-danger text-danger border-tint-danger-line',
+  neutral: 'bg-line-soft text-muted',
+  success: 'bg-tint-ok text-ok',
+  info: 'bg-brand-soft text-brand-ink',
+  warn: 'bg-tint-warn text-[#8a5a0b] dark:text-accent',
+  danger: 'bg-tint-danger text-danger',
 }
 
 export function Badge({ tone = 'neutral', children }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border
-      px-2.5 py-[3px] text-[11px] font-semibold tracking-[0.2px] ${BADGE_TONES[tone]}`}>
+    <span className={`inline-flex h-5 items-center gap-1.5 whitespace-nowrap rounded-full
+      px-2 text-[11px] font-medium ${BADGE_TONES[tone]}`}>
       {children}
     </span>
   )
@@ -51,8 +53,8 @@ const ALERT_TONES = {
 export function Alert({ tone = 'info', children }) {
   const { cls, icon } = ALERT_TONES[tone]
   return (
-    <div className={`mb-3.5 flex items-start gap-2.5 rounded-[10px] border px-3.5 py-3
-      text-[12.8px] leading-relaxed ${cls}`}>
+    <div className={`mb-3.5 flex items-start gap-2.5 rounded-lg border border-transparent px-3 py-2.5
+      text-[12px] leading-relaxed ${cls}`}>
       <span className="mt-px shrink-0"><Icon name={icon} size={16} /></span>
       <span>{children}</span>
     </div>
@@ -61,8 +63,8 @@ export function Alert({ tone = 'info', children }) {
 
 export function EmptyState({ title, children }) {
   return (
-    <div className="px-5 py-11 text-center text-[13.5px] text-muted">
-      {title && <div className="mb-1.5 text-[15px] font-semibold text-ink">{title}</div>}
+    <div className="px-5 py-10 text-center text-[13px] text-muted">
+      {title && <div className="mb-1 text-[15px] font-medium text-ink">{title}</div>}
       {children}
     </div>
   )
@@ -95,9 +97,9 @@ export function Table({ head, children }) {
 
 export function Th({ tight = false, className = '', children }) {
   return (
-    <th className={`whitespace-nowrap border-b border-line bg-line-soft px-3.5 py-2.5 text-left
-      text-[10.5px] font-extrabold uppercase tracking-[0.8px] text-muted
-      ${tight ? 'w-[1%]' : ''} ${className}`}>
+    <th className={`wa-cell h-9 whitespace-nowrap border-b border-line bg-surface px-3 text-left
+      text-[12px] font-normal normal-case tracking-normal text-muted
+      ${tight ? 'wa-tight' : ''} ${className}`}>
       {children}
     </th>
   )
@@ -105,8 +107,8 @@ export function Th({ tight = false, className = '', children }) {
 
 export function Td({ tight = false, className = '', children, ...rest }) {
   return (
-    <td className={`border-b border-line-soft px-3.5 py-[11px] align-middle [overflow-wrap:break-word]
-      ${tight ? 'w-[1%] whitespace-nowrap' : ''} ${className}`} {...rest}>
+    <td className={`wa-cell border-b border-line-soft px-3 py-2 align-middle [overflow-wrap:break-word]
+      ${tight ? 'wa-tight whitespace-nowrap' : ''} ${className}`} {...rest}>
       {children}
     </td>
   )
@@ -118,27 +120,22 @@ export function Avatar({ name, phone }) {
     : String(phone || '').slice(-2)
   return (
     <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full
-      bg-brand-soft text-[11.5px] font-bold text-brand-ink dark:text-[#5ba0e0]">
+      bg-brand-soft text-[11px] font-medium text-brand-ink">
       {label}
     </span>
   )
 }
 
-export function PageHeader({ kicker = 'WHATSAPP MARKETING', title, subtitle, children }) {
+// The same header as every other page (docs/DESIGN.md): title, one line,
+// actions on the right. No all-capitals label above it.
+export function PageHeader({ title, subtitle, children }) {
   return (
-    <div className="mb-[18px] flex flex-wrap items-end justify-between gap-6">
-      <div>
-        <span className="mb-1.5 block text-[10px] font-extrabold tracking-[0.9px] text-muted">
-          {kicker}
-        </span>
-        <h1 className="m-0 mb-1 text-[27px] leading-tight tracking-[-0.4px]">{title}</h1>
-        {subtitle && <p className="m-0 text-[13px] text-muted">{subtitle}</p>}
-      </div>
-      {children}
+    <div className="mb-4">
+      <CrmPageHeader title={title} subtitle={subtitle}>{children}</CrmPageHeader>
     </div>
   )
 }
 
-export const inputClass = `w-full min-h-[38px] rounded-[9px] border border-line bg-surface px-3 py-2
-  text-[13.5px] text-ink outline-none transition
+export const inputClass = `w-full min-h-[34px] rounded-lg border border-line bg-surface px-2.5 py-1.5
+  text-[13px] text-ink outline-none transition
   focus:border-brand focus:ring-[3px] focus:ring-brand-soft`

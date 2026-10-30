@@ -5,9 +5,8 @@ import { WhatsAppPreview } from './WhatsAppPreview'
 import {
   CONTACT_FIELDS, autoMap, isMissing, templateTokens,
 } from '../../lib/templateVars'
-import {
-  Alert, Avatar, Badge, EmptyState, Panel, PanelHead, Spinner, Table, Td, Th, inputClass,
-} from './ui'
+import { Alert, Avatar, Badge, EmptyState, Panel, PanelHead, Spinner, Table, Td, Th, inputClass } from './ui'
+import { sentenceCase } from './labels'
 
 // Friendly labels for the standard contact fields in the mapping dropdown.
 const FIELD_LABEL = { name: 'Name', company: 'Company', email: 'Email', phone: 'Phone' }
@@ -36,7 +35,7 @@ function Dropzone({ onFile, uploading, compact = false }) {
         bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
         {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
       </div>
-      <div className="mb-1 text-sm font-semibold">
+      <div className="mb-1 text-sm font-medium">
         {uploading ? 'Importing contacts…' : 'Drop an Excel, CSV or JSON file here'}
       </div>
       <div className="text-[12.5px] text-muted">
@@ -107,7 +106,7 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
             <button
               type="button"
               onClick={() => onSelectAll(false)}
-              className="font-semibold text-brand-ink underline dark:text-[#5ba0e0]"
+              className="font-medium text-brand-ink underline dark:text-[#5ba0e0]"
             >
               Clear selection
             </button>
@@ -141,8 +140,8 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
               <tr
                 key={contact.id}
                 onClick={() => onToggle(contact.id)}
-                className={`cursor-pointer transition-colors hover:bg-brand-soft
-                  ${selected.has(contact.id) ? 'bg-brand-soft' : ''}`}
+                className={`cursor-pointer transition-colors
+                  ${selected.has(contact.id) ? 'bg-brand-soft' : 'hover:bg-line-soft'}`}
               >
                 <Td tight onClick={(e) => e.stopPropagation()}>
                   <input
@@ -200,11 +199,11 @@ function TemplateStep({ templates, loading, selectedName, onSelect }) {
                 ? 'border-brand bg-brand-soft'
                 : 'border-line hover:-translate-y-px hover:border-brand'}`}
           >
-            <div className="mb-1.5 break-words text-[13.5px] font-semibold">{template.name}</div>
+            <div className="mb-1.5 break-words text-[13.5px] font-medium">{template.name}</div>
             <div className="mb-2.5 flex flex-wrap gap-1.5">
-              <Badge tone="success">{template.status}</Badge>
+              <Badge tone="success">{sentenceCase(template.status)}</Badge>
               <Badge>{template.language}</Badge>
-              {template.category && <Badge tone="info">{template.category}</Badge>}
+              {template.category && <Badge tone="info">{sentenceCase(template.category)}</Badge>}
               {template.hasVariables && (
                 <Badge tone="warn">
                   {template.variables?.length ?? 0} variable{(template.variables?.length ?? 0) === 1 ? '' : 's'}
@@ -230,7 +229,7 @@ function ReviewList({ rows }) {
         <div key={key} className="flex items-center justify-between gap-4 border-b border-line-soft
           bg-surface px-3.5 py-3 text-[13px] last:border-b-0">
           <span className="text-[12.5px] text-muted">{key}</span>
-          <span className="break-words text-right font-semibold">{value}</span>
+          <span className="break-words text-right font-medium">{value}</span>
         </div>
       ))}
     </div>
@@ -260,8 +259,7 @@ function sourceValue(entry) {
 function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availableFields }) {
   return (
     <div className="mb-4 overflow-hidden rounded-[10px] border border-line">
-      <div className="border-b border-line bg-line-soft px-3.5 py-2 text-[11px] font-bold
-        uppercase tracking-[0.5px] text-muted">
+      <div className="border-b border-line bg-surface px-3 py-2 text-[12px] text-muted">
         Map variables to your columns
       </div>
       {tokens.map((token) => {
@@ -269,7 +267,7 @@ function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availabl
         return (
           <div key={token} className="flex flex-wrap items-center gap-2.5 border-b border-line-soft
             bg-surface px-3.5 py-2.5 last:border-b-0">
-            <code className="rounded bg-brand-soft px-1.5 py-0.5 text-[12.5px] font-semibold
+            <code className="rounded bg-brand-soft px-1.5 py-0.5 text-[12.5px] font-medium
               text-brand-ink dark:text-[#5ba0e0]">{`{{${token}}}`}</code>
             <span className="text-muted" aria-hidden="true">→</span>
             <select
@@ -346,7 +344,7 @@ function PreviewStep({
       <div>
         <div className="mb-4">
           <label htmlFor="wa-campaign-name"
-            className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.5px] text-muted">
+            className="mb-1 block text-[12px] text-muted">
             Campaign name
           </label>
           <input
@@ -403,7 +401,7 @@ function SendStep({
     return (
       <EmptyState>
         <Spinner className="text-brand-ink" />
-        <div className="mb-1.5 mt-3 text-[15px] font-semibold text-ink">
+        <div className="mb-1.5 mt-3 text-[15px] font-medium text-ink">
           {partial ? 'Resuming campaign…' : 'Sending campaign…'}
         </div>
         {sendProgress
@@ -478,13 +476,13 @@ function Stepper({ step }) {
             )}
             <div className="flex shrink-0 items-center gap-2.5">
               <span className={`grid h-[27px] w-[27px] place-items-center rounded-full border
-                text-xs font-bold transition
+                text-xs font-medium transition
                 ${active ? 'border-brand bg-brand text-white ring-4 ring-brand-soft' : ''}
                 ${done ? 'border-tint-ok-line bg-tint-ok text-ok' : ''}
                 ${!active && !done ? 'border-line bg-line-soft text-muted' : ''}`}>
                 {done ? <Icon name="check" size={13} /> : index + 1}
               </span>
-              <span className={`whitespace-nowrap text-[12.5px] font-semibold
+              <span className={`whitespace-nowrap text-[12.5px] font-medium
                 ${active ? 'text-ink' : 'text-muted'}`}>
                 {label}
               </span>
@@ -804,9 +802,9 @@ export function CampaignWizard({ onDone }) {
       <div className="flex flex-wrap items-center justify-between gap-3.5 border-t border-line
         bg-line-soft px-[18px] py-3.5">
         <span className="text-[12.5px] text-muted">
-          <strong className="font-semibold text-ink">{recipientCount}</strong>
+          <strong className="font-medium text-ink">{recipientCount}</strong>
           {' '}recipient{recipientCount === 1 ? '' : 's'}
-          {template && <> · template <strong className="font-semibold text-ink">{template.name}</strong></>}
+          {template && <> · template <strong className="font-medium text-ink">{template.name}</strong></>}
         </span>
 
         <div className="flex items-center gap-2.5">

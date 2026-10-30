@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiGet } from '../../lib/api'
 import { WhatsAppPreview } from './WhatsAppPreview'
 import { Alert, Badge, EmptyState, PageHeader, Panel } from './ui'
+import { sentenceCase } from './labels'
 
 export default function WhatsAppTemplates() {
   const [templates, setTemplates] = useState([])
@@ -22,7 +23,7 @@ export default function WhatsAppTemplates() {
   }, [])
 
   return (
-    <>
+    <div className="wa-page">
       <PageHeader
         title="Templates"
         subtitle="Approved message templates pulled from your WhatsApp Business account."
@@ -52,11 +53,11 @@ export default function WhatsAppTemplates() {
                     ? 'border-brand bg-brand-soft'
                     : 'border-line hover:-translate-y-px hover:border-brand'}`}
               >
-                <div className="mb-1.5 break-words text-[13.5px] font-semibold">{template.name}</div>
+                <div className="mb-1.5 break-words text-[13.5px] font-medium">{template.name}</div>
                 <div className="mb-2.5 flex flex-wrap gap-1.5">
-                  <Badge tone="success">{template.status}</Badge>
+                  <Badge tone="success">{sentenceCase(template.status)}</Badge>
                   <Badge>{template.language}</Badge>
-                  {template.category && <Badge tone="info">{template.category}</Badge>}
+                  {template.category && <Badge tone="info">{sentenceCase(template.category)}</Badge>}
                   <Badge tone={template.hasVariables ? 'warn' : 'neutral'}>
                     {template.hasVariables ? 'Has variables' : 'Static'}
                   </Badge>
@@ -73,6 +74,6 @@ export default function WhatsAppTemplates() {
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }
