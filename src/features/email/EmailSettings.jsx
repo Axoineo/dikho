@@ -106,7 +106,6 @@ export default function EmailSettings() {
     <div className="em-page em-settings">
       <div className="page-header">
         <div>
-          <span className="page-kicker">EMAIL</span>
           <h1>Email settings</h1>
           <p>Connect mailboxes and decide who may read and answer them.</p>
         </div>

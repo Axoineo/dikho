@@ -128,6 +128,9 @@ incident details or unreleased vulnerability exploitation instructions here.
   - Details panels show label-left, value-right rows.
   - The sidebar uses neutral text and a softer highlight.
   - Navigation and section names are in sentence case.
+- Redesign phase F: Email in the same style (no all-capitals labels,
+  two weights, shared button and input sizes, figures as grey tiles).
+  Email is still off unless switched on.
 - Redesign phase E: WhatsApp in the same style. The overview's totals are
   plain figures, tables have sentence-case headers and size to their
   content, statuses read "Approved" or "Completed", buttons match the rest

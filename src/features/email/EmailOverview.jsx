@@ -63,7 +63,6 @@ export default function EmailOverview() {
     <div className="em-page" style={{ paddingBottom: 96 }}>
       <div className="page-header">
         <div>
-          <span className="page-kicker">EMAIL</span>
           <h1>Email</h1>
           <p>Your mailboxes and your team's, beside the clients and vendors they concern.</p>
         </div>
