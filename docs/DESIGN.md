@@ -56,6 +56,13 @@ numbers.
 
 ## Patterns
 
+- **Sidebar:** one flat list, no section labels: Clients, Leads, Sales
+  orders, Vendors, Purchase orders, WhatsApp, Email, Users, Settings. The
+  footer holds Ask for help and the account row (initials on the soft brand
+  tint).
+- **Sign-in:** one plain card centred on the page, nothing beside it.
+- **People:** initials on the soft brand tint, never a bright colour per
+  person (lists, chat headers, panels).
 - **Page header:** title, one-line description, actions on the right.
 - **Toolbar:** search (with icon), filters, then the record count.
 - **Table:** inside a card; 12px muted headers; two-line cells (main line,
@@ -78,6 +85,8 @@ numbers.
 - Labelled inputs carry no example text; hints go below the box.
 - No em dashes in on-screen text.
 - Tailwind's preflight is off, so a `<button>` needs its colour and
-  background set.
+  background set. Tailwind border classes (`border`, `border-b` and the
+  others listed in `src/tailwind.css`) get their style, zero default width
+  and colour from one rule there; a new width class needs adding to it.
 - Declare `-webkit-backdrop-filter` before `backdrop-filter`.
 - The corporate gifting page keeps its own fixed-light design.

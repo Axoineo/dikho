@@ -120,6 +120,23 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Changed
 
+- The screens that still differed from the agreed mockups now match them:
+  - Sign-in is one plain card; the blue welcome half is gone.
+  - Sidebar in the mockup's order (Clients, Leads, Sales orders, Vendors,
+    Purchase orders, WhatsApp, Email, Users, Settings). Settings is a row in
+    the list instead of a gear in the footer; no "Beta" tags; the account
+    initials sit on the soft brand tint.
+  - WhatsApp panels, tables and inbox columns show their hairline borders.
+    Tailwind's border classes never drew a line here because preflight is
+    off; `src/tailwind.css` now gives them a style, width and colour.
+  - WhatsApp overview is titled "WhatsApp", with delivery health as one
+    card of label-left, value-right rows.
+  - WhatsApp contacts: a one-line drop box, then the shared search with the
+    contact count beside it.
+  - WhatsApp inbox: initials on the soft brand tint instead of a bright
+    colour per contact, smaller avatars, an outlined search box and filter,
+    a line between chats, a white list.
+  - User management is called Users, with Add user at the top right.
 - One look across the dashboard, phase A of the redesign
   (`docs/DESIGN.md`, `docs/tasks/2026-10-29-site-redesign.md`):
   - Neutral greys in light and dark, with Dikho blue as the only accent.

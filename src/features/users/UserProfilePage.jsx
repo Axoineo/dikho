@@ -56,7 +56,7 @@ export default function UserProfilePage() {
   if (error && !member) {
     return (
       <div className="crm-page um-page">
-        <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> User management</Link>
+        <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> Users</Link>
         <div className="page-error" role="alert">
           <span className="page-error-icon"><Icon name="alert" size={18} /></span>
           <div><strong>Could not open this user</strong><p>{error}</p></div>
@@ -137,7 +137,7 @@ export default function UserProfilePage() {
   return (
     <div className="crm-page um-page">
       {canViewUsers
-        ? <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> User management</Link>
+        ? <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> Users</Link>
         : <Link to="/settings" className="um-back"><Icon name="chevron" size={15} /> Settings</Link>}
 
       <header className="um-profile-head">

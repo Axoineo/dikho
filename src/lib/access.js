@@ -122,7 +122,7 @@ export const SECTION_LABELS = {
   clients: 'Clients', leads: 'Leads', vendors: 'Vendors', 'sales-orders': 'Sales orders',
   'purchase-orders': 'Purchase orders', invoices: 'Invoices', payments: 'Payments', courier: 'Document courier',
   whatsapp: 'WhatsApp overview', 'whatsapp-inbox': 'WhatsApp inbox', 'whatsapp-contacts': 'WhatsApp contacts',
-  'whatsapp-campaigns': 'WhatsApp campaigns', 'whatsapp-templates': 'WhatsApp templates', users: 'User management',
+  'whatsapp-campaigns': 'WhatsApp campaigns', 'whatsapp-templates': 'WhatsApp templates', users: 'Users',
   email: 'Email overview', 'email-inbox': 'Email inbox', 'email-settings': 'Email settings',
   'email-campaigns': 'Email campaigns', 'email-templates': 'Email templates', 'email-consent': 'Email consent',
   'email-analytics': 'Email analytics',

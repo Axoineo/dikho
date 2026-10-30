@@ -189,17 +189,6 @@ export default function Login({ onLogin }) {
     }
   }
 
-  const rightPanel = (
-    <div className="login-right">
-      <div className="background-logo">dikho</div>
-      <div className="welcome-content">
-        <div className="orange-mark" />
-        <h2>Welcome to<br />Dikho</h2>
-        <p>Manage your clients, vendors and business operations in one place.</p>
-      </div>
-    </div>
-  )
-
   if (step === 'otp') {
     const sentTo = method === 'whatsapp' ? sentPhone : email
     return (
@@ -271,7 +260,6 @@ export default function Login({ onLogin }) {
             </div>
           </div>
         </div>
-        {rightPanel}
       </div>
     )
   }
@@ -283,7 +271,7 @@ export default function Login({ onLogin }) {
           <img src="/dikho-logo.svg" alt="Dikho" className="login-logo" />
 
           <h1>Sign in to your account</h1>
-          <p className="login-subtitle">Access your Dikho Dashboard</p>
+          <p className="login-subtitle">We'll send a 6-digit code.</p>
 
           {notice && <p className="login-notice" role="status">{notice}</p>}
 
@@ -351,7 +339,6 @@ export default function Login({ onLogin }) {
           </form>
         </div>
       </div>
-      {rightPanel}
     </div>
   )
 }

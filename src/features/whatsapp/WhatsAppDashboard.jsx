@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { apiGet } from '../../lib/api'
-import { Alert, EmptyState, PageHeader, Panel, PanelHead } from './ui'
+import { Alert, EmptyState, PageHeader, Panel } from './ui'
 import { Metrics, MetricTile } from '../../components/crm/CrmUi'
 import { useAccess } from '../../lib/access'
 import { formatCount } from '../../lib/format'
@@ -38,7 +38,7 @@ export default function WhatsAppDashboard() {
 
   return (
     <div className="wa-page">
-      <PageHeader title="Overview" subtitle="Delivery performance across every campaign you have sent.">
+      <PageHeader title="WhatsApp" subtitle="Delivery performance across every campaign you have sent.">
         {can('campaigns.send') && (
           <Link to="/whatsapp/campaigns" className="primary-button no-underline">
             <Icon name="plus" size={16} /> New campaign
@@ -63,31 +63,30 @@ export default function WhatsAppDashboard() {
       </div>
 
       <Panel>
-        <PanelHead title="Delivery health" subtitle="Updated live from Meta delivery receipts." />
-        <div className="p-3.5">
-          {deliveryRate === null ? (
-            <EmptyState title="No messages sent yet">
-              Delivery and read rates appear here once your first campaign goes out.
-            </EmptyState>
-          ) : (
-            // Capped width: full-bleed, each label sat ~1,300px from its value
-            // on a desktop screen, too far for the eye to pair them.
-            <div className="max-w-[560px] overflow-hidden rounded-xl border border-line">
-              {[
-                ['Delivery rate', `${deliveryRate}% of accepted`],
-                ['Read rate', `${pct(stats.read, stats.delivered)}% of delivered`],
-                ['Awaiting a receipt', count(stats.awaiting)],
-                ['Failures', count(stats.failed)],
-              ].map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between gap-4 border-b
-                  border-line-soft bg-surface px-3 py-2 text-[13px] last:border-b-0">
-                  <span className="text-muted">{key}</span>
-                  <span>{value}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-3.5 py-2.5">
+          <h2 className="m-0 text-[13px] font-medium text-ink">Delivery health</h2>
+          <span className="text-[12px] text-muted">Updated live from Meta receipts</span>
         </div>
+        {deliveryRate === null ? (
+          <EmptyState title="No messages sent yet">
+            Delivery and read rates appear here once your first campaign goes out.
+          </EmptyState>
+        ) : (
+          // Label left, value right, a hairline between rows so the eye can
+          // follow each pair across a wide screen.
+          [
+            ['Delivery rate', `${deliveryRate}% of accepted`],
+            ['Read rate', `${pct(stats.read, stats.delivered)}% of delivered`],
+            ['Awaiting a receipt', count(stats.awaiting)],
+            ['Failures', count(stats.failed)],
+          ].map(([key, value]) => (
+            <div key={key} className="flex items-center justify-between gap-4 border-b
+              border-line-soft px-3.5 py-2.5 text-[13px] last:border-b-0">
+              <span className="text-muted">{key}</span>
+              <span>{value}</span>
+            </div>
+          ))
+        )}
       </Panel>
     </div>
   )

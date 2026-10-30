@@ -184,7 +184,6 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
 /* ── Toolbar ──────────────────────────────────────────────────────────── */
 .um-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .um-toolbar .search-box { flex: 1 1 260px; min-width: 200px; max-width: 420px; }
-.um-toolbar .add-button { margin-left: auto; }
 .um-filter {
   height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--crm-border-strong); border-radius: var(--crm-radius-sm);
   background: var(--crm-input-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b95a5' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;
@@ -457,7 +456,6 @@ button.um-stat:focus-visible { outline: 2px solid var(--focus-ring); outline-off
   .um-field dd { text-align: left; }
   .um-toolbar .um-filter { flex: 1 1 calc(50% - 4px); }
   .um-toolbar .search-box { max-width: none; }
-  .um-toolbar .add-button { margin-left: 0; width: 100%; justify-content: center; }
   .um-profile-actions { width: 100%; }
   .um-session-list li { flex-wrap: wrap; }
   .um-presets { opacity: 1; }

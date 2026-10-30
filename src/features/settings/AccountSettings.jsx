@@ -21,7 +21,7 @@ const START_PAGES = [
   ['/whatsapp/inbox', 'WhatsApp inbox'],
   ['/whatsapp', 'WhatsApp overview'],
   ...(EMAIL_HUB_BUILD ? [['/email/inbox', 'Email inbox']] : []),
-  ['/users', 'User management'],
+  ['/users', 'Users'],
   ['/settings', 'Settings'],
 ]
 

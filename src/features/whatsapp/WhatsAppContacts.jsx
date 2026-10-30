@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { apiDelete, apiGet, apiUpload } from '../../lib/api'
 import { useAccess } from '../../lib/access'
+import { ResultCount, SearchField } from '../../components/crm/CrmUi'
 import {
-  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, PanelHead, Spinner, Table, Td, Th, inputClass,
+  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Spinner, Table, Td, Th,
 } from './ui'
 
 export default function WhatsAppContacts() {
@@ -99,22 +100,21 @@ export default function WhatsAppContacts() {
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files?.[0]) }}
-        className={`cursor-pointer rounded-xl border-[1.5px] border-dashed px-6 py-[30px] text-center transition
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click() } }}
+        className={`flex cursor-pointer flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-xl border
+          border-dashed px-4 py-3 text-center text-[13px] transition
           ${dragging
-            ? 'scale-[1.008] border-brand bg-brand-soft'
-            : 'border-line bg-line-soft hover:border-brand hover:bg-brand-soft'}`}
+            ? 'border-brand bg-brand-soft text-ink'
+            : 'border-line text-muted hover:border-brand hover:bg-brand-soft hover:text-ink'}`}
       >
-        <div className="mx-auto mb-3 grid h-[46px] w-[46px] place-items-center rounded-xl
-          bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
-          {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
-        </div>
-        <div className="mb-1 text-sm font-medium">
-          {uploading ? 'Importing…' : 'Drop an Excel, CSV or JSON file here'}
-        </div>
-        <div className="text-[12.5px] text-muted">
-          We auto-detect the phone column (any name works) and add <strong>+91</strong> when the
-          country code is missing. Every other column is saved for use as a variable.
-        </div>
+        {uploading ? <Spinner /> : <Icon name="upload" size={16} />}
+        <span>
+          {uploading
+            ? 'Importing…'
+            : 'Drop an Excel, CSV or JSON file, or click to choose. The phone column is found for you, and +91 is added when missing.'}
+        </span>
         <input
           ref={inputRef}
           type="file"
@@ -124,18 +124,17 @@ export default function WhatsAppContacts() {
         />
       </div>}
 
-      <Panel className="mt-[18px]">
-        <PanelHead
-          title="All contacts"
-          subtitle={`${contacts.length} record${contacts.length === 1 ? '' : 's'}`}
-        >
-          <input
-            className={`${inputClass} max-w-[260px]`}
-            placeholder="Search name, phone or company"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </PanelHead>
+      <div className="crm-toolbar mb-2.5 mt-3.5">
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder="Search name, phone or company"
+          label="Search contacts"
+        />
+        <ResultCount total={contacts.length} shown={contacts.length} noun="contact" filtered={!!search.trim()} />
+      </div>
+
+      <Panel>
 
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3.5 border-b border-line
