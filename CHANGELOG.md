@@ -128,6 +128,10 @@ incident details or unreleased vulnerability exploitation instructions here.
   - Details panels show label-left, value-right rows.
   - The sidebar uses neutral text and a softer highlight.
   - Navigation and section names are in sentence case.
+- Redesign phase D: User management and Live Assist in the same style:
+  quieter tabs and tiles, round pills, label-left profile rows, a lighter
+  permission grid, and matching dialogs and buttons. The people list fits a
+  phone without sideways scrolling.
 - Redesign phase C: Settings in the mockup's row style. Company and bank
   details are rows with the input on the right; Regional is two rows of
   small choices written as they will look; lists, navigation and sessions

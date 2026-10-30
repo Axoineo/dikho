@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import { PageHeader } from '../../components/crm/CrmUi'
 import { useAccess } from '../../lib/access'
 import { usersApi } from './usersApi'
 import AddUserModal from './AddUserModal'
@@ -31,21 +32,15 @@ export default function UsersPage() {
   const tabs = [
     ['people', 'People'],
     ['templates', 'Permission templates'],
-    ['departments', 'Departments & teams'],
+    ['departments', 'Departments and teams'],
     ...(can('audit_logs.view') ? [['audit', 'Audit log']] : []),
   ]
 
   return (
-    <div className="um-page">
-      <div className="page-header">
-        <div>
-          <span className="page-kicker">ADMINISTRATION</span>
-          <h1>User Management</h1>
-          <p>Who can use Dikho, and what each person can see and change.</p>
-        </div>
-      </div>
+    <div className="crm-page um-page">
+      <PageHeader title="User management" subtitle="Who can use Dikho, and what each person can see and change." />
 
-      <div className="um-tabs" role="tablist" aria-label="User Management sections">
+      <div className="um-tabs" role="tablist" aria-label="User management sections">
         {tabs.map(([key, label]) => (
           <button
             key={key}
@@ -132,7 +127,7 @@ function PeopleTab({ catalog }) {
     ['Online now', counts.online, null],
     ['Invited', counts.invited, () => setStatus('invited')],
     ['Suspended', counts.suspended, () => setStatus('suspended')],
-    ['Admins & Owners', counts.admins, () => { setStatus('current'); setRole('admin') }],
+    ['Admins and owners', counts.admins, () => { setStatus('current'); setRole('admin') }],
     ['Developers', counts.developers, () => { setStatus('current'); setRole('developer') }],
   ]
 
