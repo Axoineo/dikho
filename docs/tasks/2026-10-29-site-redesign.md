@@ -136,9 +136,20 @@ One PR per phase, verified locally before pushing; the owner merges.
   - Preview harness: WhatsApp overview, contacts, campaigns and templates
     with sample data.
 
+- Phase F (branch `ux/redesign-email`):
+  - No "EMAIL" label above page titles; titles and lines match the other
+    pages.
+  - `email.css`: weights 400 and 500 only, no all-capitals labels, 32px
+    buttons and 34px inputs, figures as grey tiles, round toast, status
+    pills without the inner dot, the folder rail and steps on the brand
+    tint, sentence-case table and list headers, link buttons without an
+    underline.
+  - Preview harness (`email-hub.html`): Overview, Templates, Consent and
+    Analytics with sample data.
+
 ## Remaining work
 
-- Phases F and G.
+- Phase G.
 
 ## Verification
 
@@ -158,3 +169,5 @@ One PR per phase, verified locally before pushing; the owner merges.
 | Screenshots (phase D) | pass | People (light, dark, phone), templates, departments, audit log, profile overview, access grid (light and dark), sessions, Add user and Suspend dialogs, profile on a phone (dark); Live Assist ask dialog (light and dark), pill, helper toast, consent dialog. Phone people table measured: no overflow |
 | `npm run check` (phase E) | pass | lint 0 errors (no new warnings), 228/228 tests, build, secret scan |
 | Screenshots (phase E) | pass | overview (light, dark, phone), contacts with a selection, campaigns with the not-delivered panel open, new campaign step 1, templates (light and dark), inbox list and an open chat with contact info (light and dark), inbox on a phone |
+| `npm run check` (phase F) | pass | lint 0 errors (no new warnings), 228/228 tests, build, secret scan |
+| Screenshots (phase F) | pass | Email overview (light and dark), settings (desktop and phone), campaigns, campaign editor, templates, consent with a looked-up address, analytics (light and dark), inbox with an open conversation (light and dark) |

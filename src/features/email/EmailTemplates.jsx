@@ -53,7 +53,6 @@ export default function EmailTemplates() {
     <div className="em-page" style={{ paddingBottom: 96 }}>
       <div className="page-header">
         <div>
-          <span className="page-kicker">EMAIL</span>
           <h1>Templates</h1>
           <p>Approved wording and layouts your team starts from, with every earlier version kept.</p>
         </div>

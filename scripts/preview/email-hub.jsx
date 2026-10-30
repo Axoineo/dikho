@@ -5,6 +5,7 @@
 //   ?route=/email/settings                 (default) connected mailboxes
 //   ?route=/email/inbox/<thread id>        a Hostinger conversation
 //   ?route=/email/campaigns/new            the campaign editor's sender picker
+//   ?route=/email | /email/templates | /email/consent | /email/analytics
 //   ?theme=dark                            dark mode
 //   ?google=0 / ?hostinger=0               that provider not set up on the server
 import { StrictMode } from 'react'
@@ -52,7 +53,7 @@ const conversation = {
 
 const access = {
   status: 'active', user_id: ME, email: 'sam@dikho.example', full_name: 'Sam Sales', system_role: 'staff',
-  permissions: Object.fromEntries(['email_inbox.view', 'email_mailboxes.manage', 'email_campaigns.create', 'email_campaigns.view', 'clients.view'].map((k) => [k, 'all'])),
+  permissions: Object.fromEntries(['email_inbox.view', 'email_mailboxes.manage', 'email_campaigns.create', 'email_campaigns.view', 'email_templates.manage', 'email_consent.manage', 'clients.view'].map((k) => [k, 'all'])),
 }
 
 const json = (data, status = 200) => new Response(
@@ -108,7 +109,20 @@ window.fetch = async (request, init = {}) => {
       ],
     })
   }
-  if (path === '/email/templates') return json({ templates: [], variables: { marketing: {}, transactional: {} } })
+  if (path === '/email/templates') {
+    return json({ templates: [
+      { id: 't1', kind: 'marketing', name: 'Monthly offer', subject: 'Rates for {{month}}', version: 4, updated_at: '2026-10-21T09:00:00Z', updated_by_name: 'Priya Sharma' },
+      { id: 't2', kind: 'transactional', name: 'Payment reminder', subject: 'Invoice {{invoice}} is due', version: 2, updated_at: '2026-10-02T09:00:00Z', updated_by_name: 'Meera Iyer' },
+    ], variables: { marketing: {}, transactional: {} } })
+  }
+  if (path === '/email/preferences') {
+    return json({ email: url.searchParams.get('email') || 'riya@client.example', marketing: 'subscribed', marketing_source: 'form', marketing_note: 'Expo stall form, 12 Oct',
+      marketing_changed_at: '2026-10-12T09:00:00Z', marketing_changed_by_name: 'Priya Sharma', suppressed: false })
+  }
+  if (path === '/email/analytics') {
+    return json({ campaign_recipients: { delivered: 1524, sent: 86, bounced: 6, complained: 0, failed: 2, uncertain: 1, skipped: 3, pending: 0, unsubscribed: 9 },
+      events: {}, unsubscribes: 9, subscribed: 1240, suppressed: 14, campaigns: { sent: 3, draft: 1, pending_approval: 1 } })
+  }
   if (path === '/email/audience/options') return json({ countries: [], states: [], cities: [], media: [], sub_media: [] })
   if (path === '/email/audience/preview') return json({ eligible: 0, total: 0, sample: [] })
   if (path === '/email/directory') return json([])
@@ -119,6 +133,10 @@ const { AccessContext } = await import('../../src/lib/access.js')
 const { default: EmailSettings } = await import('../../src/features/email/EmailSettings.jsx')
 const { default: EmailInbox } = await import('../../src/features/email/EmailInbox.jsx')
 const { default: EmailCampaigns } = await import('../../src/features/email/EmailCampaigns.jsx')
+const { default: EmailOverview } = await import('../../src/features/email/EmailOverview.jsx')
+const { default: EmailTemplates } = await import('../../src/features/email/EmailTemplates.jsx')
+const { default: EmailConsent } = await import('../../src/features/email/EmailConsent.jsx')
+const { default: EmailAnalytics } = await import('../../src/features/email/EmailAnalytics.jsx')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -126,6 +144,10 @@ createRoot(document.getElementById('root')).render(
       <AccessContext.Provider value={access}>
         <Workspace>
           <Routes>
+            <Route path="/email" element={<EmailOverview />} />
+            <Route path="/email/templates" element={<EmailTemplates />} />
+            <Route path="/email/consent" element={<EmailConsent />} />
+            <Route path="/email/analytics" element={<EmailAnalytics />} />
             <Route path="/email/settings" element={<EmailSettings />} />
             <Route path="/email/inbox" element={<EmailInbox />} />
             <Route path="/email/inbox/:threadId" element={<EmailInbox />} />

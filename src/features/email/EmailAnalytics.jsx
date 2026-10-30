@@ -59,7 +59,6 @@ export default function EmailAnalytics() {
     <div className="em-page" style={{ paddingBottom: 96 }}>
       <div className="page-header">
         <div>
-          <span className="page-kicker">EMAIL</span>
           <h1>Email analytics</h1>
           <p>Sending and consent from Dikho's own records. Delivery events exist only for mail sent through Amazon SES.</p>
         </div>

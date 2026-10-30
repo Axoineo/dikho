@@ -61,7 +61,6 @@ export default function EmailCampaigns() {
     <div className="em-page" style={{ paddingBottom: 96 }}>
       <div className="page-header">
         <div>
-          <span className="page-kicker">EMAIL</span>
           <h1>Campaigns</h1>
           <p>Marketing email to clients, vendors and leads who agreed to receive it, approved by a second person before it goes out.</p>
         </div>

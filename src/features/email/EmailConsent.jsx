@@ -59,7 +59,6 @@ export default function EmailConsent() {
     <div className="em-page" style={{ paddingBottom: 96 }}>
       <div className="page-header">
         <div>
-          <span className="page-kicker">EMAIL</span>
           <h1>Consent</h1>
           <p>Who has agreed to marketing email, who asked to stop, and which addresses must not be emailed.</p>
         </div>
