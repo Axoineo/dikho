@@ -39,7 +39,6 @@ export default function EditProfileModal({ member, catalog, onClose, onSaved }) 
       <div className="modal-card um-modal" role="dialog" aria-modal="true" aria-labelledby="um-edit-title" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <span className="drawer-kicker">USER MANAGEMENT</span>
             <h2 id="um-edit-title">Edit {member.full_name}</h2>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close" disabled={saving}><Icon name="close" size={19} /></button>

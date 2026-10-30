@@ -382,6 +382,82 @@ function settingsRpc(name, args) {
   }
 }
 
+/* ── User management stand-in (/api/users and its catalog) ─────────────── */
+
+const UM_ACTIONS = ['view', 'create', 'edit', 'delete']
+const UM_PERMISSIONS = [
+  ...[['Clients', 'clients'], ['Leads', 'leads'], ['Vendors', 'vendors'], ['Sales Orders', 'sales_orders'], ['Purchase Orders', 'purchase_orders']]
+    .flatMap(([module, key], m) => UM_ACTIONS.map((action, a) => ({
+      key: `${key}.${action}`, module, action, label: `${action} ${module}`, description: null,
+      allowed_scopes: key === 'sales_orders' && action !== 'create' ? ['own', 'all'] : ['all'], developer_only: false, sort_order: m * 10 + a,
+    }))),
+  ...[['users.view', 'View users'], ['users.create', 'Add users'], ['users.edit', 'Edit user profiles'], ['users.roles', 'Change system roles'],
+    ['users.sessions', 'See sessions and force sign-out'], ['audit_logs.view', 'View the audit log'], ['live_assist.use', 'Use Live Assist']]
+    .map(([key, label], i) => ({ key, module: 'User Management', action: key.split('.')[1], label, description: null, allowed_scopes: ['all'], developer_only: false, sort_order: 100 + i })),
+  { key: 'settings.manage', module: 'Settings', action: 'manage', label: 'Manage organization settings', description: null, allowed_scopes: ['all'], developer_only: false, sort_order: 800 },
+]
+const UM_ALL = Object.fromEntries(UM_PERMISSIONS.map((p) => [p.key, 'all']))
+const UM_TEMPLATES = [
+  { id: 't-sales', name: 'Sales Executive', description: 'Clients, leads and their own sales orders.', built_in: true, members: 2,
+    permissions: { 'clients.view': 'all', 'clients.create': 'all', 'clients.edit': 'all', 'leads.view': 'all', 'sales_orders.view': 'own', 'sales_orders.create': 'all', 'sales_orders.edit': 'own', 'vendors.view': 'all' } },
+  { id: 't-ops', name: 'Operations', description: 'Vendors and purchase orders.', built_in: true, members: 1,
+    permissions: { 'vendors.view': 'all', 'vendors.create': 'all', 'vendors.edit': 'all', 'purchase_orders.view': 'all', 'purchase_orders.create': 'all', 'purchase_orders.edit': 'all', 'sales_orders.view': 'all' } },
+  { id: 't-admin', name: 'Administrator', description: 'Every business permission.', built_in: true, members: 1, permissions: UM_ALL },
+]
+const UM_DEPARTMENTS = [
+  { id: 'd-sales', name: 'Sales', archived: false, members: 3, teams: [{ id: 'tm-corp', name: 'Corporate accounts', archived: false, members: 2 }, { id: 'tm-retail', name: 'Retail brands', archived: false, members: 1 }] },
+  { id: 'd-ops', name: 'Operations', archived: false, members: 2, teams: [{ id: 'tm-media', name: 'Media buying', archived: false, members: 2 }] },
+]
+const UM_PEOPLE = [
+  ['preview-user', 'Priya Sharma', 'admin', null, 'active', 'd-ops', 'tm-media', 't-admin', 'Operations manager', true],
+  ['u-vikram', 'Vikram Chandra', 'staff', null, 'active', 'd-sales', 'tm-corp', 't-sales', 'Account manager', true],
+  ['u-aarav', 'Aarav Mehta', 'owner', 'developer', 'active', null, null, null, 'Director', false],
+  ['u-meera', 'Meera Iyer', 'manager', null, 'active', 'd-sales', 'tm-retail', 't-sales', 'Sales lead', false],
+  ['u-kabir', 'Kabir Shah', 'staff', null, 'invited', 'd-ops', 'tm-media', 't-ops', 'Media planner', false],
+  ['u-rohit', 'Rohit Sharma', 'staff', null, 'suspended', null, null, null, null, false],
+].map(([id, name, role, dev, status, dept, team, template, designation, online], i) => ({
+  user_id: id, full_name: name, email: `${name.split(' ')[0].toLowerCase()}@dikho.example.com`, phone: `9198765000${10 + i}`,
+  system_role: role, developer_level: dev, status, department_id: dept, department: UM_DEPARTMENTS.find((d) => d.id === dept)?.name ?? null,
+  team_id: team, team: UM_DEPARTMENTS.flatMap((d) => d.teams).find((t) => t.id === team)?.name ?? null,
+  template_id: template, template: UM_TEMPLATES.find((t) => t.id === template)?.name ?? null, designation,
+  employee_id: `EMP-0${14 + i}`, joining_date: '2024-04-01', online, last_seen_at: online ? new Date().toISOString() : '2026-10-27T10:00:00Z',
+  last_seen_section: online ? (i === 0 ? 'settings' : 'clients') : null, last_sign_in_at: '2026-10-29T04:10:00Z',
+  status_reason: status === 'suspended' ? 'Left the team' : null, status_changed_at: status === 'suspended' ? '2026-10-20T09:00:00Z' : null,
+  welcome_sent_at: '2026-10-01T09:00:00Z', welcome_channel: 'email', created_at: '2026-09-01T09:00:00Z', active_sessions: online ? 1 : 0,
+  reporting_manager_id: i === 1 ? 'u-meera' : null, reporting_manager: i === 1 ? 'Meera Iyer' : null,
+}))
+const UM_AUDIT = [
+  { id: 'a1', occurred_at: '2026-10-29T11:02:00Z', event_type: 'user.template_changed', actor_id: 'preview-user', actor: 'Priya Sharma', target_user_id: 'u-vikram', target: 'Vikram Chandra', old_value: { template: 'Custom' }, new_value: { template: 'Sales Executive' }, ip: '203.0.113.10' },
+  { id: 'a2', occurred_at: '2026-10-29T10:15:00Z', event_type: 'user.created', actor_id: 'u-aarav', actor: 'Aarav Mehta', target_user_id: 'u-kabir', target: 'Kabir Shah', ip: '198.51.100.7' },
+  { id: 'a3', occurred_at: '2026-10-28T16:40:00Z', event_type: 'user.suspended', actor_id: 'preview-user', actor: 'Priya Sharma', target_user_id: 'u-rohit', target: 'Rohit Sharma', ip: '203.0.113.10' },
+]
+function umMember(id) {
+  const base = UM_PEOPLE.find((m) => m.user_id === id) || UM_PEOPLE[0]
+  const template = UM_TEMPLATES.find((t) => t.id === base.template_id)
+  return {
+    ...base,
+    permissions: Object.fromEntries(Object.entries(template?.permissions ?? (base.system_role === 'owner' ? UM_ALL : {})).map(([k, s]) => [k, { scope: s }])),
+    overrides: id === 'u-vikram' ? { 'vendors.create': { effect: 'grant', scope: 'all' }, 'sales_orders.edit': { effect: 'revoke', scope: null } } : {},
+    can_manage: base.system_role !== 'owner',
+    sessions: id === 'preview-user' ? MEMBER.sessions : [], recent_sign_ins: [],
+  }
+}
+function usersApiReply(path, method) {
+  const ok = (data) => reply({ success: true, data })
+  if (method !== 'GET') return ok({})
+  if (path.endsWith('/api/users')) return ok(UM_PEOPLE)
+  if (path.endsWith('/api/users/catalog')) {
+    return ok({
+      actor: { user_id: 'preview-user', system_role: 'admin', rank: 20, permissions: UM_ALL },
+      permissions: UM_PERMISSIONS, templates: UM_TEMPLATES, departments: UM_DEPARTMENTS,
+      role_permissions: { admin: { 'users.view': 'all', 'users.create': 'all', 'users.edit': 'all', 'settings.manage': 'all' } },
+    })
+  }
+  if (path.endsWith('/api/users/audit')) return ok(UM_AUDIT)
+  const id = path.split('/api/users/')[1]?.split('/')[0]
+  return id ? ok(umMember(id)) : null
+}
+
 // Read-only handles for automated checks of what a save actually wrote.
 window.__crmDb = TABLES
 window.__settingsDb = { OPTION_LISTS, ORGANIZATION, PROFILE, MEMBER, preferences: () => PREFERENCES }
@@ -502,8 +578,18 @@ window.fetch = async (input, init = {}) => {
   if (url.pathname.endsWith('/api/cg-leads/whatsapp-status')) {
     return reply({ success: true, data: { statuses: LEAD_WA } })
   }
+  if (url.pathname.endsWith('/api/assist/helpers')) {
+    return reply({ success: true, data: [
+      { user_id: 'u-meera', full_name: 'Meera Iyer', online: true, in_session: false },
+      { user_id: 'u-aarav', full_name: 'Aarav Mehta', online: false, in_session: false },
+    ] })
+  }
   if (url.pathname.endsWith('/api/users/me')) {
     return reply({ success: true, data: MEMBER })
+  }
+  if (url.pathname.includes('/api/users') && !/\/sign-out$/.test(url.pathname)) {
+    const answer = usersApiReply(url.pathname, method)
+    if (answer) return answer
   }
   if (/\/api\/users\/[^/]+\/sign-out$/.test(url.pathname) && method === 'POST') {
     MEMBER.sessions = MEMBER.sessions.filter((session) => session.session_id !== body?.session_id)
@@ -559,6 +645,27 @@ const { default: VendorsPage } = await import('../../src/features/vendors/Vendor
 const { default: SalesOrdersPage } = await import('../../src/features/sales-orders/SalesOrdersPage.jsx')
 const { default: PurchaseOrdersPage } = await import('../../src/features/purchase-orders/PurchaseOrdersPage.jsx')
 const { default: LeadsPage } = await import('../../src/features/leads/LeadsPage.jsx')
+const { default: UsersPage } = await import('../../src/features/users/UsersPage.jsx')
+const { default: UserProfilePage } = await import('../../src/features/users/UserProfilePage.jsx')
+const { AskHelpDialog, MyHelpPill, HelpToasts } = await import('../../src/features/live-assist/HelpWidgets.jsx')
+const { IncomingDialog } = await import('../../src/features/live-assist/EmployeeAssist.jsx')
+await import('../../src/features/live-assist/liveAssist.css')
+
+// Live Assist's pieces on their own, to look at: ?page=/assist (ask dialog,
+// pending pill, helper toasts) or ?page=/assist/incoming (the consent dialog).
+function AssistPreview({ incoming }) {
+  const noop = () => {}
+  if (incoming) {
+    return <IncomingDialog session={{ helper_name: 'Meera Iyer', expires_at: new Date(Date.now() + 45000).toISOString() }} onAccept={noop} onDecline={noop} />
+  }
+  return (
+    <>
+      <AskHelpDialog onClose={noop} onSend={noop} already={false} />
+      <MyHelpPill helperName="Meera" onCancel={noop} />
+      <HelpToasts requests={[{ id: 'r1', requester_name: 'Vikram Chandra', for_you: true, section: 'sales-orders', message: 'Where do I add the invoice number?' }]} onHelp={noop} onDismiss={noop} />
+    </>
+  )
+}
 const { default: SettingsPage } = await import('../../src/features/settings/SettingsPage.jsx')
 const { loadSettings } = await import('../../src/lib/settings.js')
 // AuthenticatedLayout does this once access is granted.
@@ -574,6 +681,7 @@ for (const module of MODULES) {
 }
 for (const key of ['leads.view', 'users.view', 'inbox.view', 'campaigns.view', 'wa_contacts.view', 'wa_templates.view']) permissions[key] = 'all'
 permissions['settings.manage'] = VIEW_ONLY ? 'none' : 'all'
+for (const key of ['users.create', 'users.edit', 'users.roles', 'users.permissions', 'users.suspend', 'users.sessions', 'audit_logs.view', 'templates.manage', 'departments.manage', 'live_assist.use']) permissions[key] = VIEW_ONLY ? 'none' : 'all'
 
 const ACCESS = {
   status: 'active', user_id: 'preview-user', full_name: 'Priya Sharma',
@@ -602,6 +710,10 @@ function Shell() {
             <Route path="/sales-orders" element={<SalesOrdersPage session={SESSION} />} />
             <Route path="/purchase-orders" element={<PurchaseOrdersPage session={SESSION} />} />
             <Route path="/leads" element={<LeadsPage />} />
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/users/:userId" element={<UserProfilePage />} />
+            <Route path="/assist" element={<AssistPreview />} />
+            <Route path="/assist/incoming" element={<AssistPreview incoming />} />
             <Route path="/settings" element={settings} />
             <Route path="/settings/:section" element={settings} />
             <Route path="*" element={<Navigate to="/clients" replace />} />

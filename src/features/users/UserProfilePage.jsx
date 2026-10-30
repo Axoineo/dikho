@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
+import '../../components/crm/crm.css'
 import { DEVELOPER_LABELS, ROLE_LABELS, canAssist, useAccess } from '../../lib/access'
 import { usersApi } from './usersApi'
 import PermissionMatrix from './PermissionMatrix'
@@ -54,8 +55,8 @@ export default function UserProfilePage() {
 
   if (error && !member) {
     return (
-      <div className="um-page">
-        <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> User Management</Link>
+      <div className="crm-page um-page">
+        <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> User management</Link>
         <div className="page-error" role="alert">
           <span className="page-error-icon"><Icon name="alert" size={18} /></span>
           <div><strong>Could not open this user</strong><p>{error}</p></div>
@@ -63,14 +64,14 @@ export default function UserProfilePage() {
       </div>
     )
   }
-  if (!member) return <div className="um-page"><div className="um-loading">Loading…</div></div>
+  if (!member) return <div className="crm-page um-page"><div className="um-loading">Loading…</div></div>
 
   const manage = member.can_manage
   // Live Assist reaches colleagues at your own level too, not only those you manage.
   const assistable = Boolean(liveAssist?.canHelp) && member.status === 'active' && canAssist(access, member)
   const tabs = [
     ['overview', 'Overview'],
-    ['access', 'Access & permissions'],
+    ['access', 'Access and permissions'],
     ...(member.sessions ? [['sessions', 'Sessions']] : []),
     ...(can('audit_logs.view') ? [['activity', 'Activity']] : []),
   ]
@@ -134,9 +135,9 @@ export default function UserProfilePage() {
   }
 
   return (
-    <div className="um-page">
+    <div className="crm-page um-page">
       {canViewUsers
-        ? <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> User Management</Link>
+        ? <Link to="/users" className="um-back"><Icon name="chevron" size={15} /> User management</Link>
         : <Link to="/settings" className="um-back"><Icon name="chevron" size={15} /> Settings</Link>}
 
       <header className="um-profile-head">

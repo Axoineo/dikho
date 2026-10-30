@@ -98,9 +98,27 @@ One PR per phase, verified locally before pushing; the owner merges.
   - Lists and media, the Settings navigation and the sessions cards use
     smaller rows and controls.
 
+- Phase D (branch `ux/redesign-users`):
+  - User management uses the shared page header (no all-capitals label)
+    and sentence-case names ("User management", "Departments and teams",
+    "Access and permissions").
+  - `users.css` rewritten on the design tokens: quieter tabs, metric-style
+    tiles, 32px controls, round status and role pills, label-left rows on
+    the profile cards, a lighter permission grid, tighter templates,
+    departments and audit log. The older shared pieces it uses (search
+    box, buttons, form fields, table card, error note, dialogs) are
+    restyled inside `.um-page` only.
+  - Phones: the people list shortens long addresses and hides the row
+    arrow, so it fits without sideways scrolling.
+  - Live Assist dialogs, toasts and pill on the same type and buttons,
+    using only app-wide tokens (they appear over any page).
+  - Preview harness: `/users`, `/users/:id` with sample people, templates,
+    departments and audit entries; `/assist` and `/assist/incoming` show
+    the Live Assist pieces.
+
 ## Remaining work
 
-- Phases D to G.
+- Phases E to G.
 
 ## Verification
 
@@ -116,3 +134,5 @@ One PR per phase, verified locally before pushing; the owner merges.
 | `npm run check` (phase C) | pass | lint 0 errors, 228/228 tests, build, secret scan |
 | Phase C flows | pass | Company: bad GSTIN blocked with the reason under its label, focus moved, valid GSTIN fills the state code and saves; Regional: date and number style save; Lists: add and hide |
 | Screenshots (phase C) | pass | all six sections at 1440; Company, Regional, Lists in dark; Company and Regional at 390; Company at 820 |
+| `npm run check` (phase D) | pass | lint 0 errors, 228/228 tests, build, secret scan |
+| Screenshots (phase D) | pass | People (light, dark, phone), templates, departments, audit log, profile overview, access grid (light and dark), sessions, Add user and Suspend dialogs, profile on a phone (dark); Live Assist ask dialog (light and dark), pill, helper toast, consent dialog. Phone people table measured: no overflow |
