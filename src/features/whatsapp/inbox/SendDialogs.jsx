@@ -280,7 +280,7 @@ export function ComposeDialog({ kind, conversation, onSend, onClose }) {
         aria-labelledby="compose-title"
         onSubmit={send}
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[min(720px,calc(100vh-32px))] w-full max-w-[480px] flex-col rounded-2xl border border-line bg-surface shadow-[0_17px_50px_rgba(11,20,26,0.19)]"
+        className="flex max-h-[min(720px,calc(100dvh-32px))] w-full max-w-[480px] flex-col rounded-2xl border border-line bg-surface shadow-[0_17px_50px_rgba(11,20,26,0.19)]"
       >
         <div className="border-b border-line px-6 pb-3 pt-5">
           <h2 id="compose-title" className="m-0 text-[17px] font-medium text-ink">{TITLES[kind]}</h2>

@@ -679,7 +679,7 @@ window.WebSocket = class {
 /* ── The shell ──────────────────────────────────────────────────────────── */
 
 const { AccessContext } = await import('../../src/lib/access.js')
-const { Sidebar } = await import('../../src/components/Sidebar.jsx')
+const { MobileTopBar, Sidebar } = await import('../../src/components/Sidebar.jsx')
 const { default: ClientsPage } = await import('../../src/features/clients/ClientsPage.jsx')
 const { default: VendorsPage } = await import('../../src/features/vendors/VendorsPage.jsx')
 const { default: SalesOrdersPage } = await import('../../src/features/sales-orders/SalesOrdersPage.jsx')
@@ -750,6 +750,8 @@ const ACCESS = {
 const SESSION = { user: { id: 'preview-user', email: 'priya@dikho.example.com', user_metadata: { full_name: 'Priya Sharma' } } }
 const START = PARAMS.get('page') || '/clients'
 
+const PHONE = window.matchMedia('(max-width: 768px)').matches
+
 export function Shell() {
   // Phones start with the rail closed, as AuthenticatedLayout does.
   const [collapsed, setCollapsed] = useState(() => window.matchMedia('(max-width: 768px)').matches)
@@ -761,8 +763,9 @@ export function Shell() {
   const settings = <SettingsPage themeMode={themeMode} onThemeChange={setThemeMode} />
   return (
     <div className={`app-shell${collapsed ? ' sidebar-is-closed' : ''}`}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} onOverlayClick={null} onLogout={() => {}} session={SESSION} />
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} onOverlayClick={PHONE ? () => setCollapsed(true) : null} onLogout={() => {}} session={SESSION} />
       <div className="app-main">
+        <MobileTopBar menuOpen={!collapsed} onMenu={() => setCollapsed((value) => !value)} />
         <main className="workspace">
           <Routes>
             <Route path="/clients" element={<ClientsPage />} />

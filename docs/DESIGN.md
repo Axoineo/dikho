@@ -79,6 +79,15 @@ numbers.
 - **Status:** small round pill, tinted, no dot.
 - **Empty state:** an icon, a short title, one line, one action.
 - **Toast:** bottom centre, round, three seconds.
+- **Phones (768px and below):** a 52px top bar (menu button, logo) sits
+  above the page; the menu opens the sidebar as a drawer over the page,
+  which closes on navigation, on its backdrop, on its close button and on
+  Escape. Pages stack to one column and must not scroll sideways at 360px
+  (a wide table may scroll inside its own card). Fields are 16px there, or
+  iOS zooms into each one. Any height or max-height in `vh` (shell,
+  dialogs, full-screen pages) is followed by the same value in `dvh`,
+  because `100vh` runs under the address bar and hides the bottom of the
+  screen, often a dialog's buttons.
 
 ## Rules that still apply
 

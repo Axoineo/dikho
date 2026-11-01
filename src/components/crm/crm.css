@@ -271,7 +271,7 @@
 }
 /* The table scrolls inside the card, so its header stays pinned and the
    pagination under it never leaves the screen. */
-.crm-table-scroll { overflow: auto; max-height: max(320px, calc(100vh - 252px)); overscroll-behavior: contain; }
+.crm-table-scroll { overflow: auto; max-height: max(320px, calc(100vh - 252px)); max-height: max(320px, calc(100dvh - 252px)); overscroll-behavior: contain; }
 .crm-table {
   width: 100%;
   min-width: 760px;
@@ -647,6 +647,8 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   flex-direction: column;
   width: min(720px, 100%);
   max-height: calc(100vh - 48px);
+  /* dvh: on phones 100vh runs under the address bar and hid the footer. */
+  max-height: calc(100dvh - 48px);
   overflow: hidden;
   border-radius: var(--crm-radius-md);
   background: var(--surface);
@@ -1064,7 +1066,9 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   .crm-title { font-size: 1.125rem; }
   .crm-subtitle { font-size: var(--crm-text-sm); }
   .crm-header { align-items: flex-start; }
-  .crm-search { flex-basis: 100%; max-width: none; }
+  /* min-width: the field's built-in width (about 20 characters) is wider
+     than a phone at the 16px phones use, and pushed the box off screen. */
+  .crm-search { flex-basis: 100%; max-width: none; min-width: 0; }
   .crm-count { margin-left: 0; }
   .crm-hide-sm { display: none; }
   .crm-table { min-width: 0; }

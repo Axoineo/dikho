@@ -56,7 +56,7 @@ export function ForwardDialog({ message, conversations, currentId, onForward, on
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(11,20,26,0.45)] p-4" onMouseDown={() => { if (!running) onClose() }}>
       <div role="dialog" aria-modal="true" aria-labelledby="forward-title" onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[min(640px,calc(100vh-32px))] w-full max-w-[420px] flex-col rounded-2xl border border-line bg-surface shadow-[0_17px_50px_rgba(11,20,26,0.19)]">
+        className="flex max-h-[min(640px,calc(100dvh-32px))] w-full max-w-[420px] flex-col rounded-2xl border border-line bg-surface shadow-[0_17px_50px_rgba(11,20,26,0.19)]">
         <div className="border-b border-line px-5 pb-3 pt-5">
           <h2 id="forward-title" className="m-0 text-[17px] font-medium text-ink">Forward message</h2>
           <p className="m-0 mt-1 truncate text-[12.5px] text-muted">“{snippet(message)}”</p>
