@@ -181,6 +181,17 @@ function SidebarIcon({ name, size = 20 }) {
         <path d="m14.2 9.3 2.7 2.7-2.7 2.7" />
       </svg>
     ),
+    /* Phone top bar: opens the drawer, and closes it from inside. */
+    menu: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M4 7h16M4 12h16M4 17h16" />
+      </svg>
+    ),
+    close: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M6 6l12 12M18 6 6 18" />
+      </svg>
+    ),
     /* Email consent: a shield with a tick. */
     consent: (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
@@ -746,15 +757,17 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
               <img src="/dikho-logo.svg" alt="" aria-hidden="true" />
             </span>
           </div>
+          {/* onOverlayClick is set only on phones, where this is a drawer
+              and the button simply closes it. */}
           <button
             type="button"
             className="sidebar-toggle"
             onClick={onToggle}
             aria-expanded={!collapsed}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={onOverlayClick ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={onOverlayClick ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <SidebarIcon name={collapsed ? 'panelExpand' : 'panelCollapse'} size={22} />
+            <SidebarIcon name={onOverlayClick ? 'close' : collapsed ? 'panelExpand' : 'panelCollapse'} size={22} />
           </button>
         </div>
 
@@ -831,5 +844,26 @@ export function Sidebar({ collapsed, onToggle, onOverlayClick, onLogout, session
         </div>
       )}
     </>
+  )
+}
+
+/* Phones only (CSS hides it above 768px). The drawer slides fully off screen
+   on a phone, and its own toggle went with it, so without this bar there was
+   no way to open the menu at all. Sits above the workspace, so every page
+   keeps its own header and the inbox still fills the rest of the screen. */
+export function MobileTopBar({ menuOpen, onMenu }) {
+  return (
+    <header className="mobile-topbar">
+      <button
+        type="button"
+        className="mobile-topbar-menu"
+        onClick={onMenu}
+        aria-expanded={menuOpen}
+        aria-label="Open menu"
+      >
+        <SidebarIcon name="menu" size={22} />
+      </button>
+      <img className="mobile-topbar-logo" src="/dikho-logo.svg" alt="Dikho" />
+    </header>
   )
 }

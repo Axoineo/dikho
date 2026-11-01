@@ -194,6 +194,7 @@ button, input, textarea, select { border: 0; }
 /* ---------- Login ---------- */
 .login-page {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   background: linear-gradient(160deg, #eef3fb 0%, #e4ecf6 45%, #f2f5fa 100%);
   /* The sign-in page is designed light only, but it renders inside the
@@ -384,6 +385,7 @@ button, input, textarea, select { border: 0; }
 .brand-loader {
   --dk-mark-w: 132px;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -413,6 +415,7 @@ button, input, textarea, select { border: 0; }
 
 .route-boundary {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -454,6 +457,9 @@ button, input, textarea, select { border: 0; }
   --ws-pad-t: 16px;
   --ws-pad-b: 24px;
   height: 100vh;
+  /* Phones: 100vh runs under the address bar, hiding the bottom of every
+     screen (the chat composer, form buttons). dvh is the visible height. */
+  height: 100dvh;
   display: flex;
   /* The curve now belongs to .app-main, not the rail, so the wedge it exposes
      always sits against the RAIL — one constant colour. --surface is the
@@ -497,6 +503,9 @@ button, input, textarea, select { border: 0; }
   width: var(--sidebar-w);
   flex: 0 0 var(--sidebar-w);
   height: 100vh;
+  /* Phones: 100vh runs under the address bar, hiding the bottom of every
+     screen (the chat composer, form buttons). dvh is the visible height. */
+  height: 100dvh;
   background: #ffffff;
   color: var(--muted);
   display: flex;
@@ -1234,6 +1243,10 @@ button, input, textarea, select { border: 0; }
   display: none;
 }
 
+/* ---------- Phone top bar ---------- */
+/* Rendered everywhere, shown only at phone width (see the 768px block). */
+.mobile-topbar { display: none; }
+
 /* ============================================================
    APP MAIN LAYOUT
    ============================================================ */
@@ -1246,6 +1259,9 @@ button, input, textarea, select { border: 0; }
   min-width: 0;
   flex: 1 1 auto;
   height: 100vh;
+  /* Phones: 100vh runs under the address bar, hiding the bottom of every
+     screen (the chat composer, form buttons). dvh is the visible height. */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1352,7 +1368,9 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 .modal-card { 
   width: min(690px, 100%); 
-  max-height: min(760px, calc(100vh - 48px)); 
+  max-height: min(760px, calc(100vh - 48px));
+  /* dvh: on phones 100vh runs under the address bar and hid the footer. */
+  max-height: min(760px, calc(100dvh - 48px));
   overflow-y: auto; 
   overflow-x: visible;
   background: #fff; 
@@ -1368,7 +1386,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 
 /* ---------- Add modal ---------- */
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(20,29,44,.38); display: grid; place-items: center; padding: 24px; }
-.modal-card { width: min(690px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow-y: auto; overflow-x: visible; background: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 24px; }
+.modal-card { width: min(690px, 100%); max-height: min(760px, calc(100vh - 48px)); max-height: min(760px, calc(100dvh - 48px)); overflow-y: auto; overflow-x: visible; background: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 24px; }
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .form-error { padding: 11px 12px; margin-bottom: 15px; font-size: 12px; }
 .form-error svg { color: var(--danger); flex: 0 0 auto; }
@@ -1410,6 +1428,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
     top: 0;
     bottom: 0;
     height: 100vh;
+    height: 100dvh;
     z-index: 50;
     width: min(280px, 84vw) !important;
     flex-basis: min(280px, 84vw) !important;
@@ -1452,6 +1471,47 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
   }
   .app-shell .sidebar + .app-main {
     margin-left: 0;
+    border-left: 0;
+  }
+
+  /* The menu button lives here because the drawer, and the toggle inside
+     it, are fully off screen while closed. */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    height: 52px;
+    padding: 0 12px 0 6px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .mobile-topbar-menu {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text);
+  }
+  .mobile-topbar-menu:active { background: var(--line); }
+  .mobile-topbar-logo {
+    width: 84px;
+    height: auto;
+    display: block;
+    /* Same optical lift as the sidebar wordmark: the SVG's box sits low. */
+    transform: translateY(-3.5px);
+  }
+
+  /* Under 16px, iOS Safari zooms the page into every field you tap and
+     leaves it zoomed. Sizing fields to 16px on phones stops that without
+     disabling pinch zoom. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
   }
 
   /* Show the overlay backdrop on mobile */
@@ -2141,6 +2201,7 @@ th:nth-child(6), td:nth-child(6) { width: 10%; }
 /* Shell & layout */
 .pvf-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   background: #f0f4f9;
   display: flex;
   flex-direction: column;

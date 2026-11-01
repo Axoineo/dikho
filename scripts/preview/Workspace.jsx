@@ -3,10 +3,15 @@
 // .app-shell, so a bare .workspace renders flush against the window edge.
 // --sidebar-w is zeroed so the pane fills the window, and the border and
 // corner that normally separate it from the rail are dropped.
+import { MobileTopBar } from '../../src/components/Sidebar.jsx'
+
+// The phone top bar shows below 768px as in the app; its menu does nothing
+// here because there is no sidebar to open.
 export default function Workspace({ children }) {
   return (
     <div className="app-shell" style={{ '--sidebar-w': '0px' }}>
       <div className="app-main" style={{ borderLeft: 0, borderRadius: 0 }}>
+        <MobileTopBar menuOpen={false} onMenu={() => {}} />
         <main className="workspace">{children}</main>
       </div>
     </div>

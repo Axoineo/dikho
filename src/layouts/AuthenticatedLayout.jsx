@@ -3,7 +3,7 @@ import BrandLoader, { AppReady } from '../components/BrandLoader'
 import RouteBoundary from '../components/RouteBoundary'
 import { Outlet, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { Sidebar } from '../components/Sidebar'
+import { MobileTopBar, Sidebar } from '../components/Sidebar'
 import { loadSettings, applyPreferences } from '../lib/settings'
 import { MAX_SESSION_MS, INACTIVITY_MS, WARN_BEFORE_MS } from '../app/constants'
 import Login from '../features/auth/Login'
@@ -134,14 +134,27 @@ export default function AuthenticatedLayout() {
   const showWarningRef = useRef(false)
 
   useEffect(() => {
+    // Phones fire resize whenever the address bar slides or the keyboard
+    // opens, so only crossing into phone width closes the drawer; closing on
+    // every resize shut it while people were scrolling the menu.
+    let wasMobile = window.innerWidth <= 768
     function onResize() {
       const mobile = window.innerWidth <= 768
       setIsMobile(mobile)
-      if (mobile) setSidebarOpen(false)
+      if (mobile && !wasMobile) setSidebarOpen(false)
+      wasMobile = mobile
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  // Escape closes the phone drawer, as it would any other overlay.
+  useEffect(() => {
+    if (!isMobile || !sidebarOpen) return
+    function onKeyDown(e) { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMobile, sidebarOpen])
 
   function toggleSidebar() {
     setSidebarOpen((open) => {
@@ -349,6 +362,7 @@ export default function AuthenticatedLayout() {
           settings moved to the foot of the sidebar, and the full-screen
           button is gone — the layout is already edge to edge. */}
       <div className="app-main">
+        <MobileTopBar menuOpen={!collapsed} onMenu={toggleSidebar} />
         <main className="workspace">
           <RouteBoundary>
             <Suspense fallback={<BrandLoader />}>
