@@ -58,6 +58,15 @@ The browser talks directly to Supabase PostgREST for several business features.
 Those calls are authorized by PostgreSQL RLS. Hiding navigation or checking a
 session in React does not protect the underlying rows.
 
+## Android app
+
+`dikho-mobile/` is a Flutter shell that loads the deployed SPA in a WebView, so
+it uses the same sign-in, RLS and API as a browser and adds no server or database.
+Its small native layer handles files and the installer, reached from the page only
+through a message channel pinned to the CRM origin. `cloudflare-updater/` is a
+separate read-only Worker with no bindings that answers update checks and serves
+APKs as static assets. See `docs/ANDROID.md` and ADR 0011.
+
 ## Authentication and sessions
 
 ### Email OTP

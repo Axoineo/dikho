@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White in both themes, matching the CRM's own boot splash, which keeps its
+     white ground in dark mode too. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/dikho_ground" />
+    <item
+        android:width="108dp"
+        android:height="108dp"
+        android:gravity="center"
+        android:drawable="@drawable/ic_mark" />
+</layer-list>

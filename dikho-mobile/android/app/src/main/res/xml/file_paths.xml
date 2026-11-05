@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only viewed copies can ever be granted to another app. Nothing else in the
+     app's storage is reachable through this provider. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

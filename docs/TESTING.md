@@ -21,7 +21,8 @@ npm audit --omit=dev
 
 ## Automated tests
 
-`npm test` runs `tests/*.test.js` with Node's built-in test runner. The tests
+`npm test` runs `tests/*.test.js` and `cloudflare-updater/test/*.test.js` with
+Node's built-in test runner. The tests
 need no extra dependencies, never touch the network (`fetch` and `Date.now` are
 mocked) and generate their keys in memory. CI runs them on Node 20 and 22.
 
@@ -37,6 +38,7 @@ mocked) and generate their keys in memory. CI runs them on Node 20 and 22.
 | `tests/public-vendor-upload.test.js` | Public vendor route: server-chosen keys, ignored caller paths, disguised/empty/oversized documents refused before Turnstile, cleanup on rejection |
 | `tests/otp-hook-and-media.test.js` | OTP hook refusing non-staff and oversized requests; media served with download/sandbox headers and unsatisfiable ranges |
 | `tests/logger.test.js` | Log redaction by key and by content |
+| `cloudflare-updater/test/update.test.js` | Android update API: version comparison, the mandatory policy, input validation, malformed release metadata and refused methods |
 | `tests/email-content.test.js` | Email HTML sanitizer against script, handler, URL, CSS and nesting payloads; remote images blocked; MIME parsing and header injection; token encryption (wrong key, wrong mailbox, rotation); PKCE |
 | `tests/email-api.test.js` | Email Hub routes: module flag, public/authenticated classes, OAuth state and callback outcomes, thread open, labels, attachments, send dedupe and the uncertain result, Gmail push JWT, render tickets |
 | `tests/email-delivery.test.js` | SES requests and failure modes (retries off, timeout uncertain, throttling), SNS signatures with a generated certificate, unsubscribe links, campaign dispatch outcomes, jobs secret, campaign routes and previews |

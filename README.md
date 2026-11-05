@@ -28,6 +28,7 @@ self-hosted instance. It is not yet ready for that distribution model.
 | [Agent instructions](AGENTS.md) | Shared Codex and Claude Code working rules |
 | [Product direction](docs/PRODUCT.md) | Users, outcomes, principles and open decisions |
 | [System invariants](docs/INVARIANTS.md) | Rules that changes must preserve |
+| [Android app](docs/ANDROID.md) | Building, signing, publishing and testing the Android app |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, request flows and trust boundaries |
 | [Database](docs/DATABASE.md) | Supabase/Postgres, D1, RLS, Storage and migrations |
 | [Permissions](docs/PERMISSIONS.md) | Current access behavior and proposed role model |
@@ -111,6 +112,8 @@ supabase/
 └── migrations/           # PostgreSQL/RLS/Storage migrations
 scripts/                  # developer and operational utilities
 docs/                     # architecture, operations and security documentation
+dikho-mobile/             # Flutter Android app, a shell around the deployed CRM
+cloudflare-updater/       # read-only update API and APK hosting for that app
 ```
 
 ## Local setup

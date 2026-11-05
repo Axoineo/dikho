@@ -2,7 +2,8 @@
 
 Last updated: 2026-10-05
 
-Dikho has four independently deployed parts:
+Dikho has four independently deployed parts for the web system, plus the Android
+app and its update Worker, which are covered in `docs/ANDROID.md`:
 
 1. the browser SPA, served by Cloudflare Pages and released by pushing to
    `main`;

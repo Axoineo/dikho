@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown while the process starts, until Flutter draws its first frame. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <!-- The theme behind Flutter. Its light/dark choice is also what the WebView
+         reports to the CRM as prefers-color-scheme. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- Android would otherwise outline the whole app when it holds keyboard focus. -->
+        <item name="android:defaultFocusHighlightEnabled">false</item>
+    </style>
+</resources>
