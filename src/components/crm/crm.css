@@ -1081,6 +1081,17 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   .crm-cell .crm-hide-sm { display: none; }
   .crm-pagination { justify-content: center; }
   .crm-pagination-summary { width: 100%; text-align: center; }
+  .crm-pagination-controls { flex-wrap: wrap; justify-content: center; }
+
+  /* Sized for a finger rather than a pointer. Phones only, so the desktop keeps
+     its density. */
+  .crm-btn { height: 40px; }
+  .crm-btn--sm { height: 36px; }
+  .crm-icon-btn { width: 40px; height: 40px; }
+  .crm-search { height: 40px; }
+  .crm-search .crm-icon-btn { width: 32px; height: 32px; }
+  .crm-page-size { height: 40px; }
+  .crm-page-btn { min-width: 40px; height: 40px; }
 
   .crm-panel { inset: 0; width: 100%; border: 0; border-radius: 0; }
   .crm-modal-backdrop { padding: 0; place-items: stretch; }

@@ -88,6 +88,9 @@ numbers.
   dialogs, full-screen pages) is followed by the same value in `dvh`,
   because `100vh` runs under the address bar and hides the bottom of the
   screen, often a dialog's buttons.
+- **Phone tap targets (760px and below):** CRM buttons and pagination grow to
+  40px high (`.crm-btn--sm` to 36px) in `crm.css`. The desktop density stays as it
+  is. Row links stay smaller because the whole row is the tap target.
 
 ## Rules that still apply
 
