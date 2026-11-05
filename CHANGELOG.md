@@ -14,6 +14,13 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- Android app (`dikho-mobile/`), a Flutter shell around the deployed CRM with
+  native downloads, uploads, external-link handling and self-updates, plus its
+  update Worker (`cloudflare-updater/`). Built and tested on emulators with a test
+  signing key. Not deployed or distributed: that needs a production signing key
+  and the owner's approval. See `docs/ANDROID.md` and ADR 0011.
+- Larger tap targets on phones for CRM buttons, search and pagination. Desktop is
+  unchanged.
 - Settings, phase 1 (migration `20261028120000_settings.sql`, applied
   2026-10-28; without it every screen keeps the built-in values). One page per
   section at `/settings/<section>`: "Your account" for everyone,

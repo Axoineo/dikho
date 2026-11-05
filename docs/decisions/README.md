@@ -53,3 +53,4 @@ Create a superseding ADR so the decision history remains understandable.
 - [0008: Live Assist by consented tab sharing](0008-live-assist.md)
 - [0009: Email Hub](0009-email-hub.md) (provider and campaign sender amended by 0010)
 - [0010: Email Hub with Google and Hostinger mailboxes; campaigns without SES](0010-email-hub-providers.md)
+- [0011: Android app as a Flutter shell with a Cloudflare update service](0011-android-app.md)

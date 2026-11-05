@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Native hook probe</title>
+<style>
+  body { font: 15px system-ui, sans-serif; margin: 12px; }
+  button, a.btn { display: block; width: 100%; margin: 4px 0; padding: 8px; box-sizing: border-box; text-align: left; font-size: 14px; }
+  #result { white-space: pre-wrap; background: #eef; padding: 8px; min-height: 2em; }
+</style>
+</head>
+<body>
+<h3>Native hook probe (local test only)</h3>
+<div id="result">ready</div>
+<input id="upload-single" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+<input id="upload-multi" type="file" multiple>
+<button id="blob-revoke">Blob PDF, revoked right after click</button>
+<button id="blob-xlsx">Blob xlsx</button>
+<button id="blob-detached">Blob on a detached anchor</button>
+<button id="blob-large">Blob 30 MB</button>
+<button id="blob-oversize">Blob over the limit</button>
+<button id="blob-apk">Blob APK</button>
+<button id="blob-conflict">Blob whose name is already taken</button>
+<button id="console-btn">Console message</button>
+<button id="oauth-assign">Google sign-in redirect</button>
+<input id="text-field" type="text" aria-label="Text">
+<a class="btn" id="data-link" download="probe-data.txt" href="data:text/plain;base64,cHJvYmUgZGF0YQo=">Data URL download</a>
+<a class="btn" id="signed-download" download="probe-signed.pdf" href="http://localhost:54321/storage/v1/object/sign/Dikho/probe.pdf?token=local">Signed URL download</a>
+<button id="signed-open">window.open a signed URL</button>
+<button id="iframe-pdf">PDF inside an iframe</button>
+<button id="confirm-btn">confirm()</button>
+<button id="alert-btn">alert()</button>
+<button id="prompt-btn">prompt()</button>
+<button id="clipboard-btn">Clipboard write</button>
+<button id="bridge-check">Bridge visibility</button>
+<a class="btn" id="ext-blank" href="https://example.com/?from=blank" target="_blank" rel="noopener">External, target blank</a>
+<a class="btn" id="ext-self" href="https://example.com/?from=self">External, same window</a>
+<a class="btn" id="tel-link" href="tel:+910000000000">tel</a>
+<a class="btn" id="mailto-link" href="mailto:someone@example.test">mailto</a>
+<a class="btn" id="wa-link" href="https://wa.me/910000000000?text=hello">wa.me</a>
+<a class="btn" id="intent-link" href="intent://evil#Intent;scheme=https;package=com.android.chrome;end">intent (must be refused)</a>
+<a class="btn" id="file-link" href="file:///data/data/in.dikho.crm/shared_prefs/x.xml">file (must be refused)</a>
+<a class="btn" id="content-link" href="content://in.dikho.crm.files/shared/x">content (must be refused)</a>
+<a class="btn" id="inner-link" href="/__probe.html?page=2">Internal page</a>
+<iframe id="frame" src="http://localhost:54321/frame-check" style="width:100%;height:30px;border:0"></iframe>
+<iframe id="sandbox-frame" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style="width:100%;height:64px;border:1px solid #999" srcdoc="<!doctype html><a href='https://example.com/?from=sandbox' target='_blank' style='display:block;height:100vh'>Link in a sandboxed email</a>"></iframe>
+<div id="frame-holder"></div>
+<script>
+  const out = (text) => { document.getElementById('result').textContent = text }
+  const on = (id, fn) => document.getElementById(id).addEventListener('click', fn)
+  function save(blob, name, { attach = true } = {}) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    if (attach) document.body.appendChild(a)
+    a.click()
+    if (attach) a.remove()
+    URL.revokeObjectURL(url)
+    out(`clicked ${name}`)
+  }
+  on('blob-revoke', () => save(new Blob(['%PDF-1.4 probe invoice\n'], { type: 'application/pdf' }), 'probe-invoice.pdf'))
+  on('blob-xlsx', () => save(new Blob(['PK probe'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'probe-export.xlsx'))
+  on('blob-detached', () => save(new Blob(['detached'], { type: 'text/plain' }), 'probe-detached.txt', { attach: false }))
+  on('blob-large', () => save(new Blob([new Uint8Array(30 * 1024 * 1024).fill(65)], { type: 'application/octet-stream' }), 'probe-large.bin'))
+  on('blob-oversize', () => save(new Blob([new Uint8Array(110 * 1024 * 1024)], { type: 'application/octet-stream' }), 'probe-oversize.bin'))
+  on('blob-conflict', () => save(new Blob(['conflict'], { type: 'application/pdf' }), 'probe-conflict.pdf'))
+  on('blob-apk', () => save(new Blob(['not really an apk'], { type: 'application/vnd.android.package-archive' }), 'probe-installer.apk'))
+  on('console-btn', () => { console.error('probe-console-secret'); out('logged') })
+  on('oauth-assign', () => window.location.assign('https://accounts.google.com/o/oauth2/v2/auth?client_id=probe'))
+  on('signed-open', () => window.open('http://localhost:54321/storage/v1/object/sign/Dikho/view.pdf?token=local', '_blank', 'noopener,noreferrer'))
+  on('iframe-pdf', () => {
+    const frame = document.createElement('iframe')
+    frame.src = 'http://localhost:54321/api/whatsapp/media/doc.pdf?ticket=local'
+    document.getElementById('frame-holder').appendChild(frame)
+    out('iframe added')
+  })
+  on('confirm-btn', () => out(`confirm: ${window.confirm('Delete this probe record?')}`))
+  on('alert-btn', () => { window.alert('Probe alert'); out('alert returned') })
+  on('prompt-btn', () => out(`prompt: ${window.prompt('Probe prompt', 'default')}`))
+  on('clipboard-btn', () => navigator.clipboard.writeText('probe-clipboard').then(() => out('clipboard ok'), (e) => out(`clipboard failed: ${e.name}`)))
+  on('bridge-check', () => out(`bridge: ${typeof window.DikhoAndroid}`))
+  for (const id of ['upload-single', 'upload-multi']) {
+    document.getElementById(id).addEventListener('change', async (event) => {
+      const files = [...event.target.files]
+      const sizes = await Promise.all(files.map(async (f) => (await f.arrayBuffer()).byteLength))
+      out(`${id}: ${files.map((f, i) => `${f.name} type=${f.type} read=${sizes[i]}`).join('; ') || 'none'}`)
+    })
+  }
+  window.addEventListener('message', (event) => { if (event.data && event.data.frameBridge) window.__frameBridge = event.data.frameBridge })
+</script>
+</body>
+</html>

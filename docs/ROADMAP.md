@@ -76,6 +76,17 @@ nothing is applied or deployed. State and rollout:
 - [ ] Move the remaining Brevo users (the device-check Edge Function's alert
       email) to SES, then retire Brevo.
 
+## Android app
+
+Built and tested on emulators, not yet distributed. See `docs/ANDROID.md`.
+
+- [ ] Owner: create the production signing key and back it up.
+- [ ] Owner: decide the update address, then approve deploying the update Worker.
+- [ ] Add `public/.well-known/assetlinks.json` once the production key exists.
+- [ ] Test on real phones, including a low-end one, and with a real staff sign-in.
+- [ ] Owner: get a D-U-N-S number and register `in.dikho.crm` under Android
+      developer verification before the global rollout in 2027.
+
 ## Product evolution
 
 - [x] Select one organization per self-hosted instance as the initial public

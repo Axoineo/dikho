@@ -36,6 +36,7 @@ explicit owner decision and license.
 - Current priorities: `docs/ROADMAP.md`
 - Accepted architectural decisions: `docs/decisions/`
 - AI task and handoff conventions: `docs/AI-WORKFLOW.md`
+- Android app, signing key and release workflow: `docs/ANDROID.md`
 
 Read only the sources relevant to the task. Verify documentation against code
 before relying on details that may have changed.
@@ -53,6 +54,9 @@ before relying on details that may have changed.
 - `supabase/functions/` contains Supabase Edge Functions.
 - `scripts/` contains operational/developer utilities and is not application
   code.
+- `dikho-mobile/` is the Flutter Android app, a thin shell around the deployed
+  CRM. It holds no business logic. `cloudflare-updater/` is its separate
+  read-only update Worker. Signing keys never enter this repository.
 
 Never import server-only code, credentials or privileged logic into the browser
 bundle.
@@ -116,11 +120,12 @@ Safe repository check:
 npm run check
 ```
 
-This runs lint, the tests in `tests/`, a production build and the high-signal
-secret scan. The tests cover session verification, Turnstile verification,
-webhook signatures and media tickets only; routes, RLS, Storage and UI have no
-automated coverage. Report which checks ran and what they cover, not just that
-“tests passed”.
+This runs lint, the tests in `tests/` and `cloudflare-updater/test/`, a
+production build and the high-signal secret scan. The tests cover session
+verification, Turnstile verification, webhook signatures, media tickets and the
+update API only; routes, RLS, Storage and UI have no automated coverage. The
+Android app has its own checks, see `docs/ANDROID.md`. Report which checks ran
+and what they cover, not just that “tests passed”.
 
 Additional checks:
 
@@ -154,6 +159,10 @@ delete data unless the user explicitly requests that action.
 
 A push or merge to `main` is itself a production deployment of the SPA. Never
 push to find out whether a change works; verify it locally first.
+
+Deploying `cloudflare-updater`, publishing an APK or creating the production
+signing key also require explicit approval. A published APK goes to staff phones
+and a lost signing key cannot be recovered.
 
 ## Code review rules
 

@@ -1,0 +1,28 @@
+name: dikho_crm
+description: Android app for the Dikho CRM. A thin shell around the web CRM with native file handling and self-updates.
+publish_to: none
+
+# versionName+versionCode. The code after the + must rise with every release:
+# it is what the updater compares, and Android refuses to install a lower one.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.8
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/brand/logo.png
+    - assets/brand/mark.png

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12 and later draw the first screen themselves from these values. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/dikho_ground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_mark</item>
+    </style>
+</resources>
