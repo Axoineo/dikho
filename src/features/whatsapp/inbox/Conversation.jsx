@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { MessageBubble } from './MessageBubble'
 import { Composer } from './Composer'
 import { Avatar } from './Avatar'
-import { ChatMenu } from './ChatActions'
+import { ActionIcon, ChatMenu } from './ChatActions'
 import { ComposeDialog } from './SendDialogs'
 import { canForward, canReactTo, foldReactions, indexByWamid, snippet } from './messageModel'
 import { displayName, formatDaySeparator, parseWaDate, sessionMsLeft, formatCountdown } from './inboxUtils'
@@ -484,6 +484,16 @@ export function Conversation({
         </div>
       ) : canReply
         ? (
+          <>
+          {Boolean(conversation.opted_out) && (
+            <div role="status" className="mx-3 mt-2 flex shrink-0 items-start gap-2 rounded-xl border border-tint-danger-line bg-tint-danger px-3.5 py-2.5 text-[12.5px] leading-snug text-danger">
+              <ActionIcon action="block" className="mt-px h-3.5 w-3.5 shrink-0" />
+              <span>
+                <strong>Opted out.</strong> This person replied STOP and asked not to get updates. Do not send offers or
+                templates; reply only if they asked you something. If they reply START, they are opted back in.
+              </span>
+            </div>
+          )}
           <Composer
             conversation={conversation}
             onSendText={async (body) => { await onSendText(body, replyTo?.id); setReplyTo(null) }}
@@ -495,6 +505,7 @@ export function Conversation({
             replyMine={replyTo?.direction === 'outbound'}
             onCancelReply={() => setReplyTo(null)}
           />
+          </>
         )
         : <p className="inbox-readonly-note">You can read conversations, but your access does not include replying.</p>}
 
