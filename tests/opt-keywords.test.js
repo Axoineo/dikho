@@ -5,11 +5,11 @@ import { Hono } from 'hono'
 import webhook from '../src/api/routes/whatsapp/webhook.js'
 import conversations from '../src/api/routes/whatsapp/conversations.js'
 import { errorHandler } from '../src/api/middleware/errorHandler.js'
-import { STOP_REPLY, optKeyword } from '../src/api/services/whatsapp/optKeywords.js'
+import { START_REPLY, STOP_REPLY, optKeyword } from '../src/api/services/whatsapp/optKeywords.js'
 
 // A customer's "STOP" opts them out and gets one confirmation reply; "START"
-// opts them back in. A fake D1 answers by the SQL it sees; Meta is a fake
-// fetch. Synthetic data only.
+// opts them back in and, when it did, confirms that too. A fake D1 answers by
+// the SQL it sees; Meta is a fake fetch. Synthetic data only.
 
 const SECRET = 'synthetic-app-secret'
 const PHONE = '919876543210'
@@ -109,8 +109,19 @@ test('STOP opts the contact out and sends the confirmation once, kept in the cha
   assert.deepEqual(kept.args.slice(0, 5), [9, 5, PHONE, 'wamid.OUT1', STOP_REPLY])
 })
 
-test('START opts the contact back in, without a reply', async () => {
+test('START opts an opted-out contact back in and confirms it, kept in the chat', async () => {
   await inbound({ type: 'text', text: { body: 'START' } })
+  assert.deepEqual(optUpdate().args, [0, PHONE])
+  assert.equal(sends.length, 1)
+  assert.equal(sends[0].body.text.body, START_REPLY)
+  assert.equal(START_REPLY, 'You have successfully subscribed again. You will now receive important updates from us on WhatsApp. Reply STOP at any time to stop receiving them.')
+  const kept = queries.find((q) => /INSERT INTO messages/.test(q.sql) && /'outbound'/.test(q.sql))
+  assert.equal(kept.args[4], START_REPLY)
+})
+
+test('START from someone who was never opted out gets no "subscribed again" reply', async () => {
+  db.run.push([/UPDATE contacts SET opted_out/, 0])
+  await inbound({ type: 'text', text: { body: 'Start' } })
   assert.deepEqual(optUpdate().args, [0, PHONE])
   assert.equal(sends.length, 0)
 })

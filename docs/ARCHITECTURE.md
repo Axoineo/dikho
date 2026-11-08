@@ -264,8 +264,8 @@ part of the current architecture.
   stopped batch returns `notSent`, never `remaining`, so no client keeps looping.
 - Webhook processing is idempotent and reconciliation repairs ordering races.
   An inbound message that is only STOP or START sets `contacts.opted_out`
-  (`services/whatsapp/optKeywords.js`); STOP gets one confirmation reply, sent
-  once per inbound wamid.
+  (`services/whatsapp/optKeywords.js`); STOP gets one confirmation reply, and
+  START one when it opted the person back in, sent once per inbound wamid.
 - Email campaigns: a daily cap in the database (`EMAIL_DAILY_CAP`, required
   to send), a per-campaign recipient limit, batches of 20 with five in
   flight, and no automatic resend of an unconfirmed send. Gmail sync is sized
