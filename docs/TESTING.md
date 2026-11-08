@@ -38,6 +38,9 @@ mocked) and generate their keys in memory. CI runs them on Node 20 and 22.
 | `tests/public-vendor-upload.test.js` | Public vendor route: server-chosen keys, ignored caller paths, disguised/empty/oversized documents refused before Turnstile, cleanup on rejection |
 | `tests/otp-hook-and-media.test.js` | OTP hook refusing non-staff and oversized requests; media served with download/sandbox headers and unsatisfiable ranges |
 | `tests/logger.test.js` | Log redaction by key and by content |
+| `tests/template-header-media.test.js` | Template payloads with a photo, video or document header and named or positional body variables; header file validation; refusals before anything is stored or sent; batches and retries carrying the header |
+| `tests/contact-import.test.js` | Contact sheet reading in the browser: phone numbers in every common shape, landlines, Excel-rounded numbers, title rows, headerless sheets, spare phone columns, name/email/company detection and name tidying |
+| `tests/clean-campaign.test.js` | `import-rows` validation and write-only-what-changed upserts; header file upload to Meta (types, fake files, permission); a send that stops on Meta spam, template or account errors (sent now or reported by webhook) and on mostly failed batches, without `remaining`; 131050 opting a contact out |
 | `cloudflare-updater/test/update.test.js` | Android update API: version comparison, the mandatory policy, input validation, malformed release metadata and refused methods |
 | `tests/email-content.test.js` | Email HTML sanitizer against script, handler, URL, CSS and nesting payloads; remote images blocked; MIME parsing and header injection; token encryption (wrong key, wrong mailbox, rotation); PKCE |
 | `tests/email-api.test.js` | Email Hub routes: module flag, public/authenticated classes, OAuth state and callback outcomes, thread open, labels, attachments, send dedupe and the uncertain result, Gmail push JWT, render tickets |

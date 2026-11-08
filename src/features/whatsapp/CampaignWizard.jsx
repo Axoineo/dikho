@@ -2,16 +2,51 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { apiGet, apiPost, apiUpload } from '../../lib/api'
 import { WhatsAppPreview } from './WhatsAppPreview'
+import { ContactImportReview } from './ContactImport'
 import {
-  CONTACT_FIELDS, autoMap, isMissing, templateTokens,
+  CONTACT_FIELDS, HEADER_MEDIA_KEY, autoMap, isMissing, mediaHeaderFormat, parseHeaderMedia, templateTokens,
 } from '../../lib/templateVars'
 import { Alert, Avatar, Badge, EmptyState, Panel, PanelHead, Spinner, Table, Td, Th, inputClass } from './ui'
-import { sentenceCase } from './labels'
+import { importSummary, sentenceCase } from './labels'
 
 // Friendly labels for the standard contact fields in the mapping dropdown.
 const FIELD_LABEL = { name: 'Name', company: 'Company', email: 'Email', phone: 'Phone' }
 
 const STEPS = ['Audience', 'Template', 'Preview', 'Send']
+
+// Words and limits for a template's photo, video or document header. The limits
+// are WhatsApp's own; Meta fetches the file when it sends.
+const MEDIA_HEADER = {
+  IMAGE: { noun: 'photo', label: 'Header photo', hint: 'JPEG or PNG, up to 5 MB.' },
+  VIDEO: { noun: 'video', label: 'Header video', hint: 'MP4 (H.264 video, AAC audio), up to 16 MB.' },
+  DOCUMENT: { noun: 'document', label: 'Header document', hint: 'PDF, up to 16 MB.' },
+}
+
+// What the upload button accepts for each header type (the API checks again).
+const MEDIA_ACCEPT = {
+  IMAGE: { accept: 'image/jpeg,image/png', types: ['image/jpeg', 'image/png'], maxBytes: 5 * 1024 * 1024 },
+  VIDEO: { accept: 'video/mp4,video/3gpp', types: ['video/mp4', 'video/3gpp'], maxBytes: 16 * 1024 * 1024 },
+  DOCUMENT: { accept: 'application/pdf', types: ['application/pdf'], maxBytes: 16 * 1024 * 1024 },
+}
+
+// How fast a campaign goes out. Messages leave in batches (40 on the Free
+// plan); the pause comes between batches. A paced send gives Meta's warnings
+// time to arrive, and the campaign stops itself on one (see sendHalts.js).
+const PACES = {
+  steady: { label: 'Steady', pauseMs: 30_000, hint: 'A batch every 30 seconds, about 80 messages a minute. Recommended.' },
+  gentle: { label: 'Gentle', pauseMs: 60_000, hint: 'A batch every minute, about 40 messages a minute.' },
+  fast: { label: 'No pauses', pauseMs: 0, hint: 'Batches back to back. Only for small lists.' },
+}
+const TYPICAL_BATCH = 40
+
+function paceEstimate(count, pace) {
+  const batches = Math.max(1, Math.ceil(count / TYPICAL_BATCH))
+  const seconds = batches * 4 + (batches - 1) * (PACES[pace].pauseMs / 1000)
+  if (seconds < 90) return 'about a minute'
+  return `about ${Math.round(seconds / 60)} minutes`
+}
+
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
 
 /* ── Step 1: audience ───────────────────────────────────────────────────── */
 
@@ -39,8 +74,9 @@ function Dropzone({ onFile, uploading, compact = false }) {
         {uploading ? 'Importing contacts…' : 'Drop an Excel, CSV or JSON file here'}
       </div>
       <div className="text-[12.5px] text-muted">
-        We auto-detect the phone column (any name works) and add <strong>+91</strong> when the
-        country code is missing. Every other column is saved for use as a variable.
+        We find the WhatsApp number, name, email and company columns, check every number and add
+        {' '}<strong>+91</strong> when the country code is missing. You can correct the columns before
+        anything is saved. Every other column is kept for template variables.
       </div>
       <input
         ref={inputRef}
@@ -54,28 +90,18 @@ function Dropzone({ onFile, uploading, compact = false }) {
 }
 
 function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onImported, search, onSearch }) {
-  const [uploading, setUploading] = useState(false)
+  const [pendingFile, setPendingFile] = useState(null)
   const [notice, setNotice] = useState(null)
 
-  async function handleFile(file) {
-    if (!file) return
-    setUploading(true)
-    setNotice(null)
-    try {
-      const result = await apiUpload('/contacts/import', file)
-      setNotice({
-        tone: 'success',
-        text: `Imported ${result.imported} new contact${result.imported === 1 ? '' : 's'}`
-          + `${result.updated ? `, refreshed ${result.updated}` : ''}. `
-          + `${result.invalid} row(s) had no usable phone number. `
-          + `Phone read from “${result.phoneColumn}”.`,
-      })
-      onImported()
-    } catch (err) {
-      setNotice({ tone: 'error', text: err.message })
-    } finally {
-      setUploading(false)
-    }
+  function handleImported(result) {
+    setPendingFile(null)
+    const chosen = result.contacts?.length ?? 0
+    setNotice({
+      tone: 'success',
+      text: `${importSummary(result)} Selected the ${chosen} contact${chosen === 1 ? '' : 's'} from this file`
+        + `${result.optedOut ? ` (${result.optedOut} who opted out were left out)` : ''}.`,
+    })
+    onImported(result.contacts ?? [])
   }
 
   const allSelected = contacts.length > 0 && contacts.every((c) => selected.has(c.id))
@@ -84,7 +110,9 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
     <div>
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
-      <Dropzone onFile={handleFile} uploading={uploading} />
+      {pendingFile
+        ? <ContactImportReview file={pendingFile} onCancel={() => setPendingFile(null)} onImported={handleImported} />
+        : <Dropzone onFile={(file) => { if (file) { setNotice(null); setPendingFile(file) } }} uploading={false} />}
 
       <Panel className="mt-[18px]">
         <PanelHead
@@ -204,6 +232,9 @@ function TemplateStep({ templates, loading, selectedName, onSelect }) {
               <Badge tone="success">{sentenceCase(template.status)}</Badge>
               <Badge>{template.language}</Badge>
               {template.category && <Badge tone="info">{sentenceCase(template.category)}</Badge>}
+              {mediaHeaderFormat(template) && (
+                <Badge>{`${sentenceCase(MEDIA_HEADER[mediaHeaderFormat(template)].noun)} header`}</Badge>
+              )}
               {template.hasVariables && (
                 <Badge tone="warn">
                   {template.variables?.length ?? 0} variable{(template.variables?.length ?? 0) === 1 ? '' : 's'}
@@ -305,7 +336,75 @@ function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availabl
   )
 }
 
-function SamplePreview({ template, variableMap, sampleContacts, sampleIndex, onSampleIndex }) {
+// The file a photo, video or document header shows. Without it Meta refuses
+// every message in the campaign, so Next stays off until it is valid. Upload
+// sends the file to Meta once and fills in the media ID it returns.
+function HeaderMediaField({ format, value, onChange, uploaded, onUploaded }) {
+  const media = MEDIA_HEADER[format]
+  const rule = MEDIA_ACCEPT[format]
+  const inputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+  const invalid = value.trim() !== '' && !parseHeaderMedia(value)
+
+  async function upload(file) {
+    if (!file) return
+    setUploadError(null)
+    if (!rule.types.includes(file.type)) {
+      setUploadError(format === 'VIDEO' ? 'Choose an MP4 video.' : format === 'IMAGE' ? 'Choose a JPEG or PNG image.' : 'Choose a PDF.')
+      return
+    }
+    if (file.size > rule.maxBytes) {
+      setUploadError(`The ${media.noun} must be ${rule.maxBytes / 1024 / 1024} MB or smaller.`)
+      return
+    }
+    setUploading(true)
+    try {
+      const result = await apiUpload(`/campaigns/header-media?format=${format}`, file)
+      onChange(result.mediaId)
+      onUploaded({ name: file.name, size: file.size, url: URL.createObjectURL(file), mediaId: result.mediaId })
+    } catch (err) {
+      setUploadError(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="mb-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor="wa-header-media" className="text-[12px] text-muted">{media.label}</label>
+        <button type="button" className="secondary-button h-8 px-3 text-[12.5px]"
+          onClick={() => inputRef.current?.click()} disabled={uploading}>
+          {uploading ? 'Uploading…' : `Upload ${media.noun}`}
+        </button>
+        <input ref={inputRef} type="file" className="hidden" accept={rule.accept}
+          onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
+      </div>
+      <input
+        id="wa-header-media"
+        className={inputClass}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        inputMode="url"
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={invalid}
+        aria-describedby="wa-header-media-hint"
+      />
+      <p id="wa-header-media-hint" className={`m-0 mt-1 text-[12px] ${invalid || uploadError ? 'text-danger' : 'text-muted'}`}>
+        {uploadError
+          || (invalid
+            ? 'Enter a link starting with https:// or a WhatsApp media ID (digits only).'
+            : uploaded && uploaded.mediaId === value.trim()
+              ? `Uploaded ${uploaded.name} (${uploaded.size < 1024 * 1024 ? `${Math.max(1, Math.round(uploaded.size / 1024))} KB` : `${(uploaded.size / 1024 / 1024).toFixed(1)} MB`}) to WhatsApp. Meta keeps it for about 30 days.`
+              : `Upload the ${media.noun}, or paste a public https link to it or its WhatsApp media ID. ${media.hint} Everyone gets the same ${media.noun}.`)}
+      </p>
+    </div>
+  )
+}
+
+function SamplePreview({ template, variableMap, sampleContacts, sampleIndex, onSampleIndex, mediaPreview }) {
   const total = sampleContacts.length
   const index = Math.min(sampleIndex, Math.max(0, total - 1))
   const contact = total ? sampleContacts[index] : null
@@ -322,7 +421,7 @@ function SamplePreview({ template, variableMap, sampleContacts, sampleIndex, onS
             onClick={() => onSampleIndex(index + 1)} disabled={index >= total - 1}>›</button>
         </div>
       )}
-      <WhatsAppPreview template={template} variableMap={variableMap} sampleContact={contact} />
+      <WhatsAppPreview template={template} variableMap={variableMap} sampleContact={contact} mediaPreview={mediaPreview} />
     </div>
   )
 }
@@ -330,9 +429,10 @@ function SamplePreview({ template, variableMap, sampleContacts, sampleIndex, onS
 function PreviewStep({
   template, campaignName, onCampaignName, recipientCount,
   tokens, variableMap, onVariableChange, attributeKeys, availableFields,
-  sampleContacts, sampleIndex, onSampleIndex,
+  sampleContacts, sampleIndex, onSampleIndex, headerMedia, onHeaderMedia, headerUpload, onHeaderUpload,
 }) {
   const hasVars = tokens.length > 0
+  const mediaFormat = mediaHeaderFormat(template)
   const gaps = hasVars
     ? tokens
       .map((token) => ({ token, missing: sampleContacts.filter((ct) => isMissing(token, variableMap, ct)).length }))
@@ -354,6 +454,11 @@ function PreviewStep({
             onChange={(e) => onCampaignName(e.target.value)}
           />
         </div>
+
+        {mediaFormat && (
+          <HeaderMediaField format={mediaFormat} value={headerMedia} onChange={onHeaderMedia}
+            uploaded={headerUpload} onUploaded={onHeaderUpload} />
+        )}
 
         {hasVars && (
           <VariableMapper
@@ -377,6 +482,7 @@ function PreviewStep({
           ['Template', template?.name ?? '—'],
           ['Language', template?.language ?? '—'],
           ['Recipients', recipientCount],
+          ...(mediaFormat ? [[MEDIA_HEADER[mediaFormat].label, parseHeaderMedia(headerMedia) ? 'Added' : 'Not added yet']] : []),
           ['Variables', hasVars ? `${tokens.length} mapped to your columns` : 'None — static template'],
         ]} />
       </div>
@@ -387,6 +493,7 @@ function PreviewStep({
         sampleContacts={sampleContacts}
         sampleIndex={sampleIndex}
         onSampleIndex={onSampleIndex}
+        mediaPreview={headerUpload && headerUpload.mediaId === headerMedia.trim() ? headerUpload.url : null}
       />
     </SplitLayout>
   )
@@ -395,19 +502,58 @@ function PreviewStep({
 /* ── Step 4: send ───────────────────────────────────────────────────────── */
 
 function SendStep({
-  result, error, sending, sendProgress, partial, template, recipientCount, campaignName, variableMap, sampleContact,
+  result, error, sending, resuming, sendProgress, partial, halted, stopped, template, recipientCount, campaignName,
+  variableMap, sampleContact, pace, onPace, onStop, stopRequested, mediaPreview,
 }) {
   if (sending) {
+    const done = sendProgress ? sendProgress.sent + sendProgress.failed : 0
+    const total = sendProgress?.total || recipientCount
+    const waiting = sendProgress?.waitSeconds > 0
     return (
-      <EmptyState>
+      <div className="grid place-items-center gap-3 px-4 py-8 text-center">
         <Spinner className="text-brand-ink" />
-        <div className="mb-1.5 mt-3 text-[15px] font-medium text-ink">
-          {partial ? 'Resuming campaign…' : 'Sending campaign…'}
+        <div className="text-[15px] font-medium text-ink">
+          {stopRequested ? 'Stopping after this batch…' : resuming ? 'Resuming campaign…' : 'Sending campaign…'}
         </div>
-        {sendProgress
-          ? <>{sendProgress.sent + sendProgress.failed} / {recipientCount} processed (batch {sendProgress.batch})…</>
-          : <>Delivering {recipientCount} message{recipientCount === 1 ? '' : 's'} through the Meta Cloud API.</>}
-      </EmptyState>
+        <div className="w-full max-w-[420px]">
+          <div className="h-2 overflow-hidden rounded-full bg-line" role="progressbar"
+            aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+            <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${total ? Math.min(100, (done / total) * 100) : 0}%` }} />
+          </div>
+          <div className="mt-2 text-[12.5px] text-muted">
+            {done} of {total} done
+            {sendProgress && <> · {sendProgress.sent} accepted by Meta{sendProgress.failed > 0 && <>, {sendProgress.failed} failed</>}</>}
+            {waiting && !stopRequested && <> · next batch in {sendProgress.waitSeconds}s</>}
+          </div>
+        </div>
+        <p className="m-0 max-w-[460px] text-[12px] text-muted">
+          Keep this tab open while it sends. If Meta reports a spam or account problem, sending stops by itself.
+        </p>
+        {!stopRequested && (
+          <button type="button" className="secondary-button" onClick={onStop}>Stop sending</button>
+        )}
+      </div>
+    )
+  }
+
+  if (halted && partial) {
+    return (
+      <Alert tone="error">
+        <strong>Sending stopped by itself.</strong> {halted.reason} Campaign #{partial.campaignId} reached{' '}
+        {partial.totalSent} people; <strong>{partial.remaining.length} were not sent</strong>
+        {halted.resumable
+          ? '. When it is fixed, resume to send to them. No one already messaged gets it twice.'
+          : '. They stay on the campaign: once the problem is fixed, send them from Campaigns, Unsent. Do not resume today.'}
+      </Alert>
+    )
+  }
+
+  if (stopped && partial) {
+    return (
+      <Alert tone="info">
+        Stopped. Campaign #{partial.campaignId} reached {partial.totalSent} people; {partial.remaining.length} are
+        still to send. Resume whenever you are ready; no one already messaged gets it twice.
+      </Alert>
     )
   }
 
@@ -416,7 +562,7 @@ function SendStep({
     return (
       <Alert tone="error">
         {error} Campaign #{partial.campaignId} got through <strong>{done} / {done + partial.remaining.length}</strong> before
-        this failed — resuming will continue with the remaining {partial.remaining.length} rather than starting over, so
+        this failed. Resuming continues with the remaining {partial.remaining.length} rather than starting over, so
         no one already messaged gets a duplicate.
       </Alert>
     )
@@ -428,7 +574,7 @@ function SendStep({
     return (
       <>
         <Alert tone={result.sent > 0 ? 'success' : 'error'}>
-          Campaign #{result.campaignId} finished — <strong>{result.sent} sent</strong>
+          Campaign #{result.campaignId} finished: <strong>{result.sent} accepted by Meta</strong>
           {result.failed > 0 && <>, <strong>{result.failed} failed</strong></>}.
           {result.firstError && <> First error: {result.firstError}</>}
         </Alert>
@@ -437,6 +583,11 @@ function SendStep({
           ['Failed', result.failed],
           ['Delivery receipts', 'Tracked live via webhook'],
         ]} />
+        <p className="mt-3 text-[12px] text-muted">
+          Accepted is not delivered: Meta can still hold a marketing message back (error 131049) when a person has
+          had many recently. Delivered and read counts update on the Campaigns page. People who tap Stop promotions
+          are opted out automatically.
+        </p>
       </>
     )
   }
@@ -447,6 +598,23 @@ function SendStep({
         <Alert tone="info">
           This sends real WhatsApp messages and consumes Meta message credits.
         </Alert>
+        <fieldset className="mb-4 rounded-[10px] border border-line px-3.5 pb-3 pt-2">
+          <legend className="px-1 text-[12px] text-muted">Sending pace</legend>
+          {Object.entries(PACES).map(([key, option]) => (
+            <label key={key} className="flex cursor-pointer items-start gap-2.5 py-1.5 text-[13px]">
+              <input type="radio" name="wa-pace" value={key} checked={pace === key} onChange={() => onPace(key)}
+                className="mt-[3px] accent-brand" />
+              <span>
+                <span className="font-medium text-ink">{option.label}</span>
+                <span className="block text-[12px] text-muted">{option.hint}</span>
+              </span>
+            </label>
+          ))}
+          <p className="m-0 mt-1 text-[12px] text-muted">
+            {recipientCount} message{recipientCount === 1 ? '' : 's'} at this pace take {paceEstimate(recipientCount, pace)}.
+            Sending stops by itself if Meta reports a spam limit, a paused template or an account block.
+          </p>
+        </fieldset>
         <ReviewList rows={[
           ['Campaign', campaignName || '—'],
           ['Template', template?.name ?? '—'],
@@ -454,7 +622,7 @@ function SendStep({
         ]} />
       </div>
       <div className="grid place-items-center py-2">
-        <WhatsAppPreview template={template} variableMap={variableMap} sampleContact={sampleContact} />
+        <WhatsAppPreview template={template} variableMap={variableMap} sampleContact={sampleContact} mediaPreview={mediaPreview} />
       </div>
     </SplitLayout>
   )
@@ -497,10 +665,18 @@ function Stepper({ step }) {
 export function CampaignWizard({ onDone }) {
   const [step, setStep] = useState(0)
 
-  const [contacts, setContacts] = useState([])
+  const [loadedContacts, setLoadedContacts] = useState([])
+  // The contacts of a file imported here. The list endpoint returns the newest
+  // 2,000, which can leave out older people in the file, so they are kept too.
+  const [fileContacts, setFileContacts] = useState([])
   const [contactsLoading, setContactsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(() => new Set())
+  const contacts = useMemo(() => {
+    if (search.trim() || fileContacts.length === 0) return loadedContacts
+    const ids = new Set(fileContacts.map((contact) => contact.id))
+    return [...fileContacts, ...loadedContacts.filter((contact) => !ids.has(contact.id))]
+  }, [search, fileContacts, loadedContacts])
 
   const [templates, setTemplates] = useState([])
   const [templatesLoading, setTemplatesLoading] = useState(true)
@@ -508,6 +684,16 @@ export function CampaignWizard({ onDone }) {
 
   const [campaignName, setCampaignName] = useState('')
   const [variableMap, setVariableMap] = useState({})
+  // The file for a photo, video or document header, as typed or as the media ID
+  // an upload returned (headerUpload keeps that file for the preview).
+  const [headerMedia, setHeaderMedia] = useState('')
+  const [headerUpload, setHeaderUpload] = useState(null)
+  const [pace, setPace] = useState('steady')
+  const [halted, setHalted] = useState(null)
+  const [stopped, setStopped] = useState(false)
+  const [stopRequested, setStopRequested] = useState(false)
+  const [resuming, setResuming] = useState(false)
+  const stopRef = useRef(false)
   const [sampleIndex, setSampleIndex] = useState(0)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState(null)
@@ -545,7 +731,7 @@ export function CampaignWizard({ onDone }) {
       const data = await apiGet(`/contacts?search=${encodeURIComponent(term)}`)
       // The send endpoint skips opted-out contacts, so don't offer them here —
       // otherwise the selected count would not match the number actually sent.
-      setContacts(data.contacts.filter((contact) => !contact.opted_out))
+      setLoadedContacts(data.contacts.filter((contact) => !contact.opted_out))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -575,6 +761,8 @@ export function CampaignWizard({ onDone }) {
   // change (which shifts attributeKeys) never discards manual mappings.
   useEffect(() => {
     setSampleIndex(0)
+    setHeaderMedia('')
+    setHeaderUpload(null)
     if (template && tokens.length) {
       setVariableMap(autoMap(tokens, { fields: availableFields, attributeKeys }))
     } else {
@@ -582,6 +770,25 @@ export function CampaignWizard({ onDone }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template])
+
+  // Columns can arrive after the template was chosen (contacts still loading,
+  // or a file imported later). Fill any variable still unmapped, never one the
+  // person already set.
+  useEffect(() => {
+    if (!template || tokens.length === 0) return
+    setVariableMap((prev) => {
+      const missing = tokens.filter((token) => !prev[token])
+      if (missing.length === 0) return prev
+      const guess = autoMap(tokens, { fields: availableFields, attributeKeys })
+      const found = missing.filter((token) => guess[token])
+      if (found.length === 0) return prev
+      return { ...prev, ...Object.fromEntries(found.map((token) => [token, guess[token]])) }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attributeKeys, availableFields])
+
+  // Frees the preview copy of an uploaded header file.
+  useEffect(() => () => { if (headerUpload?.url) URL.revokeObjectURL(headerUpload.url) }, [headerUpload])
 
   function handleVariableChange(token, value, literalText) {
     setVariableMap((prev) => {
@@ -607,12 +814,14 @@ export function CampaignWizard({ onDone }) {
 
   const recipientCount = selected.size
   const allMapped = tokens.every((token) => variableMap[token])
+  const mediaFormat = mediaHeaderFormat(template)
+  const headerMediaReady = !mediaFormat || Boolean(parseHeaderMedia(headerMedia))
   const canAdvance = useMemo(() => {
     if (step === 0) return recipientCount > 0
     if (step === 1) return Boolean(template)
-    if (step === 2) return campaignName.trim().length > 0 && allMapped
+    if (step === 2) return campaignName.trim().length > 0 && allMapped && headerMediaReady
     return false
-  }, [step, recipientCount, template, campaignName, allMapped])
+  }, [step, recipientCount, template, campaignName, allMapped, headerMediaReady])
 
   const [sendProgress, setSendProgress] = useState(null)
   // Snapshot of an in-progress campaign that stopped mid-way (a batch call
@@ -623,13 +832,18 @@ export function CampaignWizard({ onDone }) {
   // quality rating / messaging limits with Meta).
   const [partial, setPartial] = useState(null)
 
+  // A media header's file rides in the variable map (HEADER_MEDIA_KEY), so the
+  // campaign keeps it for /send-batch and for a later retry.
   function sharedSendPayload() {
     return {
       templateName: template.name,
       templateLanguage: template.language,
       templateHeader: template.headerText || '',
+      templateHeaderFormat: template.headerFormat || '',
       templateBody: template.bodyText || '',
-      variableMap,
+      variableMap: mediaFormat
+        ? { ...variableMap, [HEADER_MEDIA_KEY]: { source: 'media', value: headerMedia.trim() } }
+        : variableMap,
     }
   }
 
@@ -649,23 +863,40 @@ export function CampaignWizard({ onDone }) {
     return undefined
   }
 
+  // Waits between batches, a second at a time so Stop takes effect at once and
+  // the countdown stays honest even when a background tab slows the timers.
+  async function pauseBetweenBatches(ms, progress) {
+    const end = Date.now() + ms
+    while (!stopRef.current && Date.now() < end) {
+      setSendProgress({ ...progress, waitSeconds: Math.ceil((end - Date.now()) / 1000) })
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(Math.min(1000, end - Date.now()))
+    }
+    setSendProgress({ ...progress, waitSeconds: 0 })
+  }
+
   // Drives /send-batch until `remaining` is empty, accumulating on top of
   // whatever was already sent (0 for a fresh send, or a resumed campaign's
-  // running totals). Updates `partial` before every batch so a mid-loop
-  // failure always leaves enough to resume from exactly this point.
+  // running totals), pausing between batches at the chosen pace. Updates
+  // `partial` before every batch so a mid-loop failure, a Stop or a halt
+  // always leaves enough to resume from exactly this point. Returns null when
+  // the run ended early (stopped or halted), else the finished result.
   async function driveBatches(firstResponse, shared, seed = { sent: 0, failed: 0, firstError: null }) {
     let data = firstResponse
     let totalSent = seed.sent + data.sent
     let totalFailed = seed.failed + data.failed
     let firstError = seed.firstError || data.firstError
     let batch = 1
+    const total = seed.sent + seed.failed + recipientTotal(firstResponse)
 
     while (data.remaining?.length > 0) {
       batch += 1
-      setPartial({
-        campaignId: data.campaignId, remaining: data.remaining, totalSent, totalFailed, firstError,
-      })
-      setSendProgress({ sent: totalSent, failed: totalFailed, batch })
+      const progress = { sent: totalSent, failed: totalFailed, batch, total }
+      setPartial({ campaignId: data.campaignId, remaining: data.remaining, totalSent, totalFailed, firstError })
+      setSendProgress(progress)
+      // eslint-disable-next-line no-await-in-loop
+      if (PACES[pace].pauseMs > 0) await pauseBetweenBatches(PACES[pace].pauseMs, progress)
+      if (stopRef.current) { setStopped(true); return null }
 
       // eslint-disable-next-line no-await-in-loop
       data = await postWithRetry('/campaigns/send-batch', {
@@ -677,6 +908,15 @@ export function CampaignWizard({ onDone }) {
       totalSent += data.sent
       totalFailed += data.failed
       if (!firstError && data.firstError) firstError = data.firstError
+      setSendProgress({ sent: totalSent, failed: totalFailed, batch, total })
+    }
+
+    // Meta reported a stop-the-campaign error: the API sent `notSent` instead
+    // of `remaining`, so the loop above has ended.
+    if (data.halted) {
+      setPartial({ campaignId: data.campaignId, remaining: data.notSent ?? [], totalSent, totalFailed, firstError })
+      setHalted(data.halted)
+      return null
     }
 
     setPartial(null)
@@ -685,11 +925,30 @@ export function CampaignWizard({ onDone }) {
     }
   }
 
+  // Everyone this run will reach: the first batch plus what it handed back.
+  function recipientTotal(response) {
+    return response.sent + response.failed + (response.remaining?.length ?? response.notSent?.length ?? 0)
+  }
+
+  function resetRunState() {
+    stopRef.current = false
+    setStopRequested(false)
+    setStopped(false)
+    setHalted(null)
+    setError(null)
+  }
+
+  function requestStop() {
+    stopRef.current = true
+    setStopRequested(true)
+  }
+
   async function send() {
     if (sending) return
     setSending(true)
-    setError(null)
-    setSendProgress(null)
+    setResuming(false)
+    resetRunState()
+    setSendProgress({ sent: 0, failed: 0, batch: 1, total: recipientCount })
     setPartial(null)
     try {
       const shared = sharedSendPayload()
@@ -699,7 +958,8 @@ export function CampaignWizard({ onDone }) {
         contactIds: [...selected],
         ...shared,
       })
-      setResult(await driveBatches(initial, shared))
+      const finished = await driveBatches(initial, shared)
+      if (finished) setResult(finished)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -713,7 +973,8 @@ export function CampaignWizard({ onDone }) {
   async function resumeSend() {
     if (sending || !partial) return
     setSending(true)
-    setError(null)
+    setResuming(true)
+    resetRunState()
     try {
       const shared = sharedSendPayload()
       const next = await postWithRetry('/campaigns/send-batch', {
@@ -721,9 +982,10 @@ export function CampaignWizard({ onDone }) {
         contactIds: partial.remaining,
         ...shared,
       })
-      setResult(await driveBatches(next, shared, {
+      const finished = await driveBatches(next, shared, {
         sent: partial.totalSent, failed: partial.totalFailed, firstError: partial.firstError,
-      }))
+      })
+      if (finished) setResult(finished)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -739,7 +1001,7 @@ export function CampaignWizard({ onDone }) {
       + 'campaign will re-message everyone in your current selection, including those already sent to. Continue?',
     )) return
     setPartial(null)
-    setError(null)
+    resetRunState()
   }
 
   return (
@@ -754,7 +1016,11 @@ export function CampaignWizard({ onDone }) {
             selected={selected}
             onToggle={toggle}
             onSelectAll={(checked) => setSelected(checked ? new Set(contacts.map((c) => c.id)) : new Set())}
-            onImported={() => loadContacts()}
+            onImported={(imported) => {
+              setFileContacts(imported)
+              setSelected(new Set(imported.map((contact) => contact.id)))
+              loadContacts()
+            }}
             search={search}
             onSearch={setSearch}
           />
@@ -781,6 +1047,10 @@ export function CampaignWizard({ onDone }) {
             sampleContacts={sampleContacts}
             sampleIndex={sampleIndex}
             onSampleIndex={setSampleIndex}
+            headerMedia={headerMedia}
+            onHeaderMedia={setHeaderMedia}
+            headerUpload={headerUpload}
+            onHeaderUpload={setHeaderUpload}
           />
         )}
         {step === 3 && (
@@ -788,13 +1058,21 @@ export function CampaignWizard({ onDone }) {
             result={result}
             error={error}
             sending={sending}
+            resuming={resuming}
             sendProgress={sendProgress}
             partial={partial}
+            halted={halted}
+            stopped={stopped}
             template={template}
             recipientCount={recipientCount}
             campaignName={campaignName}
             variableMap={variableMap}
             sampleContact={sampleContacts[Math.min(sampleIndex, Math.max(0, sampleContacts.length - 1))] || null}
+            pace={pace}
+            onPace={setPace}
+            onStop={requestStop}
+            stopRequested={stopRequested}
+            mediaPreview={headerUpload && headerUpload.mediaId === headerMedia.trim() ? headerUpload.url : null}
           />
         )}
       </div>
@@ -808,7 +1086,7 @@ export function CampaignWizard({ onDone }) {
         </span>
 
         <div className="flex items-center gap-2.5">
-          {result ? (
+          {result || (halted && !halted.resumable && !sending) ? (
             <button type="button" className="primary-button" onClick={onDone}>
               Back to campaigns
             </button>
@@ -831,6 +1109,10 @@ export function CampaignWizard({ onDone }) {
                   disabled={!canAdvance}
                 >
                   Continue
+                </button>
+              ) : sending ? (
+                <button type="button" className="primary-button" disabled>
+                  {resuming ? 'Resuming…' : 'Sending…'}
                 </button>
               ) : partial ? (
                 <>

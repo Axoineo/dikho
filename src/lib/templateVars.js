@@ -153,11 +153,61 @@ function buildParamComponent(type, text, map, contact, fallback) {
   return { type, parameters }
 }
 
+/* ── Media headers ───────────────────────────────────────────────────────
+   A template header is either text (which may hold {{variables}}) or a photo,
+   video or document. A media header takes exactly one parameter of its own on
+   every send: the file to show, as a public https link or the ID of media
+   already uploaded to WhatsApp. Leave it out and Meta refuses the whole message
+   with 132012 "Parameter format does not match format in the created template".
+   The file is the same for every recipient. */
+export const MEDIA_HEADER_FORMATS = ['IMAGE', 'VIDEO', 'DOCUMENT']
+
+// The header file travels in the variable map, so the campaign's stored map
+// (what a retry re-reads) keeps it. `@` is outside TOKEN_RE, so no {{token}}
+// can ever collide with this key.
+export const HEADER_MEDIA_KEY = '@header'
+
+// IMAGE, VIDEO or DOCUMENT when the template's header needs a file, else null.
+// LOCATION headers are not handled here.
+export function mediaHeaderFormat(template) {
+  const format = String(template?.headerFormat ?? '').toUpperCase()
+  return MEDIA_HEADER_FORMATS.includes(format) ? format : null
+}
+
+// { id } or { link } from what someone typed, or null when it is neither.
+// Untrusted input: a media ID is digits only; a link must be https, without
+// credentials, at most 2048 characters. Meta fetches the link, we never do.
+export function parseHeaderMedia(input) {
+  const value = String(input ?? '').trim()
+  if (/^\d{1,32}$/.test(value)) return { id: value }
+  if (!value || value.length > 2048) return null
+  let url
+  try { url = new URL(value) } catch { return null }
+  if (url.protocol !== 'https:' || url.username || url.password) return null
+  return { link: url.href }
+}
+
+// The validated header file in a variable map, or null.
+export function headerMediaFrom(map) {
+  const entry = map?.[HEADER_MEDIA_KEY]
+  return entry?.source === 'media' ? parseHeaderMedia(entry.value) : null
+}
+
 // Full Meta `components` array for one recipient. Empty array => static send.
+// A media header becomes { type: 'header', parameters: [{ type: 'video',
+// video: { link } }] } (or image/document, or { id }); it is left out when the
+// map has no valid file, so callers must check headerMediaFrom first.
 export function buildComponents(template, map, contact, { fallback = ' ' } = {}) {
   const components = []
-  const header = buildParamComponent('header', template?.headerText, map, contact, fallback)
-  if (header) components.push(header)
+  const mediaFormat = mediaHeaderFormat(template)
+  if (mediaFormat) {
+    const media = headerMediaFrom(map)
+    const type = mediaFormat.toLowerCase()
+    if (media) components.push({ type: 'header', parameters: [{ type, [type]: media }] })
+  } else {
+    const header = buildParamComponent('header', template?.headerText, map, contact, fallback)
+    if (header) components.push(header)
+  }
   const body = buildParamComponent('body', template?.bodyText, map, contact, fallback)
   if (body) components.push(body)
   return components

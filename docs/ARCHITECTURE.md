@@ -115,7 +115,9 @@ Public routes:
 
 Authenticated routes:
 
-- contacts/import and deletion;
+- contacts/import (older multipart path), contacts/import-rows (rows already
+  read and checked in the browser, which keeps the Worker inside the Free
+  plan's 10 ms CPU limit) and deletion;
 - WhatsApp templates and campaigns;
 - corporate-gifting lead status;
 - WhatsApp conversations, replies and media uploads;
@@ -256,6 +258,10 @@ part of the current architecture.
 - Public WhatsApp confirmations use per-number cooldowns and a global daily
   send ceiling.
 - Campaign sends claim message rows atomically and constrain concurrency.
+  The wizard paces batches (30 seconds apart by default) and a batch stops the
+  campaign on Meta spam, template, account or token errors, whether returned on
+  the send or reported later by webhook (`services/whatsapp/sendHalts.js`); a
+  stopped batch returns `notSent`, never `remaining`, so no client keeps looping.
 - Webhook processing is idempotent and reconciliation repairs ordering races.
 - Email campaigns: a daily cap in the database (`EMAIL_DAILY_CAP`, required
   to send), a per-campaign recipient limit, batches of 20 with five in

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
-import { apiDelete, apiGet, apiUpload } from '../../lib/api'
+import { apiDelete, apiGet } from '../../lib/api'
+import { ContactImportReview } from './ContactImport'
+import { importSummary } from './labels'
 import { useAccess } from '../../lib/access'
 import { ResultCount, SearchField } from '../../components/crm/CrmUi'
 import {
-  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Spinner, Table, Td, Th,
+  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Table, Td, Th,
 } from './ui'
 
 export default function WhatsAppContacts() {
@@ -14,7 +16,7 @@ export default function WhatsAppContacts() {
   const [search, setSearch] = useState('')
   const [notice, setNotice] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [pendingFile, setPendingFile] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
   const [deleting, setDeleting] = useState(false)
   const inputRef = useRef(null)
@@ -32,25 +34,19 @@ export default function WhatsAppContacts() {
     return () => clearTimeout(timer)
   }, [search, load])
 
-  async function handleFile(file) {
+  // The file is read and its columns checked in ContactImportReview, which
+  // saves only after the person confirms the columns.
+  function handleFile(file) {
+    if (inputRef.current) inputRef.current.value = ''
     if (!file) return
-    setUploading(true)
     setNotice(null)
-    try {
-      const result = await apiUpload('/contacts/import', file)
-      setNotice({
-        tone: 'success',
-        text: `Imported ${result.imported} new contact${result.imported === 1 ? '' : 's'}`
-          + `${result.updated ? `, refreshed ${result.updated}` : ''} from ${result.totalRows} rows. `
-          + `${result.invalid} had no usable phone. Phone read from "${result.phoneColumn}".`,
-      })
-      load(search)
-    } catch (err) {
-      setNotice({ tone: 'error', text: err.message })
-    } finally {
-      setUploading(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }
+    setPendingFile(file)
+  }
+
+  function handleImported(result) {
+    setPendingFile(null)
+    setNotice({ tone: 'success', text: importSummary(result) })
+    load(search)
   }
 
   function toggle(id) {
@@ -95,7 +91,11 @@ export default function WhatsAppContacts() {
 
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
-      {can('wa_contacts.import') && <div
+      {pendingFile && (
+        <ContactImportReview file={pendingFile} onCancel={() => setPendingFile(null)} onImported={handleImported} />
+      )}
+
+      {can('wa_contacts.import') && !pendingFile && <div
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
@@ -109,11 +109,10 @@ export default function WhatsAppContacts() {
             ? 'border-brand bg-brand-soft text-ink'
             : 'border-line text-muted hover:border-brand hover:bg-brand-soft hover:text-ink'}`}
       >
-        {uploading ? <Spinner /> : <Icon name="upload" size={16} />}
+        <Icon name="upload" size={16} />
         <span>
-          {uploading
-            ? 'Importing…'
-            : 'Drop an Excel, CSV or JSON file, or click to choose. The phone column is found for you, and +91 is added when missing.'}
+          Drop an Excel, CSV or JSON file, or click to choose. The columns are found for you and every number is
+          checked; you can correct the columns before saving.
         </span>
         <input
           ref={inputRef}

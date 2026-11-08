@@ -127,6 +127,28 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Changed
 
+- Contact imports are read in the browser and shown for checking before
+  anything is saved: the WhatsApp number, spare phone columns, name (or first
+  plus last name), email and company are detected and can be changed. Numbers
+  are checked with `libphonenumber-js` (new dependency, MIT, no dependencies of
+  its own, loaded only when a file is chosen), so order IDs, landlines,
+  placeholders and numbers Excel rounded to 9.19877E+11 are skipped with a
+  reason. Title rows above the headers and sheets with no header row are
+  handled, blank or repeated headers keep their columns, and names in one case
+  are tidied. A re-import writes only contacts that changed. In the campaign
+  wizard the imported file's contacts are selected, even ones older than the
+  newest 2,000 the list shows.
+- WhatsApp campaigns are sent at a chosen pace (a batch of 40 every 30 seconds
+  by default, or every minute, or without pauses), with live progress and a
+  Stop button. Sending stops by itself when Meta reports a spam limit, a paused
+  or mismatched template, an account block, a payment problem, a bad token or a
+  rate limit, or when most of a batch fails; people not yet messaged stay on
+  the campaign to send later. Campaigns stopped this way show as Stopped.
+- A template's header video, photo or PDF can be uploaded from the wizard; it
+  goes to Meta once and every message reuses the media ID.
+- People who choose "Stop promotions" in WhatsApp (Meta error 131050) are
+  opted out of campaigns automatically.
+
 - The screens that still differed from the agreed mockups now match them:
   - Sign-in is one plain card; the blue welcome half is gone.
   - Sidebar in the mockup's order (Clients, Leads, Sales orders, Vendors,
@@ -236,6 +258,19 @@ incident details or unreleased vulnerability exploitation instructions here.
   build and the high-signal secret scan.
 - Documentation now distinguishes the production Cloudflare Pages SPA from the
   unused standalone SPA Worker deployment command.
+
+### Fixed
+
+- WhatsApp campaigns with a photo, video or document header no longer fail
+  every message with Meta error 132012 ("Parameter format does not match").
+  The send left the header out and only sent the body. The campaign wizard now
+  asks for the header file (a public https link or a WhatsApp media ID) and
+  sends it as the header component, next to the body variables (named ones
+  with `parameter_name`). The API refuses such a campaign without a valid file
+  before anything is stored or sent. The file is kept with the campaign's
+  variables, so a retry sends it too; a campaign sent before this fix has no
+  file saved and its retry is refused with a message saying so. The inbox,
+  lead confirmations and staff welcome still do not fill media headers.
 
 ### Security
 
