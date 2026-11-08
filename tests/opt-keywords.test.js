@@ -114,12 +114,12 @@ test('START opts an opted-out contact back in and confirms it, kept in the chat'
   assert.deepEqual(optUpdate().args, [0, PHONE])
   assert.equal(sends.length, 1)
   assert.equal(sends[0].body.text.body, START_REPLY)
-  assert.equal(START_REPLY, 'You have successfully subscribed again. You will now receive important updates from us on WhatsApp. Reply STOP at any time to stop receiving them.')
+  assert.equal(START_REPLY, 'Your request to START receiving updates has been successfully registered.\n\nPlease reply STOP if you would like to stop receiving important updates on WhatsApp. Thank you.')
   const kept = queries.find((q) => /INSERT INTO messages/.test(q.sql) && /'outbound'/.test(q.sql))
   assert.equal(kept.args[4], START_REPLY)
 })
 
-test('START from someone who was never opted out gets no "subscribed again" reply', async () => {
+test('START from someone who was never opted out gets no confirmation', async () => {
   db.run.push([/UPDATE contacts SET opted_out/, 0])
   await inbound({ type: 'text', text: { body: 'Start' } })
   assert.deepEqual(optUpdate().args, [0, PHONE])

@@ -5,7 +5,7 @@
 // the inbox shows a warning on their chat. They get one confirmation reply,
 // which is free because they have just messaged us. "START" opts them back in
 // and confirms that too, but only when they were opted out, so a stray "Start"
-// from anyone else gets no "subscribed again" message. Meta's own "Stop
+// from anyone else gets no confirmation. Meta's own "Stop
 // promotions" button arrives separately, as error 131050 on a receipt (see
 // routes/whatsapp/webhook.js).
 //
@@ -19,8 +19,9 @@ import { logError, logEvent } from '../../utils/logger.js'
 export const STOP_REPLY = 'Your request to STOP receiving updates has been successfully registered.\n\n'
   + 'Please reply START if you would like to start receiving important updates on WhatsApp again. Thank you.'
 
-export const START_REPLY = 'You have successfully subscribed again. You will now receive important updates from us on WhatsApp. '
-  + 'Reply STOP at any time to stop receiving them.'
+// The owner's wording, mirroring STOP_REPLY.
+export const START_REPLY = 'Your request to START receiving updates has been successfully registered.\n\n'
+  + 'Please reply STOP if you would like to stop receiving important updates on WhatsApp. Thank you.'
 
 const KEYWORD = /^\s*(stop|start)[\s.!]*$/i
 

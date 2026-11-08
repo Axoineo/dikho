@@ -20,10 +20,10 @@ incident details or unreleased vulnerability exploitation instructions here.
   would like to start receiving important updates on WhatsApp again. Thank you."
   The reply is kept in the chat. Campaigns skip opted-out people, and the inbox
   shows an "Opted out" tag in the chat list and Contact info plus a warning above
-  the message box. A reply of START opts them back in and confirms it: "You
-  have successfully subscribed again. You will now receive important updates
-  from us on WhatsApp. Reply STOP at any time to stop receiving them." Someone
-  who was not opted out gets no reply to START.
+  the message box. A reply of START opts them back in and confirms it: "Your
+  request to START receiving updates has been successfully registered. Please
+  reply STOP if you would like to stop receiving important updates on
+  WhatsApp. Thank you." Someone who was not opted out gets no reply to START.
 - Android app (`dikho-mobile/`), a Flutter shell around the deployed CRM with
   native downloads, uploads, external-link handling and self-updates, plus its
   update Worker (`cloudflare-updater/`). Built and tested on emulators with a test
