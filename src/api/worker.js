@@ -53,9 +53,9 @@ export default {
       // Does nothing otherwise; safe alongside the request-driven dispatch.
       if (env.EMAIL_HUB_ENABLED === 'true') await dispatchCampaignBatch(env)
 
-      // The reconciler is the heavy D1 sweep, so it stays off the
-      // every-minute schedule — running it 10x more often spends row-reads
-      // against the free-tier budget migration 0006 records running out once.
+      // The reconciler stays off the every-minute schedule to spare D1's free
+      // row-read budget. Both passes below read through the processing_status
+      // index; an unbounded scan here once used up the whole day's reads.
       if (event.cron === '* * * * *') return
 
       await reconcileStatuses(env.DB)

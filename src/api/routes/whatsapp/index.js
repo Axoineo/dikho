@@ -26,12 +26,13 @@ whatsapp.get('/media-ticket', requireAuth, requirePermission('inbox.view'), asyn
 // Drains delivery receipts the webhook could not attach to a row at the time
 // (see services/whatsapp/reconcile.js). A cron in wrangler.api.jsonc runs the
 // same sweep; this route is the manual handle, and `?includeProcessed=1`
-// widens it to receipts ACKed before the backlog flag existed.
+// widens it to receipts ACKed before the backlog flag existed and to the full
+// (expensive) scan for inbound messages that never became a row.
 whatsapp.post('/reconcile', requireAuth, requirePermission('whatsapp.maintain'), async (c) => {
   const includeProcessed = c.req.query('includeProcessed') === '1'
   const sinceIso = c.req.query('since') ?? null
   const result = await reconcileStatuses(c.env.DB, { includeProcessed, sinceIso })
-  const inbound = await reconcileInbound(c)
+  const inbound = await reconcileInbound(c, { includeProcessed })
   return ok(c, { ...result, inbound })
 })
 

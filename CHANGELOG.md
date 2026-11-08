@@ -279,6 +279,12 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Fixed
 
+- The WhatsApp inbox and dashboard stopped loading on 2026-11-08 ("Something
+  went wrong processing this request") because D1's free 5 million daily row
+  reads were used up. A background repair job ran every 10 minutes and scanned
+  the whole webhook log (about 11,000 rows each time) once Cloudflare began
+  firing the crons. It now reads only failed or unfinished events through an
+  index; the full scan is kept for the manual repair route.
 - WhatsApp campaigns with a photo, video or document header no longer fail
   every message with Meta error 132012 ("Parameter format does not match").
   The send left the header out and only sent the body. The campaign wizard now

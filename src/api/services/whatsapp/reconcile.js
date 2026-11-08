@@ -124,11 +124,8 @@ export async function reconcileStatuses(db, { includeProcessed = false, sinceIso
 // every request. The probe reads the `processing_status` index, then does at
 // most a handful of `meta_message_id` lookups.
 //
-// reconcileInbound is deliberately NOT called here: its guard query is a
-// NOT EXISTS scan over every message-type event rather than an indexed lookup,
-// and it exists for a one-time historical repair (two pre-inbox messages from
-// 2026-09-24) rather than an ongoing race. It stays on the cron, for if the
-// cron ever starts working.
+// reconcileInbound is deliberately NOT called here; the 10-minute cron runs it
+// (crons do fire on this account now; see worker.js).
 let lastReconcileAt = 0
 const RECONCILE_INTERVAL_MS = 120_000
 
@@ -167,16 +164,36 @@ export function maybeReconcileOnRequest(c) {
 // media into R2 and broadcasts to open agent tabs. Replaying only the row
 // would leave the rest half-built. `ctx` needs `env` and `executionCtx`, which
 // both a Hono context and a { env, executionCtx } shim from the cron satisfy.
-export async function reconcileInbound(ctx, { limit = 25 } = {}) {
-  const { results } = await ctx.env.DB.prepare(
-    `SELECT idempotency_key, payload FROM webhook_events AS w
+//
+// The routine pass (the cron) reads only events whose processing failed or
+// never finished, through the processing_status index, and leaves anything
+// under 10 minutes old to the live webhook. It used to scan every event in the
+// ledger: about 11,000 rows a run, every 10 minutes once crons began firing,
+// which used up D1's free 5 million daily row reads on 2026-11-08 and took the
+// inbox and dashboard down until the midnight UTC reset. The full scan is kept
+// for the manual repair route only (`includeProcessed`), for events ACKed
+// before the inbox existed.
+export const ROUTINE_INBOUND_SQL = `SELECT idempotency_key, payload FROM webhook_events AS w
+     WHERE w.processing_status IN ('pending', 'failed')
+       AND w.event_type = 'message'
+       AND w.received_at < datetime('now', '-10 minutes')
+       AND NOT EXISTS (
+         SELECT 1 FROM messages m WHERE m.meta_message_id = w.idempotency_key
+       )
+     ORDER BY w.received_at
+     LIMIT ?1`
+
+export const FULL_INBOUND_SQL = `SELECT idempotency_key, payload FROM webhook_events AS w
      WHERE w.event_type = 'message'
        AND NOT EXISTS (
          SELECT 1 FROM messages m WHERE m.meta_message_id = w.idempotency_key
        )
      ORDER BY w.received_at
-     LIMIT ?1`,
-  ).bind(limit).all()
+     LIMIT ?1`
+
+export async function reconcileInbound(ctx, { limit = 25, includeProcessed = false } = {}) {
+  const { results } = await ctx.env.DB.prepare(includeProcessed ? FULL_INBOUND_SQL : ROUTINE_INBOUND_SQL)
+    .bind(limit).all()
 
   let replayed = 0
   for (const row of results ?? []) {
@@ -188,6 +205,11 @@ export async function reconcileInbound(ctx, { limit = 25 } = {}) {
       await processInboundMessage(ctx, {
         raw, from: raw.from, waName: null, timestamp: raw.timestamp,
       })
+      // Settled: the routine pass never reads this event again.
+      await ctx.env.DB.prepare(
+        `UPDATE webhook_events SET processing_status = 'processed', processed_at = datetime('now')
+         WHERE idempotency_key = ?1 AND processing_status <> 'processed'`,
+      ).bind(row.idempotency_key).run()
       replayed += 1
     } catch (err) {
       logError('whatsapp.reconcile.inbound_failed', err)
