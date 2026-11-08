@@ -126,7 +126,7 @@ conversations.get('/', requirePermission('inbox.view'), async (c) => {
     // shows, hence the cleared_through_id bound. Deleted chats (status
     // 'deleted') drop out through the status filter. Reactions are skipped:
     // Meta never reports them past `sent` (see sendReaction).
-    `SELECT conv.*, ct.name AS contact_name, ct.avatar_url AS avatar_url,
+    `SELECT conv.*, ct.name AS contact_name, ct.avatar_url AS avatar_url, ct.opted_out AS opted_out,
             (SELECT m.status FROM messages m
               WHERE m.conversation_id = conv.id AND m.direction = 'outbound'
                 AND m.id > conv.cleared_through_id AND m.type <> 'reaction'

@@ -75,6 +75,11 @@ export function ContactPanel({ conversation, messages, onOpenMedia, onChatAction
             <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-danger px-3 py-1 text-[12px] font-medium text-danger">
               <ActionIcon action="block" className="h-3.5 w-3.5" /> Blocked
             </span>
+          ) : conversation.opted_out ? (
+            <span className="mt-3 flex items-center gap-1.5 rounded-full bg-tint-danger px-3 py-1 text-[12px] font-medium text-danger"
+              title="They replied STOP. If they reply START, they are opted back in.">
+              <ActionIcon action="block" className="h-3.5 w-3.5" /> Opted out · replied STOP
+            </span>
           ) : msLeft > 0 ? (
             <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inbox-chip px-3 py-1 text-[12px] font-medium text-brand-ink">
               <span className="h-1.5 w-1.5 rounded-full bg-current" /> Replies open · {formatCountdown(msLeft)} left

@@ -14,6 +14,13 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- WhatsApp STOP and START replies. A customer whose message is just STOP (any
+  capitals) is opted out and gets one confirmation reply: "Your request to STOP
+  receiving updates has been successfully registered. Please reply START if you
+  would like to start receiving important updates on WhatsApp again. Thank you."
+  The reply is kept in the chat. Campaigns skip opted-out people, and the inbox
+  shows an "Opted out" tag in the chat list and Contact info plus a warning above
+  the message box. A reply of START opts them back in, without a reply.
 - Android app (`dikho-mobile/`), a Flutter shell around the deployed CRM with
   native downloads, uploads, external-link handling and self-updates, plus its
   update Worker (`cloudflare-updater/`). Built and tested on emulators with a test
