@@ -2,8 +2,14 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
 import { fetchApprovedTemplates, sendTemplateMessage } from '../../services/whatsapp/graph.js'
-import { buildComponents } from '../../../lib/templateVars.js'
-import { MAX_DASHBOARD_JSON_BYTES, readJsonOr } from '../../utils/body.js'
+import { uploadMediaToMeta } from '../../services/whatsapp/media.js'
+import { WATCHED_CODES, haltFor, mostlyFailed } from '../../services/whatsapp/sendHalts.js'
+import {
+  HEADER_MEDIA_KEY, buildComponents, mediaHeaderFormat, parseHeaderMedia,
+} from '../../../lib/templateVars.js'
+import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
+import { safeDisplayName, sniffType } from '../../utils/fileType.js'
+import { logEvent } from '../../utils/logger.js'
 import { requirePermission } from '../../middleware/requireAuth.js'
 
 const campaigns = new Hono()
@@ -31,6 +37,38 @@ function concurrency(env) {
   return Number(env.CAMPAIGN_CONCURRENCY) || DEFAULT_CONCURRENCY
 }
 
+// What one campaign's sends are built from. A photo, video or document header
+// needs its file on every send, or Meta refuses each message with 132012, so a
+// missing or malformed file is refused here, before anything is stored or sent.
+// The file is kept in the variable map (HEADER_MEDIA_KEY) only in its validated
+// form, which is what a retry reads back. `missingMediaMessage` is the refusal.
+function prepareSend(template, variableMap, missingMediaMessage) {
+  const map = variableMap && typeof variableMap === 'object' && !Array.isArray(variableMap) ? { ...variableMap } : {}
+  delete map[HEADER_MEDIA_KEY]
+
+  const format = mediaHeaderFormat(template)
+  if (format) {
+    const media = parseHeaderMedia(variableMap?.[HEADER_MEDIA_KEY]?.value)
+    if (!media) throw new HTTPException(400, { message: missingMediaMessage(format.toLowerCase()) })
+    map[HEADER_MEDIA_KEY] = { source: 'media', value: media.id ?? media.link }
+  }
+
+  const hasVariables = /\{\{/.test(template.headerText ?? '') || /\{\{/.test(template.bodyText ?? '')
+  return { variableMap: map, withComponents: hasVariables || Boolean(format) }
+}
+
+const addMediaMessage = (kind) => `This template has a ${kind} header. Add a public https link to the ${kind}, or its WhatsApp media ID.`
+
+// The header format comes from the wizard, as the header and body text already
+// do. Anything but a known media format is treated as a text header.
+function requestTemplate({ templateHeader = '', templateHeaderFormat = '', templateBody = '' }) {
+  return {
+    headerText: typeof templateHeader === 'string' ? templateHeader : '',
+    headerFormat: typeof templateHeaderFormat === 'string' ? templateHeaderFormat.slice(0, 20) : '',
+    bodyText: typeof templateBody === 'string' ? templateBody : '',
+  }
+}
+
 function parseAttributes(text) {
   if (!text) return null
   try { return JSON.parse(text) } catch { return null }
@@ -38,12 +76,13 @@ function parseAttributes(text) {
 
 // Runs `worker` over `items` with a fixed number of parallel lanes, preserving
 // result order. Keeps the Meta API from being hit with 500 simultaneous calls.
-async function mapWithConcurrency(items, limit, worker) {
+// Once `shouldStop()` is true no new item starts; skipped items stay undefined.
+async function mapWithConcurrency(items, limit, worker, shouldStop = () => false) {
   const results = new Array(items.length)
   let cursor = 0
 
   async function lane() {
-    while (cursor < items.length) {
+    while (cursor < items.length && !shouldStop()) {
       const index = cursor
       cursor += 1
       results[index] = await worker(items[index])
@@ -123,13 +162,16 @@ async function claimFailedRecipients(db, campaignId, recipients) {
   return recipients.filter((r) => claimed.has(r.id))
 }
 
-// Sends to a list of already-claimed recipients, returning per-recipient
-// outcomes. Persistence (finalizeMessages) is a separate step so callers
-// that claimed via INSERT vs UPDATE can share this.
-async function sendToRecipients(env, { recipients, templateName, templateLanguage, template, hasVariables, variableMap }) {
-  return mapWithConcurrency(recipients, concurrency(env), async (recipient) => {
+// Sends to a list of already-claimed recipients. Returns the per-recipient
+// outcomes, and, when Meta answered with an error that should stop the whole
+// campaign (sendHalts.js), that halt plus the recipients never attempted.
+// Persistence (finishBatch) is a separate step so callers that claimed via
+// INSERT vs UPDATE can share this.
+async function sendToRecipients(env, { recipients, templateName, templateLanguage, template, withComponents, variableMap }) {
+  let halt = null
+  const results = await mapWithConcurrency(recipients, concurrency(env), async (recipient) => {
     const contact = { ...recipient, attributes: parseAttributes(recipient.attributes) }
-    const components = hasVariables ? buildComponents(template, variableMap, contact) : undefined
+    const components = withComponents ? buildComponents(template, variableMap, contact) : undefined
 
     let result
     try {
@@ -142,8 +184,71 @@ async function sendToRecipients(env, { recipients, templateName, templateLanguag
     } catch (err) {
       result = { ok: false, errorCode: 'exception', errorMessage: err.message || 'Send failed' }
     }
+    if (!result.ok && !halt) halt = haltFor(result.errorCode)
     return { recipient, result }
-  })
+  }, () => Boolean(halt))
+
+  const outcomes = results.filter(Boolean)
+  const attempted = new Set(outcomes.map(({ recipient }) => recipient.id))
+  const skipped = recipients.filter((recipient) => !attempted.has(recipient.id))
+  return { outcomes, skipped, halt: halt ?? mostlyFailed(outcomes) }
+}
+
+const NOTHING_SENT = { outcomes: [], skipped: [], halt: null }
+
+// A stopped batch's unattempted recipients go back to "never attempted": their
+// claim is removed, so they show in the campaign's unsent list for later.
+async function releaseClaims(db, campaignId, recipients) {
+  const release = db.prepare(
+    `DELETE FROM messages
+     WHERE campaign_id = ? AND contact_id = ? AND status = 'pending' AND meta_message_id IS NULL`,
+  )
+  for (let i = 0; i < recipients.length; i += 100) {
+    await db.batch(recipients.slice(i, i + 100).map((r) => release.bind(campaignId, r.id)))
+  }
+}
+
+// A stop-the-campaign error Meta reported by webhook in the last 24 hours, for
+// example 131048 (spam limit) arriving after the previous batch was accepted.
+async function recordedHalt(db, campaignId) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const row = await db.prepare(
+    `SELECT error_code FROM messages
+     WHERE campaign_id = ?1 AND status = 'failed' AND failed_at > ?2
+       AND error_code IN (${WATCHED_CODES.map((_, i) => `?${i + 3}`).join(',')})
+     LIMIT 1`,
+  ).bind(campaignId, since, ...WATCHED_CODES).first()
+  return row ? haltFor(row.error_code) : null
+}
+
+// Saves a batch and says what comes next. A halted batch marks the campaign
+// `stopped` and answers with `notSent` instead of `remaining`: every client
+// loops while `remaining` is non-empty, so leaving it out is what stops them,
+// including a dashboard tab still running older code.
+async function finishBatch(db, campaignId, run, remainingIds) {
+  await finalizeMessages(db, campaignId, run.outcomes)
+  const { sent, failed, firstError } = summarizeOutcomes(run.outcomes)
+  if (!run.halt) {
+    await updateCampaignProgress(db, campaignId, { final: remainingIds.length === 0 })
+    return { sent, failed, firstError, ...(remainingIds.length > 0 ? { remaining: remainingIds } : {}) }
+  }
+  await releaseClaims(db, campaignId, run.skipped)
+  await updateCampaignProgress(db, campaignId, { final: false })
+  await db.prepare(`UPDATE campaigns SET status = 'stopped' WHERE id = ?`).bind(campaignId).run()
+  logEvent('campaigns.send.halted', { campaignId, code: run.halt.code })
+  return {
+    sent, failed, firstError,
+    notSent: [...run.skipped.map((r) => r.id), ...remainingIds],
+    halted: { code: run.halt.code, reason: run.halt.reason, resumable: run.halt.resumable },
+  }
+}
+
+async function haltedBeforeSending(db, campaignId, halt, ids) {
+  await db.prepare(`UPDATE campaigns SET status = 'stopped' WHERE id = ?`).bind(campaignId).run()
+  return {
+    campaignId, total: 0, sent: 0, failed: 0, firstError: null, notSent: ids,
+    halted: { code: halt.code, reason: halt.reason, resumable: halt.resumable },
+  }
 }
 
 // Writes the final outcome onto each claimed (`pending`) row.
@@ -391,10 +496,7 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
   const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
-  const {
-    name, contactIds, templateName, templateLanguage = 'en',
-    templateHeader = '', templateBody = '', variableMap = {},
-  } = body
+  const { name, contactIds, templateName, templateLanguage = 'en' } = body
 
   if (!name?.trim()) throw new HTTPException(400, { message: 'Campaign name is required' })
   if (!templateName?.trim()) throw new HTTPException(400, { message: 'Template name is required' })
@@ -422,8 +524,8 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
     throw new HTTPException(400, { message: 'None of the selected contacts can be messaged' })
   }
 
-  const template = { headerText: templateHeader, bodyText: templateBody }
-  const hasVariables = /\{\{/.test(templateHeader) || /\{\{/.test(templateBody)
+  const template = requestTemplate(body)
+  const { variableMap, withComponents } = prepareSend(template, body.variableMap, addMediaMessage)
 
   const user = c.get('user')
   // Store the whole intended audience, not just this first batch. If the send
@@ -435,34 +537,20 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
      RETURNING id`,
   ).bind(
     name.trim(), templateName.trim(), templateLanguage, totalRecipients, user?.id ?? null,
-    hasVariables ? JSON.stringify(variableMap) : null,
+    withComponents ? JSON.stringify(variableMap) : null,
     JSON.stringify([...batchIds, ...remainingIds]),
   ).first()
 
   const campaignId = campaign.id
 
   const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
-  const outcomes = claimed.length > 0
-    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, hasVariables, variableMap })
-    : []
-  await finalizeMessages(c.env.DB, campaignId, outcomes)
-  const { sent, failed, firstError } = summarizeOutcomes(outcomes)
+  const run = claimed.length > 0
+    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, withComponents, variableMap })
+    : NOTHING_SENT
+  const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
 
-  await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
-
-  // If there are remaining IDs, tell the frontend to continue with /send-batch.
-  if (remainingIds.length > 0) {
-    return ok(c, {
-      campaignId,
-      total: recipients.length,
-      sent,
-      failed,
-      firstError,
-      remaining: remainingIds,
-    })
-  }
-
-  return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
+  // `remaining` tells the frontend to continue with /send-batch.
+  return ok(c, { campaignId, total: recipients.length, ...next })
 })
 
 /* ── POST /api/campaigns/send-batch ────────────────────────────────────── */
@@ -473,10 +561,7 @@ campaigns.post('/send-batch', requirePermission('campaigns.send'), async (c) => 
   const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
-  const {
-    campaignId, contactIds, templateName, templateLanguage = 'en',
-    templateHeader = '', templateBody = '', variableMap = {},
-  } = body
+  const { campaignId, contactIds, templateName, templateLanguage = 'en' } = body
 
   if (!campaignId) throw new HTTPException(400, { message: 'campaignId is required' })
   if (!Array.isArray(contactIds) || contactIds.length === 0) {
@@ -488,25 +573,23 @@ campaigns.post('/send-batch', requirePermission('campaigns.send'), async (c) => 
   const batchIds = allIds.slice(0, limit)
   const remainingIds = allIds.slice(limit)
 
+  const template = requestTemplate(body)
+  const { variableMap, withComponents } = prepareSend(template, body.variableMap, addMediaMessage)
+
+  // Meta may have reported a spam or account block on an earlier batch by
+  // webhook; nothing more goes out on this campaign until someone looks.
+  const recorded = await recordedHalt(c.env.DB, Number(campaignId))
+  if (recorded) return ok(c, await haltedBeforeSending(c.env.DB, Number(campaignId), recorded, allIds))
+
   const recipients = await loadRecipients(c.env.DB, batchIds)
-  const template = { headerText: templateHeader, bodyText: templateBody }
-  const hasVariables = /\{\{/.test(templateHeader) || /\{\{/.test(templateBody)
-
   const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
-  const outcomes = claimed.length > 0
-    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, hasVariables, variableMap })
-    : []
-  await finalizeMessages(c.env.DB, campaignId, outcomes)
-  const { sent, failed, firstError } = summarizeOutcomes(outcomes)
+  const run = claimed.length > 0
+    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, withComponents, variableMap })
+    : NOTHING_SENT
+  const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
 
-  await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
-
-  // More to go — frontend calls again with the remaining IDs.
-  if (remainingIds.length > 0) {
-    return ok(c, { campaignId, total: recipients.length, sent, failed, firstError, remaining: remainingIds })
-  }
-
-  return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
+  // More to go: the frontend calls again with `remaining`.
+  return ok(c, { campaignId, total: recipients.length, ...next })
 })
 
 /* ── GET /api/campaigns/:id/unsent ─────────────────────────────────────── */
@@ -588,8 +671,12 @@ campaigns.post('/:id/retry', requirePermission('campaigns.send'), async (c) => {
   const remainingIds = outstandingIds.slice(limit)
 
   const template = await resolveCampaignTemplate(c.env, campaign.template_name, campaign.template_language)
-  const variableMap = campaign.variables ? JSON.parse(campaign.variables) : {}
-  const hasVariables = /\{\{/.test(template.headerText) || /\{\{/.test(template.bodyText)
+  // A campaign sent before header files were kept has none to retry with.
+  const { variableMap, withComponents } = prepareSend(
+    template,
+    campaign.variables ? JSON.parse(campaign.variables) : {},
+    (kind) => `This campaign has no ${kind} saved for its ${kind} header, so it cannot be retried. Send it again as a new campaign with the ${kind} added.`,
+  )
 
   // Filter to sendable contacts first (opted-out contacts are dropped by
   // loadRecipients and should keep their old failed row untouched, not get
@@ -601,6 +688,9 @@ campaigns.post('/:id/retry', requirePermission('campaigns.send'), async (c) => {
   // that some overlapping retry already took, so whichever request gets there
   // first is the only one that sends — see claimFailedRecipients /
   // claimRecipients.
+  const recorded = await recordedHalt(c.env.DB, campaignId)
+  if (recorded) return ok(c, await haltedBeforeSending(c.env.DB, campaignId, recorded, outstandingIds))
+
   const candidates = await loadRecipients(c.env.DB, batchIds)
   const failedSet = new Set(await loadFailedContactIds(c.env.DB, campaignId))
   const [reclaimed, freshlyClaimed] = await Promise.all([
@@ -609,26 +699,65 @@ campaigns.post('/:id/retry', requirePermission('campaigns.send'), async (c) => {
   ])
   const recipients = [...reclaimed, ...freshlyClaimed]
 
-  const outcomes = recipients.length > 0
+  const run = recipients.length > 0
     ? await sendToRecipients(c.env, {
       recipients,
       templateName: campaign.template_name,
       templateLanguage: campaign.template_language,
       template,
-      hasVariables,
+      withComponents,
       variableMap,
     })
-    : []
-  await finalizeMessages(c.env.DB, campaignId, outcomes)
-  const { sent, failed, firstError } = summarizeOutcomes(outcomes)
+    : NOTHING_SENT
+  const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
 
-  await updateCampaignProgress(c.env.DB, campaignId, { final: remainingIds.length === 0 })
+  return ok(c, { campaignId, total: recipients.length, ...next })
+})
 
-  if (remainingIds.length > 0) {
-    return ok(c, { campaignId, total: recipients.length, sent, failed, firstError, remaining: remainingIds })
+/* ── POST /api/campaigns/header-media?format=VIDEO ─────────────────────────
+   Uploads the file for a template's photo, video or document header to Meta
+   once and returns its media ID, which every message in the campaign reuses.
+   Meta keeps uploaded media for about 30 days, so nothing is stored here and
+   Meta never has to fetch anything from us (the R2 bucket stays private). Needs
+   campaigns.send, since the file goes out in paid sends; one Meta call each. */
+const MB = 1024 * 1024
+
+// MP4 and 3GP files both open with an ISO media box whose type is "ftyp".
+function isIsoMedia(bytes) {
+  const head = new Uint8Array(bytes, 0, Math.min(8, bytes.byteLength))
+  return head.length === 8 && String.fromCharCode(head[4], head[5], head[6], head[7]) === 'ftyp'
+}
+
+const HEADER_MEDIA_RULES = {
+  VIDEO: { types: ['video/mp4', 'video/3gpp'], maxBytes: 16 * MB, matches: (bytes) => isIsoMedia(bytes) },
+  IMAGE: { types: ['image/jpeg', 'image/png'], maxBytes: 5 * MB, matches: (bytes, mime) => sniffType(bytes) === mime },
+  DOCUMENT: { types: ['application/pdf'], maxBytes: 16 * MB, matches: (bytes, mime) => sniffType(bytes) === mime },
+}
+
+campaigns.post('/header-media', requirePermission('campaigns.send'), async (c) => {
+  const format = String(c.req.query('format') || '').toUpperCase()
+  const rule = HEADER_MEDIA_RULES[format]
+  if (!rule) throw new HTTPException(400, { message: 'Unknown header type' })
+
+  const form = await readBoundedFormData(c, rule.maxBytes + 64 * 1024)
+  const file = formFile(form, 'file')
+  if (!file) throw new HTTPException(400, { message: 'No file uploaded under the "file" field' })
+  const mime = (file.type || '').split(';')[0].trim().toLowerCase()
+  const kind = format.toLowerCase()
+  if (!rule.types.includes(mime)) {
+    throw new HTTPException(415, { message: format === 'VIDEO' ? 'Use an MP4 video.' : format === 'IMAGE' ? 'Use a JPEG or PNG image.' : 'Use a PDF document.' })
   }
+  if (file.size > rule.maxBytes) {
+    throw new HTTPException(413, { message: `The ${kind} must be ${rule.maxBytes / MB} MB or smaller.` })
+  }
+  const bytes = await file.arrayBuffer()
+  if (bytes.byteLength === 0) throw new HTTPException(400, { message: 'The file is empty.' })
+  if (!rule.matches(bytes, mime)) throw new HTTPException(415, { message: `The file is not a real ${kind}.` })
 
-  return ok(c, { campaignId, total: recipients.length, sent, failed, firstError })
+  const uploaded = await uploadMediaToMeta(c.env, { bytes, mime, filename: safeDisplayName(file.name, `header-${kind}`) })
+  if (!uploaded.ok) throw new HTTPException(502, { message: `WhatsApp did not accept the file: ${uploaded.errorMessage}` })
+  logEvent('campaigns.header_media.uploaded', { format, bytes: bytes.byteLength })
+  return ok(c, { mediaId: uploaded.mediaId, size: bytes.byteLength })
 })
 
 export default campaigns

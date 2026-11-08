@@ -10,6 +10,7 @@ import { useAccess } from '../../lib/access'
 const STATUS_TONE = {
   completed: 'success',
   sending: 'info',
+  stopped: 'warn',
   failed: 'danger',
   draft: 'neutral',
 }

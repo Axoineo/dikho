@@ -133,6 +133,16 @@ async function processStatus(c, event) {
       errorMessage: event.errorMessage,
     })
   }
+
+  // 131050: the person chose "Stop promotions" for this business in WhatsApp.
+  // Opt them out so no campaign messages them again; sending anyway only
+  // fails, and messaging people who said no is what gets numbers reported.
+  if (matched && event.status === 'failed' && event.errorCode === '131050') {
+    await c.env.DB.prepare(
+      `UPDATE contacts SET opted_out = 1
+       WHERE opted_out = 0 AND phone = (SELECT phone FROM messages WHERE meta_message_id = ?1 AND phone IS NOT NULL LIMIT 1)`,
+    ).bind(event.messageId).run()
+  }
   return matched
 }
 

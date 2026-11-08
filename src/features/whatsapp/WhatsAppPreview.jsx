@@ -1,4 +1,6 @@
-import { TOKEN_RE, resolveValue } from '../../lib/templateVars'
+import { TOKEN_RE, mediaHeaderFormat, resolveValue } from '../../lib/templateVars'
+
+const MEDIA_LABEL = { IMAGE: 'Photo', VIDEO: 'Video', DOCUMENT: 'Document' }
 
 // Renders the approved template the way the recipient will see it.
 // Colours here are WhatsApp's own (wa-* in tailwind.config.js), not the
@@ -53,7 +55,9 @@ function DoubleTick() {
   )
 }
 
-export function WhatsAppPreview({ template, businessName = 'Dikho', variableMap, sampleContact }) {
+// `mediaPreview` is a local object URL for an uploaded header file, shown in
+// place of the placeholder.
+export function WhatsAppPreview({ template, businessName = 'Dikho', variableMap, sampleContact, mediaPreview }) {
   const shell = 'w-[300px] max-w-full overflow-hidden rounded-[26px] border border-line bg-wa-canvas shadow-2xl'
 
   if (!template) {
@@ -83,6 +87,17 @@ export function WhatsAppPreview({ template, businessName = 'Dikho', variableMap,
       <div className="flex min-h-[250px] flex-col gap-2 bg-wa-canvas px-3 pb-5 pt-4" style={CANVAS_TEXTURE}>
         <div className="relative max-w-[85%] self-end rounded-lg rounded-tr-[2px] bg-wa-bubble
           px-2.5 pb-1.5 pt-[7px] text-[13px] leading-[1.45] text-wa-text shadow-sm">
+          {mediaHeaderFormat(template) === 'VIDEO' && mediaPreview ? (
+            <video src={mediaPreview} controls muted playsInline preload="metadata"
+              className="-mx-1 mb-1.5 block aspect-video w-[calc(100%+0.5rem)] max-w-none rounded-md bg-black object-cover" />
+          ) : mediaHeaderFormat(template) === 'IMAGE' && mediaPreview ? (
+            <img src={mediaPreview} alt="" className="-mx-1 mb-1.5 block w-[calc(100%+0.5rem)] max-w-none rounded-md" />
+          ) : mediaHeaderFormat(template) && (
+            <div className="-mx-1 mb-1.5 grid aspect-video place-items-center rounded-md bg-black/30
+              text-[12px] font-medium text-wa-text/70">
+              {MEDIA_LABEL[mediaHeaderFormat(template)]}
+            </div>
+          )}
           {template.headerText && (
             <div className="mb-[3px] font-bold">{renderRich(template.headerText, variableMap, sampleContact)}</div>
           )}

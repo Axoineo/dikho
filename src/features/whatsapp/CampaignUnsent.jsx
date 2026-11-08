@@ -54,6 +54,9 @@ export function CampaignUnsent({ campaign, onChanged }) {
         // eslint-disable-next-line no-await-in-loop
         res = await apiPost(`/campaigns/${campaign.id}/retry`, { contactIds: res.remaining })
       }
+      // Meta reported a spam, template or account problem: the API stopped and
+      // sent `notSent` instead of `remaining`.
+      if (res.halted) setError(`Sending stopped by itself. ${res.halted.reason}`)
     } catch (err) {
       setError(err.message)
     } finally {

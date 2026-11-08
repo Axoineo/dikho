@@ -204,6 +204,115 @@ contacts.post('/import', requirePermission('wa_contacts.import'), async (c) => {
     phoneColumn: phoneColumn || 'auto-detected per row',
   })
 })
+/* ── POST /api/contacts/import-rows ────────────────────────────────────────
+   The browser reads the file, finds the columns and checks every number with
+   libphonenumber (src/lib/contactImport.js), then sends the clean rows here:
+   that work costs far more CPU than the Free plan's 10 ms per request. Each row
+   is still untrusted, so every field is checked and bounded again, more cheaply.
+   An unchanged contact costs no database write; a re-import used to rewrite
+   every row and was a large part of the day's D1 write allowance. */
+const MAX_IMPORT_JSON_BYTES = 4 * 1024 * 1024
+const E164_DIGITS = /^[1-9]\d{7,14}$/
+
+function boundedText(value, max) {
+  if (value == null) return null
+  if (typeof value !== 'string') return undefined
+  const text = value.replace(/\s+/g, ' ').trim()
+  return text ? text.slice(0, max) : null
+}
+
+// A flat object of short strings, or null. Anything else marks the row bad.
+function boundedAttributes(value) {
+  if (value == null) return null
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entries = Object.entries(value)
+  if (entries.length > 200) return undefined
+  const out = {}
+  for (const [key, raw] of entries) {
+    if (typeof raw !== 'string' || key.length > 100 || raw.length > 2000) return undefined
+    const text = raw.trim()
+    if (key.trim() && text) out[key.trim()] = text
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : null
+}
+
+contacts.post('/import-rows', requirePermission('wa_contacts.import'), async (c) => {
+  const body = await readJsonOr(c, MAX_IMPORT_JSON_BYTES, null)
+  const list = body?.contacts
+  if (!Array.isArray(list) || list.length === 0) throw new HTTPException(400, { message: 'No contacts to import' })
+  if (list.length > MAX_IMPORT_ROWS) {
+    throw new HTTPException(400, { message: `The limit per import is ${MAX_IMPORT_ROWS} contacts` })
+  }
+
+  const byPhone = new Map()
+  let invalid = 0
+  for (const item of list) {
+    const phone = typeof item?.phone === 'string' && E164_DIGITS.test(item.phone) ? item.phone : null
+    const name = boundedText(item?.name, 120)
+    const email = boundedText(item?.email, 254)
+    const company = boundedText(item?.company, 160)
+    const attributes = boundedAttributes(item?.attributes)
+    if (!phone || [name, email, company, attributes].includes(undefined)) { invalid += 1; continue }
+    byPhone.set(phone, { phone, name, email: email?.toLowerCase() ?? null, company, attributes })
+  }
+  const valid = [...byPhone.values()]
+  if (valid.length === 0) throw new HTTPException(400, { message: 'None of the rows had a usable phone number' })
+
+  // DO UPDATE ... WHERE skips the write entirely when nothing would change.
+  const upsert = c.env.DB.prepare(
+    `INSERT INTO contacts (name, phone, email, company, attributes, source)
+     VALUES (?1, ?2, ?3, ?4, ?5, 'import')
+     ON CONFLICT(phone) DO UPDATE SET
+       name = COALESCE(excluded.name, contacts.name),
+       email = COALESCE(excluded.email, contacts.email),
+       company = COALESCE(excluded.company, contacts.company),
+       attributes = excluded.attributes,
+       updated_at = datetime('now')
+     WHERE COALESCE(excluded.name, contacts.name) IS NOT contacts.name
+        OR COALESCE(excluded.email, contacts.email) IS NOT contacts.email
+        OR COALESCE(excluded.company, contacts.company) IS NOT contacts.company
+        OR excluded.attributes IS NOT contacts.attributes`,
+  )
+
+  const before = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM contacts').first()
+  let changed = 0
+  for (let i = 0; i < valid.length; i += 500) {
+    const results = await c.env.DB.batch(valid.slice(i, i + 500)
+      .map((row) => upsert.bind(row.name, row.phone, row.email, row.company, row.attributes)))
+    for (const result of results) changed += result.meta?.changes ? 1 : 0
+  }
+  const after = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM contacts').first()
+  const imported = Math.max(0, (after?.n ?? 0) - (before?.n ?? 0))
+
+  // The file's own contacts, so the campaign wizard can select exactly these
+  // people even when they are older than the newest 2,000 it lists. Anyone who
+  // opted out stays out. D1 allows 100 bound parameters per query.
+  const fileContacts = []
+  let optedOut = 0
+  for (let i = 0; i < valid.length; i += 100) {
+    const chunk = valid.slice(i, i + 100).map((row) => row.phone)
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, name, phone, email, company, attributes, opted_out, created_at
+       FROM contacts WHERE phone IN (${chunk.map(() => '?').join(',')})`,
+    ).bind(...chunk).all()
+    for (const row of results) {
+      if (row.opted_out) { optedOut += 1; continue }
+      fileContacts.push({ ...row, attributes: row.attributes ? safeParse(row.attributes) : null })
+    }
+  }
+
+  return ok(c, {
+    received: list.length,
+    imported,
+    updated: Math.max(0, changed - imported),
+    unchanged: valid.length - changed,
+    duplicates: list.length - invalid - valid.length,
+    invalid,
+    optedOut,
+    contacts: fileContacts,
+  })
+})
+
 /* ── DELETE /api/contacts ───────────────────────────────────────────────── */
 
 // Accepts { contactIds: [1, 2, 3] } for selective deletion, or { all: true }
