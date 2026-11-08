@@ -127,6 +127,14 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Changed
 
+- The campaign wizard after an import: only that file's contacts are listed,
+  all selected, 25 to a page with a pager (All contacts shows everyone), and
+  the import message has a Continue button, so nobody scrolls thousands of
+  rows. The chosen template is clearly marked (outline, tick, Selected) with
+  its phone preview beside the list. The Preview step lists every column of
+  the file for each variable, including the phone column, and a table shows
+  what each number will get, 10 to a page. A First Name column now beats a
+  loose name match such as "Original Contact Name".
 - Contact imports are read in the browser and shown for checking before
   anything is saved: the WhatsApp number, spare phone columns, name (or first
   plus last name), email and company are detected and can be changed. Numbers

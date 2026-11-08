@@ -4,7 +4,7 @@ import { apiGet, apiPost, apiUpload } from '../../lib/api'
 import { WhatsAppPreview } from './WhatsAppPreview'
 import { ContactImportReview } from './ContactImport'
 import {
-  CONTACT_FIELDS, HEADER_MEDIA_KEY, autoMap, isMissing, mediaHeaderFormat, parseHeaderMedia, templateTokens,
+  CONTACT_FIELDS, HEADER_MEDIA_KEY, autoMap, isMissing, mediaHeaderFormat, parseHeaderMedia, resolveValue, templateTokens,
 } from '../../lib/templateVars'
 import { Alert, Avatar, Badge, EmptyState, Panel, PanelHead, Spinner, Table, Td, Th, inputClass } from './ui'
 import { importSummary, sentenceCase } from './labels'
@@ -61,23 +61,33 @@ function Dropzone({ onFile, uploading, compact = false }) {
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => { e.preventDefault(); setDragging(false); onFile(e.dataTransfer.files?.[0]) }}
       className={`cursor-pointer rounded-xl border-[1.5px] border-dashed text-center transition
-        ${compact ? 'px-6 py-6' : 'px-6 py-[30px]'}
+        ${compact ? 'flex items-center justify-center gap-2 px-4 py-2.5 text-[13px]' : 'px-6 py-[30px]'}
         ${dragging
           ? 'scale-[1.008] border-brand bg-brand-soft'
           : 'border-line bg-line-soft hover:border-brand hover:bg-brand-soft'}`}
     >
-      <div className="mx-auto mb-3 grid h-[46px] w-[46px] place-items-center rounded-xl
-        bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
-        {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
-      </div>
-      <div className="mb-1 text-sm font-medium">
-        {uploading ? 'Importing contacts…' : 'Drop an Excel, CSV or JSON file here'}
-      </div>
-      <div className="text-[12.5px] text-muted">
-        We find the WhatsApp number, name, email and company columns, check every number and add
-        {' '}<strong>+91</strong> when the country code is missing. You can correct the columns before
-        anything is saved. Every other column is kept for template variables.
-      </div>
+      {compact ? (
+        // After an import: one line, so the recipients stay near the top.
+        <>
+          <Icon name="upload" size={16} />
+          <span>Import another file</span>
+        </>
+      ) : (
+        <>
+          <div className="mx-auto mb-3 grid h-[46px] w-[46px] place-items-center rounded-xl
+            bg-brand-soft text-brand-ink dark:text-[#5ba0e0]">
+            {uploading ? <Spinner /> : <Icon name="upload" size={21} />}
+          </div>
+          <div className="mb-1 text-sm font-medium">
+            {uploading ? 'Importing contacts…' : 'Drop an Excel, CSV or JSON file here'}
+          </div>
+          <div className="text-[12.5px] text-muted">
+            We find the WhatsApp number, name, email and company columns, check every number and add
+            {' '}<strong>+91</strong> when the country code is missing. You can correct the columns before
+            anything is saved. Every column is kept for template variables.
+          </div>
+        </>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -89,51 +99,115 @@ function Dropzone({ onFile, uploading, compact = false }) {
   )
 }
 
-function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onImported, search, onSearch }) {
+const PAGE_SIZE = 25
+
+// "‹ 26–50 of 1,379 ›" under a long list, so nobody scrolls thousands of rows.
+function Pager({ page, total, onPage, size = PAGE_SIZE }) {
+  if (total <= size) return null
+  const pages = Math.ceil(total / size)
+  const from = page * size + 1
+  const to = Math.min(total, (page + 1) * size)
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3.5 py-2.5 text-[12.5px] text-muted">
+      <span>Showing {from}–{to} of {total.toLocaleString('en-IN')}</span>
+      <span className="flex items-center gap-1.5">
+        <button type="button" className="secondary-button h-8 px-3" onClick={() => onPage(page - 1)} disabled={page === 0}
+          aria-label="Previous page">‹ Previous</button>
+        <span className="px-1">Page {page + 1} of {pages}</span>
+        <button type="button" className="secondary-button h-8 px-3" onClick={() => onPage(page + 1)} disabled={page >= pages - 1}
+          aria-label="Next page">Next ›</button>
+      </span>
+    </div>
+  )
+}
+
+function matchesSearch(contact, term) {
+  const needle = term.trim().toLowerCase()
+  if (!needle) return true
+  return [contact.name, contact.phone, contact.company].some((value) => String(value ?? '').toLowerCase().includes(needle))
+}
+
+// Recipients. After a file is imported the list shows only that file's
+// contacts, all selected, 25 to a page; "All contacts" shows everyone else.
+function AudienceStep({
+  contacts, fileContacts, fileName, loading, selected, onToggle, onSelectMany, onImported, onContinue, search, onSearch,
+}) {
   const [pendingFile, setPendingFile] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [view, setView] = useState(fileContacts.length ? 'file' : 'all')
+  const [page, setPage] = useState(0)
+
+  useEffect(() => { if (fileContacts.length) setView('file') }, [fileContacts])
+  useEffect(() => { setPage(0) }, [view, search, fileContacts])
 
   function handleImported(result) {
     setPendingFile(null)
     const chosen = result.contacts?.length ?? 0
     setNotice({
       tone: 'success',
-      text: `${importSummary(result)} Selected the ${chosen} contact${chosen === 1 ? '' : 's'} from this file`
+      chosen,
+      text: `${importSummary(result)} All ${chosen} contact${chosen === 1 ? '' : 's'} from this file are selected`
         + `${result.optedOut ? ` (${result.optedOut} who opted out were left out)` : ''}.`,
     })
-    onImported(result.contacts ?? [])
+    onImported(result.contacts ?? [], result.fileName)
   }
 
-  const allSelected = contacts.length > 0 && contacts.every((c) => selected.has(c.id))
+  const rows = view === 'file' ? fileContacts.filter((contact) => matchesSearch(contact, search)) : contacts
+  const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const allSelected = rows.length > 0 && rows.every((c) => selected.has(c.id))
 
   return (
     <div>
-      {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
+      {notice && (
+        <Alert tone={notice.tone}>
+          <span>{notice.text}</span>
+          {notice.chosen > 0 && (
+            <button type="button" className="primary-button ml-3 mt-1 h-8 px-3 align-middle" onClick={onContinue}>
+              Continue with {notice.chosen.toLocaleString('en-IN')} contacts
+            </button>
+          )}
+        </Alert>
+      )}
 
       {pendingFile
         ? <ContactImportReview file={pendingFile} onCancel={() => setPendingFile(null)} onImported={handleImported} />
-        : <Dropzone onFile={(file) => { if (file) { setNotice(null); setPendingFile(file) } }} uploading={false} />}
+        : <Dropzone onFile={(file) => { if (file) { setNotice(null); setPendingFile(file) } }} uploading={false} compact={fileContacts.length > 0} />}
 
       <Panel className="mt-[18px]">
         <PanelHead
-          title="Select recipients"
-          subtitle={`${contacts.length} contact${contacts.length === 1 ? '' : 's'} available`}
+          title="Recipients"
+          subtitle={view === 'file'
+            ? `${fileContacts.length.toLocaleString('en-IN')} from ${fileName || 'your file'}`
+            : `${contacts.length.toLocaleString('en-IN')} contact${contacts.length === 1 ? '' : 's'} available`}
         >
-          <input
-            className={`${inputClass} max-w-[260px]`}
-            placeholder="Search name, phone or company"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            {fileContacts.length > 0 && (
+              <div className="flex overflow-hidden rounded-lg border border-line text-[12.5px]" role="group" aria-label="Which contacts to show">
+                {[['file', 'This file'], ['all', 'All contacts']].map(([key, label]) => (
+                  <button key={key} type="button" aria-pressed={view === key} onClick={() => setView(key)}
+                    className={`px-3 py-1.5 ${view === key ? 'bg-brand text-white' : 'bg-surface text-ink hover:bg-line-soft'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              className={`${inputClass} max-w-[240px]`}
+              placeholder="Search name, phone or company"
+              aria-label="Search recipients"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+            />
+          </div>
         </PanelHead>
 
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3.5 border-b border-line
             bg-brand-soft px-3.5 py-2.5 text-[12.8px]">
-            <span><strong>{selected.size}</strong> selected</span>
+            <span><strong>{selected.size.toLocaleString('en-IN')}</strong> selected for this campaign</span>
             <button
               type="button"
-              onClick={() => onSelectAll(false)}
+              onClick={() => onSelectMany([...selected], false)}
               className="font-medium text-brand-ink underline dark:text-[#5ba0e0]"
             >
               Clear selection
@@ -141,56 +215,61 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
           </div>
         )}
 
-        {loading ? (
+        {loading && view === 'all' ? (
           <EmptyState>Loading contacts…</EmptyState>
-        ) : contacts.length === 0 ? (
-          <EmptyState title="No contacts yet">Import a spreadsheet above to get started.</EmptyState>
+        ) : rows.length === 0 ? (
+          <EmptyState title={search ? 'No matches' : 'No contacts yet'}>
+            {search ? 'Try another name or number.' : 'Import a spreadsheet above to get started.'}
+          </EmptyState>
         ) : (
-          <Table
-            head={
-              <>
-                <Th tight>
-                  <input
-                    type="checkbox"
-                    className="h-[15px] w-[15px] cursor-pointer accent-brand"
-                    checked={allSelected}
-                    onChange={(e) => onSelectAll(e.target.checked)}
-                    aria-label="Select all contacts"
-                  />
-                </Th>
-                <Th>Name</Th>
-                <Th>Phone</Th>
-                <Th>Company</Th>
-              </>
-            }
-          >
-            {contacts.map((contact) => (
-              <tr
-                key={contact.id}
-                onClick={() => onToggle(contact.id)}
-                className={`cursor-pointer transition-colors
-                  ${selected.has(contact.id) ? 'bg-brand-soft' : 'hover:bg-line-soft'}`}
-              >
-                <Td tight onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    className="h-[15px] w-[15px] cursor-pointer accent-brand"
-                    checked={selected.has(contact.id)}
-                    onChange={() => onToggle(contact.id)}
-                    aria-label={`Select ${contact.name || contact.phone}`}
-                  />
-                </Td>
-                <Td>
-                  <span className="flex items-center gap-2.5">
-                    <Avatar name={contact.name} phone={contact.phone} />
-                    {contact.name || <span className="text-muted">Unnamed</span>}
-                  </span>
-                </Td>
-                <Td>+{contact.phone}</Td>
-                <Td className="text-muted">{contact.company || '—'}</Td>
-              </tr>
-            ))}
-          </Table>
+          <>
+            <Table
+              head={
+                <>
+                  <Th tight>
+                    <input
+                      type="checkbox"
+                      className="h-[15px] w-[15px] cursor-pointer accent-brand"
+                      checked={allSelected}
+                      onChange={(e) => onSelectMany(rows.map((c) => c.id), e.target.checked)}
+                      aria-label={`Select all ${rows.length} shown`}
+                    />
+                  </Th>
+                  <Th>Name</Th>
+                  <Th>Phone</Th>
+                  <Th>Company</Th>
+                </>
+              }
+            >
+              {pageRows.map((contact) => (
+                <tr
+                  key={contact.id}
+                  onClick={() => onToggle(contact.id)}
+                  className={`cursor-pointer transition-colors
+                    ${selected.has(contact.id) ? 'bg-brand-soft' : 'hover:bg-line-soft'}`}
+                >
+                  <Td tight onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="h-[15px] w-[15px] cursor-pointer accent-brand"
+                      checked={selected.has(contact.id)}
+                      onChange={() => onToggle(contact.id)}
+                      aria-label={`Select ${contact.name || contact.phone}`}
+                    />
+                  </Td>
+                  <Td>
+                    <span className="flex items-center gap-2.5">
+                      <Avatar name={contact.name} phone={contact.phone} />
+                      {contact.name || <span className="text-muted">Unnamed</span>}
+                    </span>
+                  </Td>
+                  <Td>+{contact.phone}</Td>
+                  <Td className="text-muted">{contact.company || '—'}</Td>
+                </tr>
+              ))}
+            </Table>
+            <Pager page={page} total={rows.length} onPage={setPage} />
+          </>
         )}
       </Panel>
     </div>
@@ -199,7 +278,10 @@ function AudienceStep({ contacts, loading, selected, onToggle, onSelectAll, onIm
 
 /* ── Step 2: template ───────────────────────────────────────────────────── */
 
-function TemplateStep({ templates, loading, selectedName, onSelect }) {
+// Approved templates as cards. The chosen one is unmistakable (brand ring,
+// tick and "Selected"), and the phone preview beside the cards shows exactly
+// what was picked.
+function TemplateStep({ templates, loading, selectedName, selectedLanguage, onSelect, preview }) {
   if (loading) return <EmptyState>Loading approved templates…</EmptyState>
   if (templates.length === 0) {
     return (
@@ -210,48 +292,64 @@ function TemplateStep({ templates, loading, selectedName, onSelect }) {
   }
 
   return (
-    <>
-      <Alert tone="info">
-        Pick an approved template. Templates with <strong>{'{{variables}}'}</strong> are
-        supported — you'll map each one to a contact column on the next step.
-      </Alert>
+    <SplitLayout>
+      <div>
+        <Alert tone="info">
+          Pick an approved template. You map each <strong>{'{{variable}}'}</strong> to a column of your file on the next step.
+        </Alert>
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-        {templates.map((template) => (
-          <button
-            type="button"
-            key={`${template.name}-${template.language}`}
-            onClick={() => onSelect(template)}
-            className={`rounded-xl border-[1.5px] bg-surface p-[15px] text-left text-ink transition
-              ${selectedName === template.name
-                ? 'border-brand bg-brand-soft'
-                : 'border-line hover:-translate-y-px hover:border-brand'}`}
-          >
-            <div className="mb-1.5 break-words text-[13.5px] font-medium">{template.name}</div>
-            <div className="mb-2.5 flex flex-wrap gap-1.5">
-              <Badge tone="success">{sentenceCase(template.status)}</Badge>
-              <Badge>{template.language}</Badge>
-              {template.category && <Badge tone="info">{sentenceCase(template.category)}</Badge>}
-              {mediaHeaderFormat(template) && (
-                <Badge>{`${sentenceCase(MEDIA_HEADER[mediaHeaderFormat(template)].noun)} header`}</Badge>
-              )}
-              {template.hasVariables && (
-                <Badge tone="warn">
-                  {template.variables?.length ?? 0} variable{(template.variables?.length ?? 0) === 1 ? '' : 's'}
-                </Badge>
-              )}
-            </div>
-            <div className="line-clamp-3 text-[12.5px] leading-normal text-muted">
-              {template.bodyText}
-            </div>
-          </button>
-        ))}
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]" role="radiogroup" aria-label="Template">
+          {templates.map((template) => {
+            const chosen = selectedName === template.name && selectedLanguage === template.language
+            return (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={chosen}
+                key={`${template.name}-${template.language}`}
+                onClick={() => onSelect(template)}
+                className={`relative rounded-xl p-[15px] text-left text-ink transition
+                  ${chosen
+                    ? 'border-2 border-brand bg-brand-soft shadow-[0_0_0_3px_rgba(33,102,173,0.18)]'
+                    : 'border-[1.5px] border-line bg-surface hover:-translate-y-px hover:border-brand'}`}
+              >
+                {chosen && (
+                  <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5
+                    text-[11.5px] font-medium text-white">
+                    <Icon name="check" size={12} /> Selected
+                  </span>
+                )}
+                <div className={`mb-1.5 break-words text-[13.5px] font-medium ${chosen ? 'pr-[84px]' : ''}`}>{template.name}</div>
+                <div className="mb-2.5 flex flex-wrap gap-1.5">
+                  <Badge tone="success">{sentenceCase(template.status)}</Badge>
+                  <Badge>{template.language}</Badge>
+                  {template.category && <Badge tone="info">{sentenceCase(template.category)}</Badge>}
+                  {mediaHeaderFormat(template) && (
+                    <Badge>{`${sentenceCase(MEDIA_HEADER[mediaHeaderFormat(template)].noun)} header`}</Badge>
+                  )}
+                  {template.hasVariables && (
+                    <Badge tone="warn">
+                      {template.variables?.length ?? 0} variable{(template.variables?.length ?? 0) === 1 ? '' : 's'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="line-clamp-3 text-[12.5px] leading-normal text-muted">
+                  {template.bodyText}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
-    </>
+      <div className="grid place-items-center gap-2 py-2">
+        <div className="text-[12px] text-muted">
+          {selectedName ? <>Selected: <strong className="text-ink">{selectedName}</strong></> : 'No template selected yet'}
+        </div>
+        {preview}
+      </div>
+    </SplitLayout>
   )
 }
-
-/* ── Review rows, shared by steps 3 and 4 ───────────────────────────────── */
 
 function ReviewList({ rows }) {
   return (
@@ -308,12 +406,12 @@ function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availabl
             >
               <option value="" disabled>Choose a source…</option>
               {attributeKeys.length > 0 && (
-                <optgroup label="From your file">
+                <optgroup label="Columns in your file">
                   {attributeKeys.map((key) => <option key={key} value={`attr:${key}`}>{key}</option>)}
                 </optgroup>
               )}
               {availableFields.length > 0 && (
-                <optgroup label="Contact fields">
+                <optgroup label="Saved contact details">
                   {availableFields.map((field) => (
                     <option key={field} value={`field:${field}`}>{FIELD_LABEL[field]}</option>
                   ))}
@@ -332,6 +430,49 @@ function VariableMapper({ tokens, variableMap, onChange, attributeKeys, availabl
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// What each person will actually get: their number and the value every
+// variable takes from their own row, 10 to a page. A blank shows in amber.
+function RecipientCheck({ tokens, variableMap, contacts }) {
+  const [page, setPage] = useState(0)
+  const size = 10
+  useEffect(() => { setPage(0) }, [contacts.length])
+  if (tokens.length === 0 || contacts.length === 0) return null
+  const rows = contacts.slice(page * size, (page + 1) * size)
+  return (
+    <div className="mb-4 overflow-hidden rounded-[10px] border border-line">
+      <div className="border-b border-line bg-surface px-3 py-2 text-[12px] text-muted">
+        Check each person: every value comes from that person's own row
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[12.5px]">
+          <thead>
+            <tr className="bg-line-soft text-left text-muted">
+              <th className="px-3 py-2 font-medium">Phone</th>
+              {tokens.map((token) => <th key={token} className="px-3 py-2 font-medium">{`{{${token}}}`}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((contact) => (
+              <tr key={contact.id} className="border-t border-line-soft">
+                <td className="whitespace-nowrap px-3 py-2">+{contact.phone}</td>
+                {tokens.map((token) => {
+                  const value = isMissing(token, variableMap, contact) ? '' : resolveValue(token, variableMap, contact)
+                  return (
+                    <td key={token} className="px-3 py-2">
+                      {value || <span className="rounded bg-amber-400/25 px-1">blank</span>}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pager page={page} total={contacts.length} onPage={setPage} size={size} />
     </div>
   )
 }
@@ -469,6 +610,8 @@ function PreviewStep({
             availableFields={availableFields}
           />
         )}
+
+        {hasVars && <RecipientCheck tokens={tokens} variableMap={variableMap} contacts={sampleContacts} />}
 
         {gaps.length > 0 && (
           <Alert tone="warn">
@@ -669,6 +812,7 @@ export function CampaignWizard({ onDone }) {
   // The contacts of a file imported here. The list endpoint returns the newest
   // 2,000, which can leave out older people in the file, so they are kept too.
   const [fileContacts, setFileContacts] = useState([])
+  const [fileName, setFileName] = useState('')
   const [contactsLoading, setContactsLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(() => new Set())
@@ -1012,15 +1156,24 @@ export function CampaignWizard({ onDone }) {
         {step === 0 && (
           <AudienceStep
             contacts={contacts}
+            fileContacts={fileContacts}
+            fileName={fileName}
             loading={contactsLoading}
             selected={selected}
             onToggle={toggle}
-            onSelectAll={(checked) => setSelected(checked ? new Set(contacts.map((c) => c.id)) : new Set())}
-            onImported={(imported) => {
+            onSelectMany={(ids, checked) => setSelected((prev) => {
+              const next = new Set(prev)
+              for (const id of ids) { if (checked) next.add(id); else next.delete(id) }
+              return next
+            })}
+            onImported={(imported, name) => {
               setFileContacts(imported)
+              setFileName(name || '')
+              setSearch('')
               setSelected(new Set(imported.map((contact) => contact.id)))
-              loadContacts()
+              loadContacts('')
             }}
+            onContinue={() => setStep(1)}
             search={search}
             onSearch={setSearch}
           />
@@ -1030,7 +1183,12 @@ export function CampaignWizard({ onDone }) {
             templates={templates}
             loading={templatesLoading}
             selectedName={template?.name}
+            selectedLanguage={template?.language}
             onSelect={setTemplate}
+            preview={(
+              <WhatsAppPreview template={template} variableMap={variableMap}
+                sampleContact={sampleContacts[0] ?? null} />
+            )}
           />
         )}
         {step === 2 && (
