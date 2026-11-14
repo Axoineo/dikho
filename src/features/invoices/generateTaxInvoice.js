@@ -3,6 +3,7 @@ import fontkit from '@pdf-lib/fontkit'
 import { supabase } from '../../lib/supabase'
 import { formatMoney } from '../../lib/format'
 import { numberToWords } from '../../lib/money'
+import { invoiceGstRate } from '../../lib/gst'
 
 export async function generateTaxInvoice(templatePath, orderData) {
   const { data: items, error } = await supabase
@@ -78,8 +79,9 @@ export async function generateTaxInvoice(templatePath, orderData) {
       drawRight('1 PCS', 315, currentY, 9.0) // Qty
       drawRight(formatMoney(item.taxable_amount), 375, currentY, 9.0) // Rate
       
-      const gstPct = item.gst_type ? item.gst_type.replace(/[^0-9]/g, '') : '0'
-      drawRight(gstPct, 415, currentY, 9.0) // GST %
+      // gst_type is 'Intra-State', 'Inter-State' or 'Union Territory', never a
+      // rate, so the rate comes from the line's own amounts.
+      drawRight(invoiceGstRate(item.taxable_amount, item.tax_amount), 415, currentY, 9.0) // GST %
       
       drawRight(formatMoney(item.taxable_amount), 495, currentY, 9.0) // Taxable Value
       drawRight(formatMoney(item.after_tax_amount), 575, currentY, 9.0) // Total Amount
@@ -104,7 +106,7 @@ export async function generateTaxInvoice(templatePath, orderData) {
   if (items) {
     items.forEach(item => {
       const hsn = item.hsn_sac || '-'
-      const gstPct = item.gst_type ? item.gst_type.replace(/[^0-9]/g, '') : '-'
+      const gstPct = invoiceGstRate(item.taxable_amount, item.tax_amount)
       const key = `${hsn}_${gstPct}`
       if (!taxGroups[key]) taxGroups[key] = { hsn, gstPct, taxable: 0, tax: 0 }
       taxGroups[key].taxable += Number(item.taxable_amount) || 0

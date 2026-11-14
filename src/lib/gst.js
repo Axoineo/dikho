@@ -3,8 +3,8 @@
  * No React, no side effects.
  */
 
-import { round2, toAmount } from './money'
-import { formatMoney } from './format'
+import { round2, toAmount } from './money.js'
+import { formatMoney } from './format.js'
 
 /* ── Constants ──────────────────────────────────────────────────────────── */
 
@@ -74,6 +74,22 @@ export function rateFromAmounts(taxableAmount, taxAmount) {
   if (taxable <= 0) return '18'
   const rate = round2((toAmount(taxAmount) / taxable) * 100)
   return GST_RATES.includes(rate) ? String(rate) : 'custom'
+}
+
+// The GST % printed on a tax invoice line. Like rateFromAmounts it reads the
+// rate back out of the stored amounts, because `gst_type` only says how the tax
+// is split (CGST + SGST, IGST or CGST + UTGST) and holds no rate. It differs for
+// print: a line with no tax (not taxable, or a 0% slab) prints 0 rather than the
+// form's default of 18, a tax that matches a standard slab to the paisa prints
+// that slab even on a small amount, and a custom tax prints the rate it really
+// works out to. A tax on a zero taxable amount has no rate, so it prints '-'.
+export function invoiceGstRate(taxableAmount, taxAmount) {
+  const taxable = round2(toAmount(taxableAmount))
+  const tax = round2(toAmount(taxAmount))
+  if (tax === 0) return '0'
+  if (taxable === 0) return '-'
+  const slab = GST_RATES.find((rate) => taxFromRate(taxable, rate) === tax)
+  return String(slab ?? round2((tax / taxable) * 100))
 }
 
 export function gstBreakdown(row) {
