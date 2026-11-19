@@ -47,7 +47,7 @@ effective production behavior is verified.
 
 ### Found live on 2026-10-05 (read-only checks)
 
-#### P0: open sign-up made every session untrusted (fixed in code; dashboard toggle pending)
+#### P0: open sign-up made every session untrusted (fixed and deployed; sign-up confirmed off in production 2026-11-20)
 
 `/auth/v1/settings` reported `disable_signup: false` with email and phone
 enabled. Anyone with the publishable key could create and confirm an account
