@@ -19,6 +19,7 @@ import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom'
 import '../../src/index.css'
 import '../../src/components/ContactDetails.css'
 import '../../src/tailwind.css'
+import { analyticsFixture, campaignFixture } from './whatsapp-analytics-fixture.js'
 
 /* ── Sample data (fictional) ────────────────────────────────────────────── */
 
@@ -478,7 +479,8 @@ const WA_TEMPLATES = [
 function whatsappApiReply(url) {
   const ok = (data) => reply({ success: true, data })
   const path = url.pathname
-  if (path.endsWith('/api/campaigns/stats')) return ok({ contacts: 8412, campaigns: 36, accepted: 61230, delivered: 58904, read: 41377, failed: 1412, awaiting: 914 })
+  if (path.endsWith('/api/whatsapp/analytics')) return ok(analyticsFixture(Number(url.searchParams.get('days')) || 30))
+  if (/\/api\/whatsapp\/analytics\/campaigns\/\d+$/.test(path)) return ok(campaignFixture)
   if (path.endsWith('/api/campaigns')) return ok({ campaigns: WA_CAMPAIGNS })
   if (/\/api\/campaigns\/\d+\/unsent$/.test(path)) {
     return ok({ audienceSource: 'recorded', unaccounted: 0, counts: { total: 43, failed: 23, neverAttempted: 20 }, contacts: [
@@ -614,7 +616,7 @@ window.fetch = async (input, init = {}) => {
   if (url.pathname.endsWith('/api/cg-leads/whatsapp-status')) {
     return reply({ success: true, data: { statuses: LEAD_WA } })
   }
-  if (/\/api\/(campaigns|contacts|templates)/.test(url.pathname)) {
+  if (/\/api\/(campaigns|contacts|templates|whatsapp\/analytics)/.test(url.pathname)) {
     const answer = whatsappApiReply(url)
     if (answer) return answer
   }

@@ -38,6 +38,14 @@ mocked) and generate their keys in memory. CI runs them on Node 20 and 22.
 | `tests/public-vendor-upload.test.js` | Public vendor route: server-chosen keys, ignored caller paths, disguised/empty/oversized documents refused before Turnstile, cleanup on rejection |
 | `tests/otp-hook-and-media.test.js` | OTP hook refusing non-staff and oversized requests; media served with download/sandbox headers and unsatisfiable ranges |
 | `tests/logger.test.js` | Log redaction by key and by content |
+| `tests/inbox-android-api.test.js` | Paged conversation list, server search and wildcards, thread page size, send-to-a-number: permission, normalising, opted-out and blocked numbers, duplicates, daily cap failing closed |
+| `tests/whatsapp-analytics.test.js` | The WhatsApp dashboard and campaign figures: local-midnight days, what is read and cached and for how long, settled days counted once, a missing cache table, Meta parsing with the messaging-limit fallback, permission and token failures without the token in any message, a campaign's funnel, failures, hourly receipts, bounded reply window, 404 and recount after a retry; quick-reply taps per template and per campaign, Meta link taps and cost (ids checked, pages followed, quick replies not double-counted, 90-day limit, insights off) |
+| `tests/whatsapp-analytics-figures.test.js` | The dashboard's rates, changes against the previous period, day and stamp parsing, Meta codes in words, campaign running totals and chart scales |
+| `tests/lead-search.test.js` | The Leads search filter: text columns only, a whole number matched exactly on the numeric mobile column, filter syntax dropped |
+| `tests/campaign-send-retry.test.js` | A retried campaign send reuses its campaign and reports real totals; `send-batch` takes the template from the campaign row |
+| `tests/template-header-media.test.js` | Template payloads with a photo, video or document header and named or positional body variables; header file validation; refusals before anything is stored or sent; batches and retries carrying the header |
+| `tests/contact-import.test.js` | Contact sheet reading in the browser: phone numbers in every common shape, landlines, Excel-rounded numbers, title rows, headerless sheets, spare phone columns, name/email/company detection and name tidying |
+| `tests/clean-campaign.test.js` | `import-rows` validation and write-only-what-changed upserts; header file upload to Meta (types, fake files, permission); a send that stops on Meta spam, template or account errors (sent now or reported by webhook) and on mostly failed batches, without `remaining`; 131050 opting a contact out |
 | `cloudflare-updater/test/update.test.js` | Android update API: version comparison, the mandatory policy, input validation, malformed release metadata and refused methods |
 | `tests/email-content.test.js` | Email HTML sanitizer against script, handler, URL, CSS and nesting payloads; remote images blocked; MIME parsing and header injection; token encryption (wrong key, wrong mailbox, rotation); PKCE |
 | `tests/email-api.test.js` | Email Hub routes: module flag, public/authenticated classes, OAuth state and callback outcomes, thread open, labels, attachments, send dedupe and the uncertain result, Gmail push JWT, render tickets |
@@ -92,6 +100,12 @@ Replace them with isolated tests before connecting them to `npm test` or CI.
 | Message send/retry | duplicate/concurrent requests and partial failure recovery |
 
 ## Manual browser checks
+
+Security headers exist only in the built `dist/_headers`. `npm run dev` and
+`scripts/preview/*` do not send them, so anything a header can block (the
+microphone, the CSP, framing) has to be checked on a build served with that file.
+That gap is why Chrome refused voice notes in production while recording passed on
+the preview harness.
 
 For UI changes, use representative widths including a small phone and desktop.
 Check keyboard operation, visible focus, loading/empty/error/success states and

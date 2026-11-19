@@ -19,8 +19,10 @@ import org.json.JSONObject
  * injects the script for the pinned origin alone, in contrast to
  * addJavascriptInterface, which any frame or redirect target could call. Every
  * message is still treated as untrusted and checked field by field, and the
- * only things it can do are save a file, copy text, and report the page's edge
- * colours.
+ * only things it can do are save a file, copy text, report the page's edge
+ * colours, report session state to the Dart side (which validates it again in
+ * shell_messages.dart), and keep the Supabase session in the vault. It never
+ * gets device contacts, the recorder, or a way to place a call.
  */
 internal class WebViewBridge(
     private val context: Context,
@@ -31,7 +33,16 @@ internal class WebViewBridge(
         const val OBJECT_NAME = "DikhoAndroid"
         const val MAX_MESSAGE_CHARS = 800 * 1024
         const val MAX_COPY_CHARS = 65536
+        const val MAX_SHELL_CHARS = 32 * 1024
+        const val MAX_VAULT_VALUE_CHARS = 32 * 1024
+        const val MAX_VAULT_PENDING = 16
+        val SHELL_MESSAGES = setOf("access", "signedOut", "route", "ready", "token", "theme", "open", "warning", "active")
+        // "refresh": the page asks the app for a fresh session instead of refreshing it.
+        val VAULT_OPS = setOf("get", "set", "remove", "refresh")
+        val VAULT_KEY = Regex("^sb-[a-z0-9-]{1,80}-auth-token(-code-verifier)?$")
     }
+
+    private val vaultReplies = HashMap<Int, JavaScriptReplyProxy>()
 
     private var webView: WebView? = null
     private var origin: String = ""
@@ -99,7 +110,11 @@ internal class WebViewBridge(
             return
         }
 
-        when (json.optString("t")) {
+        when (val type = json.optString("t")) {
+            in SHELL_MESSAGES -> if (text.length <= MAX_SHELL_CHARS) {
+                emit(mapOf("type" to "shell", "kind" to type, "body" to text))
+            }
+            "vault" -> onVault(json, reply)
             "begin" -> transfers.begin(
                 id = json.optString("id"),
                 name = json.optString("name"),
@@ -138,5 +153,29 @@ internal class WebViewBridge(
                 }
             }
         }
+    }
+
+    /** Only Supabase's own session keys, bounded, one reply per request. */
+    private fun onVault(json: JSONObject, reply: JavaScriptReplyProxy) {
+        val id = json.optInt("id", -1)
+        val op = json.optString("op")
+        val key = json.optString("key")
+        val value = if (json.isNull("value")) null else json.optString("value")
+        val valid = id >= 0 && op in VAULT_OPS && VAULT_KEY.matches(key) &&
+            (op != "set" || (value != null && value.length <= MAX_VAULT_VALUE_CHARS)) &&
+            vaultReplies.size < MAX_VAULT_PENDING && id !in vaultReplies
+        if (!valid) {
+            reply.postMessage(JSONObject().put("vault", id).toString())
+            return
+        }
+        vaultReplies[id] = reply
+        emit(mapOf("type" to "vault", "id" to id, "op" to op, "key" to key, "value" to value))
+    }
+
+    fun answerVault(id: Int, value: String?) {
+        val reply = vaultReplies.remove(id) ?: return
+        val answer = JSONObject().put("vault", id)
+        if (value != null) answer.put("value", value)
+        reply.postMessage(answer.toString())
     }
 }

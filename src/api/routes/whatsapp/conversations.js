@@ -11,7 +11,9 @@ import { uploadMediaToMeta, storeOutboundCopy } from '../../services/whatsapp/me
 import { broadcast } from '../../services/whatsapp/realtime.js'
 import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
 import { safeDisplayName, sniffType } from '../../utils/fileType.js'
-import { logEvent } from '../../utils/logger.js'
+import { logEvent, logError } from '../../utils/logger.js'
+import { KEYSET_CURSOR, likeTerm } from '../../utils/paging.js'
+import { normalisePhone } from '../../utils/phone.js'
 import { requirePermission } from '../../middleware/requireAuth.js'
 
 // Most recent inbound message id — the one Meta read-receipts and typing
@@ -108,8 +110,48 @@ const AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gi
 const MAX_AVATAR_BYTES = 2 * MB
 
 /* ── GET /api/whatsapp/conversations — chat list ───────────────────────────
-   Newest activity first, matching the WhatsApp Web left pane. */
+   Newest activity first, matching the WhatsApp Web left pane.
+
+   Without `limit` this is the browser inbox's call: the newest 200. With
+   `limit` (1 to 100) it pages, for the Android app. `cursor` is the nextCursor
+   of the page before, a keyset on (last_message_at, id) so a chat moving to the
+   top cannot shift the next page. `q` searches every open chat on the server,
+   not just the rows a client happens to hold, and `unread=1` keeps unread ones.
+   The first page also carries unreadTotal, which the partial index in migration
+   0013 keeps from touching read chats. */
+const MAX_LIST_PAGE = 100
+const MAX_LIST_SEARCH_CHARS = 80
+
 conversations.get('/', requirePermission('inbox.view'), async (c) => {
+  const limitParam = c.req.query('limit')
+  const limit = limitParam === undefined ? 200 : Number(limitParam)
+  if (!Number.isInteger(limit) || limit < 1 || (limitParam !== undefined && limit > MAX_LIST_PAGE)) {
+    throw new HTTPException(400, { message: 'Bad page size' })
+  }
+  const paged = limitParam !== undefined
+
+  const cursorParam = c.req.query('cursor')
+  const cursor = cursorParam === undefined ? null : KEYSET_CURSOR.exec(cursorParam)
+  if (cursorParam !== undefined && !cursor) throw new HTTPException(400, { message: 'Bad cursor' })
+
+  const q = (c.req.query('q') ?? '').trim().slice(0, MAX_LIST_SEARCH_CHARS)
+  const phoneDigits = q.replace(/\D/g, '')
+  const where = ["conv.status = 'open'"]
+  const args = []
+  const bind = (value) => { args.push(value); return `?${args.length}` }
+  if (c.req.query('unread') === '1') where.push('conv.unread_count > 0')
+  if (q) {
+    const term = bind(likeTerm(q))
+    const inFields = [`conv.wa_name LIKE ${term} ESCAPE '\\'`, `ct.name LIKE ${term} ESCAPE '\\'`, `conv.last_message_preview LIKE ${term} ESCAPE '\\'`]
+    if (phoneDigits) inFields.push(`conv.phone LIKE ${bind(likeTerm(phoneDigits))} ESCAPE '\\'`)
+    where.push(`(${inFields.join(' OR ')})`)
+  }
+  if (cursor) {
+    const at = bind(cursor[1])
+    where.push(`(conv.last_message_at < ${at} OR (conv.last_message_at = ${at} AND conv.id < ${bind(Number(cursor[2]))}))`)
+  }
+  const pageLimit = bind(paged ? limit + 1 : limit)
+
   const { results } = await c.env.DB.prepare(
     // last_message_status is derived, not stored: the list row needs the
     // delivery state of the newest outbound message so it can show the same
@@ -134,20 +176,36 @@ conversations.get('/', requirePermission('inbox.view'), async (c) => {
               LIMIT 1) AS last_message_status
      FROM conversations conv
      LEFT JOIN contacts ct ON ct.id = conv.contact_id
-     WHERE conv.status = 'open'
-     ORDER BY conv.last_message_at DESC
-     LIMIT 200`,
-  ).all()
-  return ok(c, { conversations: results })
+     WHERE ${where.join(' AND ')}
+     ORDER BY conv.last_message_at DESC, conv.id DESC
+     LIMIT ${pageLimit}`,
+  ).bind(...args).all()
+  if (!paged) return ok(c, { conversations: results })
+
+  const hasMore = results.length > limit
+  if (hasMore) results.pop()
+  const last = results.at(-1)
+  const data = {
+    conversations: results,
+    nextCursor: hasMore && last?.last_message_at ? `${last.last_message_at}|${last.id}` : null,
+  }
+  if (!cursor) {
+    const unread = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM conversations WHERE status = 'open' AND unread_count > 0",
+    ).first()
+    data.unreadTotal = unread?.total ?? 0
+  }
+  return ok(c, data)
 })
 
 /* ── GET /api/whatsapp/conversations/:id/messages — one page of the thread ──
    Everything after the last Clear chat / Delete chat, minus messages deleted
    one by one (migration 0011). `starred` is the caller's own star.
 
-   The newest THREAD_PAGE rows, oldest first; `?before=<message id>` gives the
-   page older than that message, for scrolling up. `hasMore` says whether an
-   older page exists. Keyset order is (created_at, id), not id alone: inbound
+   The newest THREAD_PAGE rows, oldest first, or `limit` rows when asked for
+   fewer (a phone wants small pages); `?before=<message id>` gives the page
+   older than that message, for scrolling up. `hasMore` says whether an older
+   page exists. Keyset order is (created_at, id), not id alone: inbound
    rows carry WhatsApp's timestamp, so a late webhook gets a higher id than
    newer messages. The cursor row is looked up without the hidden/cleared
    filters, so a message deleted after the page was loaded still works as one. */
@@ -155,6 +213,12 @@ const THREAD_PAGE = 500
 conversations.get('/:id/messages', requirePermission('inbox.view'), async (c) => {
   const id = Number(c.req.param('id'))
   if (!Number.isInteger(id)) throw new HTTPException(400, { message: 'Bad conversation id' })
+
+  const limitParam = c.req.query('limit')
+  const pageSize = limitParam === undefined ? THREAD_PAGE : Number(limitParam)
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > THREAD_PAGE) {
+    throw new HTTPException(400, { message: 'Bad page size' })
+  }
 
   const before = c.req.query('before')
   let cursor = null
@@ -180,9 +244,9 @@ conversations.get('/:id/messages', requirePermission('inbox.view'), async (c) =>
        ORDER BY m.created_at DESC, m.id DESC
        LIMIT ?3
      ) ORDER BY created_at ASC, id ASC`,
-  ).bind(id, c.get('user')?.id ?? '', THREAD_PAGE + 1, ...(cursor ? [cursor.created_at, cursor.id] : [])).all()
+  ).bind(id, c.get('user')?.id ?? '', pageSize + 1, ...(cursor ? [cursor.created_at, cursor.id] : [])).all()
 
-  const hasMore = results.length > THREAD_PAGE
+  const hasMore = results.length > pageSize
   if (hasMore) results.shift()
   return ok(c, { messages: results, hasMore })
 })
@@ -549,50 +613,51 @@ conversations.post('/:id/interactive', requirePermission('inbox.reply'), structu
    template to the same chat within two minutes is refused as a double send. */
 const TEMPLATE_REPEAT_MS = 2 * 60 * 1000
 
-conversations.post('/:id/template', requirePermission('campaigns.send'), async (c) => {
-  const { name, language, values } = (await readJsonOr(c, 16 * 1024, {})) ?? {}
+function readTemplateChoice(input) {
+  const { name, language, values } = input ?? {}
   if (typeof name !== 'string' || !/^[a-z0-9_]{1,512}$/.test(name) || typeof language !== 'string' || !/^[A-Za-z_-]{2,15}$/.test(language)) {
     throw new HTTPException(400, { message: 'Pick a template.' })
   }
-  const conv = await findConversation(c)
-  if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
-  if (conv.blocked_at) return fail(c, 'BLOCKED', BLOCKED_MESSAGE, 409)
+  return { name, language, values }
+}
 
+// The approved template and its filled-in values, or the response refusing them.
+async function prepareTemplate(c, { name, language, values }) {
   let templates
   try { templates = await fetchApprovedTemplates(c.env) } catch {
-    return fail(c, 'TEMPLATES_UNAVAILABLE', 'Could not load the approved templates from WhatsApp. Please try again.', 502)
+    return { refusal: fail(c, 'TEMPLATES_UNAVAILABLE', 'Could not load the approved templates from WhatsApp. Please try again.', 502) }
   }
   const template = templates.find((t) => t.name === name && t.language === language && t.status === 'APPROVED')
-  if (!template) return fail(c, 'TEMPLATE_NOT_FOUND', 'That template is not approved.', 404)
+  if (!template) return { refusal: fail(c, 'TEMPLATE_NOT_FOUND', 'That template is not approved.', 404) }
   if (template.headerFormat && template.headerFormat !== 'TEXT') {
-    return fail(c, 'TEMPLATE_UNSUPPORTED', 'This template has a photo, video or document header, which the inbox cannot fill in yet.', 409)
+    return { refusal: fail(c, 'TEMPLATE_UNSUPPORTED', 'This template has a photo, video or document header, which the inbox cannot fill in yet.', 409) }
   }
   if ((template.buttons ?? []).some((b) => /\{\{/.test(b?.url ?? ''))) {
-    return fail(c, 'TEMPLATE_UNSUPPORTED', 'This template has a link button with a variable, which the inbox cannot fill in yet.', 409)
+    return { refusal: fail(c, 'TEMPLATE_UNSUPPORTED', 'This template has a link button with a variable, which the inbox cannot fill in yet.', 409) }
   }
 
   const map = {}
   for (const token of templateTokens(template)) {
     const value = sanitizeParam(values?.[token]).slice(0, 1024)
-    if (!value) return fail(c, 'INVALID', `Fill in {{${token}}}.`, 400)
+    if (!value) return { refusal: fail(c, 'INVALID', `Fill in {{${token}}}.`, 400) }
     map[token] = { source: 'literal', value }
   }
+  return { template, map }
+}
 
-  const recent = await c.env.DB.prepare(
+async function sentTemplateRecently(db, conversationId, name) {
+  const recent = await db.prepare(
     `SELECT 1 FROM messages
      WHERE conversation_id = ?1 AND direction = 'outbound' AND type = 'template'
        AND json_extract(payload, '$.name') = ?2 AND created_at > ?3 LIMIT 1`,
-  ).bind(conv.id, name, new Date(Date.now() - TEMPLATE_REPEAT_MS).toISOString()).first()
-  if (recent) return fail(c, 'DUPLICATE', 'This template was just sent to this chat.', 409)
+  ).bind(conversationId, name, new Date(Date.now() - TEMPLATE_REPEAT_MS).toISOString()).first()
+  return Boolean(recent)
+}
 
-  const sent = await sendTemplateMessage(c.env, {
-    to: conv.phone, templateName: name, languageCode: language, components: buildComponents(template, map, {}),
-  })
-  if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
-
+function recordTemplate(c, conv, { name, language }, { template, map }, messageId) {
   const body = renderTemplateText(template.bodyText, map, {})
-  const row = await recordOutbound(c, conv, {
-    metaMessageId: sent.messageId, type: 'template', body,
+  return recordOutbound(c, conv, {
+    metaMessageId: messageId, type: 'template', body,
     payload: {
       kind: 'template', name, language,
       header: renderTemplateText(template.headerText, map, {}) || null,
@@ -601,7 +666,104 @@ conversations.post('/:id/template', requirePermission('campaigns.send'), async (
       buttons: (template.buttons ?? []).map((b) => String(b?.text ?? '').slice(0, 40)).filter(Boolean).slice(0, 10),
     },
   })
+}
+
+conversations.post('/:id/template', requirePermission('campaigns.send'), async (c) => {
+  const choice = readTemplateChoice(await readJsonOr(c, 16 * 1024, {}))
+  const conv = await findConversation(c)
+  if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
+  if (conv.blocked_at) return fail(c, 'BLOCKED', BLOCKED_MESSAGE, 409)
+
+  const prepared = await prepareTemplate(c, choice)
+  if (prepared.refusal) return prepared.refusal
+  if (await sentTemplateRecently(c.env.DB, conv.id, choice.name)) {
+    return fail(c, 'DUPLICATE', 'This template was just sent to this chat.', 409)
+  }
+
+  const sent = await sendTemplateMessage(c.env, {
+    to: conv.phone, templateName: choice.name, languageCode: choice.language,
+    components: buildComponents(prepared.template, prepared.map, {}),
+  })
+  if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
+
+  const row = await recordTemplate(c, conv, choice, prepared, sent.messageId)
   return ok(c, { message: row })
+})
+
+/* ── POST /api/whatsapp/conversations/template: template to a phone number ──
+   Authenticated, campaigns.send. For the Android app's Device Contacts, which
+   starts from a number on the person's phone, possibly with no chat yet. The
+   same template rules as above, plus what a number from outside the CRM needs:
+   the server normalises it itself, refuses anyone who opted out, and counts the
+   send against a daily ceiling (migration 0013). The chat is only created once
+   Meta has accepted the send, so a refused send leaves no empty chat behind. */
+async function consumeDirectTemplateBudget(env) {
+  const cap = Number(env.WHATSAPP_DIRECT_TEMPLATE_DAILY_CAP)
+  if (!Number.isFinite(cap) || cap <= 0) {
+    logEvent('whatsapp.direct_template.budget_misconfigured', {})
+    return 'unavailable'
+  }
+  const day = new Date().toISOString().slice(0, 10)
+  try {
+    // Guarded, so reaching the ceiling writes nothing.
+    const row = await env.DB.prepare(
+      `INSERT INTO direct_template_budget (day, sent) VALUES (?1, 1)
+         ON CONFLICT(day) DO UPDATE SET sent = sent + 1
+           WHERE direct_template_budget.sent < ?2
+       RETURNING sent`,
+    ).bind(day, cap).first()
+    if (row) return 'ok'
+    logEvent('whatsapp.direct_template.daily_cap_reached', { cap })
+    return 'capped'
+  } catch (err) {
+    logError('whatsapp.direct_template.budget_check_failed', err)
+    return 'unavailable'
+  }
+}
+
+conversations.post('/template', requirePermission('campaigns.send'), async (c) => {
+  const input = await readJsonOr(c, 16 * 1024, {})
+  const choice = readTemplateChoice(input)
+  const phone = typeof input?.phone === 'string' ? normalisePhone(input.phone.slice(0, 40)) : null
+  if (!phone) return fail(c, 'INVALID_PHONE', 'That is not a phone number WhatsApp can reach.', 400)
+
+  const db = c.env.DB
+  const contact = await db.prepare('SELECT id, opted_out FROM contacts WHERE phone = ?1').bind(phone).first()
+  if (contact?.opted_out) return fail(c, 'OPTED_OUT', 'This person opted out of WhatsApp messages.', 409)
+  const existing = await db.prepare('SELECT * FROM conversations WHERE phone = ?1').bind(phone).first()
+  if (existing?.blocked_at) return fail(c, 'BLOCKED', BLOCKED_MESSAGE, 409)
+
+  const prepared = await prepareTemplate(c, choice)
+  if (prepared.refusal) return prepared.refusal
+  if (existing && await sentTemplateRecently(db, existing.id, choice.name)) {
+    return fail(c, 'DUPLICATE', 'This template was just sent to this number.', 409)
+  }
+
+  const budget = await consumeDirectTemplateBudget(c.env)
+  if (budget === 'capped') return fail(c, 'DAILY_LIMIT', "Today's limit for sending from the app has been reached.", 429)
+  if (budget !== 'ok') return fail(c, 'SENDING_UNAVAILABLE', 'Sending from the app is not available right now.', 503)
+
+  const sent = await sendTemplateMessage(c.env, {
+    to: phone, templateName: choice.name, languageCode: choice.language,
+    components: buildComponents(prepared.template, prepared.map, {}),
+  })
+  if (!sent.ok) return fail(c, 'SEND_FAILED', sent.errorMessage, 502)
+
+  // Reopens a chat someone deleted, as an inbound message would. Its old
+  // messages stay behind cleared_through_id.
+  await db.prepare(
+    `INSERT INTO conversations (contact_id, phone, status, last_message_at)
+     VALUES (?1, ?2, 'open', ?3)
+     ON CONFLICT(phone) DO UPDATE SET
+       contact_id = COALESCE(conversations.contact_id, ?1),
+       status = 'open',
+       updated_at = datetime('now')`,
+  ).bind(contact?.id ?? null, phone, new Date().toISOString()).run()
+  const conv = await db.prepare('SELECT * FROM conversations WHERE phone = ?1').bind(phone).first()
+
+  const row = await recordTemplate(c, conv, choice, prepared, sent.messageId)
+  logEvent('whatsapp.direct_template.sent', { conversation_id: conv.id, user_id: c.get('user')?.id })
+  return ok(c, { conversationId: conv.id, message: row })
 })
 
 /* ── Per-message actions: react, pin, star, delete, forward ───────────────

@@ -19,21 +19,65 @@ class DikhoColors {
 
 ThemeData dikhoTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
-  final scheme =
-      ColorScheme.fromSeed(
-        seedColor: DikhoColors.brand,
-        brightness: brightness,
-      ).copyWith(
-        primary: dark ? DikhoColors.brandInk : DikhoColors.brand,
-        surface: dark ? DikhoColors.surfaceDark : DikhoColors.surfaceLight,
-        onSurface: dark ? DikhoColors.textDark : DikhoColors.textLight,
-        onSurfaceVariant: dark ? DikhoColors.mutedDark : DikhoColors.mutedLight,
-        error: dark ? const Color(0xFFD9534F) : DikhoColors.danger,
-      );
+  final scheme = ColorScheme.fromSeed(seedColor: DikhoColors.brand, brightness: brightness).copyWith(
+    primary: dark ? DikhoColors.brandInk : DikhoColors.brand,
+    surface: dark ? DikhoColors.surfaceDark : DikhoColors.surfaceLight,
+    onSurface: dark ? DikhoColors.textDark : DikhoColors.textLight,
+    onSurfaceVariant: dark ? DikhoColors.mutedDark : DikhoColors.mutedLight,
+    error: dark ? const Color(0xFFD9534F) : DikhoColors.danger,
+  );
+  final line = dark ? const Color(0xFF34373B) : const Color(0xFFE3E5E8);
   return ThemeData(
     useMaterial3: true,
-    colorScheme: scheme,
+    colorScheme: scheme.copyWith(outlineVariant: line),
     scaffoldBackgroundColor: scheme.surface,
+    dividerTheme: DividerThemeData(color: line, thickness: 1, space: 1),
+    appBarTheme: AppBarTheme(
+      backgroundColor: scheme.surface,
+      foregroundColor: scheme.onSurface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 4,
+      titleTextStyle: TextStyle(color: scheme.onSurface, fontSize: 18, fontWeight: FontWeight.w500),
+      shape: Border(bottom: BorderSide(color: line)),
+    ),
+    drawerTheme: DrawerThemeData(backgroundColor: scheme.surface, surfaceTintColor: Colors.transparent, elevation: 1),
+    navigationDrawerTheme: NavigationDrawerThemeData(
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: dark ? const Color(0xFF233A52) : const Color(0xFFEAF1FA),
+      tileHeight: 48,
+      labelTextStyle: WidgetStatePropertyAll(TextStyle(color: scheme.onSurface, fontSize: 14, fontWeight: FontWeight.w500)),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    ),
+    snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    inputDecorationTheme: InputDecorationTheme(
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: line),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: line),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: scheme.primary, width: 1.5),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(minimumSize: const Size(48, 48))),
+    textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(minimumSize: const Size(48, 48))),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(minimumSize: const Size(48, 48), tapTargetSize: MaterialTapTargetSize.padded),
+    ),
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,

@@ -14,6 +14,192 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Added
 
+- WhatsApp dashboard rebuilt with charts and analysis, on the web and natively in
+  the Android app. Pick 7, 30 or 90 days and every figure compares with the same
+  length of time before: messages sent, delivery and read rates, failures,
+  messages received and Meta spend; a daily sent/delivered/read chart with a
+  table view; the delivery funnel; failure reasons in plain words; messages
+  received by day; where sent messages came from; spend by day and by Meta
+  pricing category; each template's results with Meta's quality rating; the
+  period's campaigns; the number's quality rating, messaging limit and
+  throughput; audience and inbox. One request,
+  `GET /api/whatsapp/analytics?days=7|30|90`, cached per day in the new
+  `analytics_cache` table (D1 migration 0013) so a busy dashboard does not
+  rescan messages; Meta figures are cached for 30 minutes and each Meta part
+  fails on its own with a plain reason.
+- User Management is native in the Android app: the people with a search, counts that
+  filter and a filter sheet (status, role, department, template), refreshed every 30
+  seconds so "Online" stays true; each person's details, access, sessions and history;
+  adding people and editing their details; suspending, reactivating, archiving, signing
+  out everywhere and resending the welcome, each asked about first in plain words;
+  permission templates, departments and teams, and the audit log. The web's permission
+  grid is redesigned for a phone as a list per module (a switch and its reach for each
+  permission, quick settings per module, the whole row tappable), with the grid's rules:
+  the smallest change that gives the result, and only access the editor holds can be
+  given. The app's sessions now show as "Dikho app on Android" in the session lists, on
+  the web too. Live Assist is not on the native profile yet.
+- Settings is native in the Android app, redesigned for a phone as a list where each
+  section opens on its own: your profile, preferences (the theme changes at once and
+  follows you to every device; the start page; the web tables' density and rows per
+  page), your devices with ending a session; and, for people with `settings.manage`,
+  the company's invoice details (checked as on the web, only changed fields sent, Save
+  only while something changed, asked before leaving with unsaved changes), date and
+  number formats, the dropdown lists (move, hide, add, row colours from a palette) and
+  media with sub media. The database's own refusals ("That value is already in the
+  list") are shown as written, and a Settings change is never sent twice after a
+  dropped connection. After a change the page in the app reloads the person's access
+  and the organization's settings, and native order and vendor forms read the lists
+  again.
+- Live Assist in the Android app, for both sides (ADR 0014). Being helped on a phone:
+  the request says what the helper will see, a banner shows while they are viewing,
+  with Stop; their pointer, highlights, pinned notes (Done or hide) and page
+  suggestions (Go) show over the app, and the chat has quick replies. Ask for help is
+  in the drawer. A phone shares only pictures of Dikho's own screens, a few a second,
+  directly to the helper over WebRTC: no screen-recording permission, and never the
+  phone's notifications or other apps. Helping from a phone: the other person's screen
+  (a computer's tab or a phone's pictures), drag to point, tap to highlight and pin a
+  note, chat, suggest a page, end; help requests show as cards, and native profiles
+  have a Live Assist button. The browser's viewer shows a phone's pictures. The page in
+  the app leaves Live Assist to the app. New dependency: `flutter_webrtc` 1.6.3.
+- The email inbox is native in the Android app: folders and mailboxes as two pickers,
+  search (and searching the mailbox itself), unread only, a list that loads more as
+  it scrolls and refreshes every minute; a conversation on its own screen, marked read
+  on opening, each message in a small view that can load nothing and run nothing,
+  with links opened in another app only after asking and attachments downloaded with
+  the session and saved to Downloads; archive, star, mark unread, labels, status,
+  assignee, internal notes and CRM records. Writing is redesigned for a phone: plain
+  text with the original quoted below, recipients as chips with suggestions, files
+  from the phone, send-as addresses, a draft kept when leaving, and one id per message
+  so a send repeated after a dropped connection goes once.
+- Email overview and analytics are native in the Android app. The overview: unread,
+  assigned to you, connected and needing attention as figures, mailboxes needing a
+  reconnect, the newest unread conversations, each mailbox with its role, status and
+  Sync now, campaign counts, and the server's connections. Analytics: 7, 30 or 90
+  days; campaign emails sent, bounce and complaint rates with their standing in words
+  (against Amazon SES's limits), unsubscribes; where campaign emails ended up as
+  labelled bars; the audience today; delivery events. Consent and Email settings are
+  still the web's.
+- Email campaigns and templates are native in the Android app. Campaigns: a list with
+  filters (awaiting approval, drafts, scheduled and sending, sent) and progress; each
+  campaign on its own screen with its details, audience (clients, vendors, leads and
+  their filters, with who will receive it counted by the server), content (plain text
+  written on the phone; a designed email is shown as it is and can only be replaced by
+  a template), a preview, the checklist, a test to yourself, approval of exactly the
+  version reviewed (the server refuses an approval once the content has changed),
+  request changes with a note, pause, resume, cancel, send the next batch, delivery
+  figures and history. Templates: list, edit, older versions restored as the newest,
+  archive. A started campaign is never edited.
+- Email settings is native in the Android app, so the whole Email Hub now is: your
+  mailbox and shared mailboxes with their status, whether outside mail reaches them
+  and storage, Sync now, connect (Google in the phone's browser, Hostinger at once),
+  disconnect or remove after confirming, campaign sending allowed with a daily limit
+  (1 to 2000), adding shared mailboxes, and a People screen to add, change or remove
+  who may use a mailbox (never yourself) or leave it. Google's return comes back to
+  the app on its App Link and is finished with the app's own session, its outcome
+  shown in words. Every drawer entry is now a native screen.
+- Email consent is native in the Android app: look up one address (never a list of
+  everyone), see whether it agreed, unsubscribed or is suppressed, how and when it was
+  recorded and by whom; record consent (how they agreed is required) or an unsubscribe
+  with a note, suppress or lift a suppression after confirming. Changing needs "Manage
+  email consent"; others who write campaigns can look. Campaigns' Consent link opens it.
+- The Android app's unsaved-changes bar (Settings, email campaigns and templates) keeps
+  Cancel and Save changes side by side on a phone, with the words above them; before,
+  the buttons stacked on top of each other. Long hints under campaign and template
+  fields are shown in full instead of being cut off.
+- The Android app signs people in itself: a six-digit code by email or WhatsApp on a
+  native screen, for people the organization has added (nobody new can be created), with
+  a resend timer, Android's code autofill, and a note saying why the last session ended
+  (signed out by an administrator, suspended, timed out). The app owns the session: it
+  keeps it in the Android Keystore, refreshes it before it runs out, and is the only
+  thing that ever refreshes it; the CRM page in the app reads that session and asks the
+  app for a fresh one rather than refreshing it itself, so the two can never race on one
+  refresh token. The page is loaded only after signing in. Signing out of the app ends
+  only this phone's session, not the person's other devices. App builds now need the
+  Supabase address and publishable key (`tool/build-release.sh` reads them from the
+  web's `.env.local`). See ADR 0013.
+- The Android app also keeps the session's rules itself: what the drawer offers comes
+  from the app's own access check, and the app sends the activity heartbeat, records
+  the sign-in for User Management, warns after 40 minutes without activity and signs
+  out at 45, ends the session 8 hours after signing in, and signs out at once when an
+  administrator ends the session. The page in the app no longer runs its own copies.
+  After a wrong code, the sign-in keeps the code field and keyboard ready for the next
+  try.
+- Purchase orders is native in the Android app: the list a page at a time with a
+  server search (PO number, vendor, brand, CRM reference), each with its vendor and the
+  sales order it was raised for; each order's figures (payment requested, still to
+  request), lines and vendor, order and history details; and adding and editing with
+  the web form's fields and rules: the sales order (which fills in the campaign, brand
+  and reference), the vendor and its address (picked for you when it has one), and
+  lines that can each be linked to the sales order line they supply, with the margin on
+  each and in total. Saved the way the web does it: the order first, then all new lines
+  in one request, removed again if the lines are refused; an edit keeps the vendor
+  address, so a purchase order never turns into a sales order. "New PO" on a vendor now
+  opens this native form. A link to another sales order's line is dropped when the
+  sales order changes, where the web form keeps it.
+- Sales orders is native in the Android app: the list a page at a time with a server
+  search (order number, client, CRM reference) and a status filter, purchase orders left
+  out as on the web; each order's figures (total, before tax, tax, received, balance
+  due), its lines with their GST split, and the order, campaign and history details,
+  with a note when the stored total no longer matches the lines; and adding and editing
+  with the web form's fields, lists and money rules. GST is worked out from each line's
+  rate and the totals from the lines, the same way `src/lib/gst.js` does (checked
+  against the web's own rounding). A save writes the order, then all new lines in one
+  request; a new order whose lines are refused is removed again, and an edit changes
+  saved lines in place, so purchase-order and invoice links stay. Edit shows only where
+  `sales_orders.edit` reaches: on every order with "all", on the person's own with
+  "own". A sales order's lines are the ones without a `purchase_order_id`: purchase
+  order lines carry the sales order's id too, to say what they were bought for, and
+  are never shown or saved as its own. "New order" on a client now opens this native
+  form. "Tax invoice" opens the
+  new web page `/sales-orders/:id/invoice`, which draws the PDF from the template as
+  the Sales orders page does, and Back returns to the native list.
+- `/sales-orders/:id/invoice` on the web: one order's tax invoice PDF on a page of its
+  own, with Download again and Try again.
+- The page tells the Android app how far each permission reaches (`scopes`, 'own' or
+  'all' and so on) alongside the permission list, so a native screen can offer Edit
+  only where RLS allows it. An app talking to an older page treats every permission it
+  holds as 'all', and RLS still refuses the rest.
+- Vendors is native in the Android app: the list a page at a time with a server
+  search and status, media and sub media filters; each vendor's details (contact, media
+  and terms, tax, bank with the account number masked until asked, address, and its
+  document through a ten-minute signed link); adding and editing with the web form's
+  fields and rules, saved step by step and undone on failure as the web form does; and
+  "New PO", which opens the web purchase order form with the vendor chosen. Country,
+  state and city are typed with suggestions from places already in use, and the PIN code
+  is not looked up, where the web form uses a world place list and a postal lookup.
+- WhatsApp Campaigns is native in the Android app: every campaign with how far it got
+  and who has not received it, live progress while one is sending, each campaign's own
+  performance screen, and a native new-campaign wizard (choose people, an approved
+  template, its variables and header file, then send at a chosen pace with Stop and
+  Resume, after a confirmation that says real, charged messages go out). The wizard
+  sends a one-time request id with the start and never repeats a request by itself; a
+  lost start is tried again only when the person chooses, with the same id. That is
+  safe only once D1 migration 0013 and the campaign request-id fix are live, so the
+  APK must ship after them. The web keeps its wizard, now also at
+  `/whatsapp/campaigns/new` (the web dashboard's button goes there).
+- WhatsApp Contacts is native in the Android app: the list a page at a time with a
+  server search, each contact's details with Call and Send template (consent asked,
+  opted-out numbers refused), and a long press to select contacts to delete, asking
+  first. "Import a spreadsheet" opens the web importer at the new
+  `/whatsapp/contacts/import`, and Back returns to the native list.
+- Removed `GET /api/campaigns/stats`, the old dashboard's all-time count over
+  every message, which nothing uses any more. Deploy the web right after the API:
+  until it is live, the old dashboard page asks for that route.
+- A page for each WhatsApp campaign at `/whatsapp/campaigns/<id>`, opened from
+  the dashboard or the Campaigns list: audience to replies funnel, failure
+  reasons, how fast deliveries and reads arrived hour by hour, replies within
+  seven days, opt-outs since, and the list of people who have not received it
+  with the existing retry. `GET /api/whatsapp/analytics/campaigns/:id` reads
+  only that campaign's messages and keeps the answer once its receipts settle;
+  a retry makes it count again.
+- Button taps on WhatsApp templates, on the dashboard and each campaign's page,
+  web and app. Quick-reply taps are counted exactly from the replies in our own
+  records (each tap answers the message it was sent on), so they work today.
+  Link-button taps and spend per template come from Meta's template insights:
+  they show whenever Meta answers and are hidden otherwise, so they appear by
+  themselves if insights are ever switched on.
+  `scripts/whatsapp/check-template-insights.mjs` checks, read-only, whether Meta
+  answers for the account's templates with website buttons.
 - Android app (`dikho-mobile/`), a Flutter shell around the deployed CRM with
   native downloads, uploads, external-link handling and self-updates, plus its
   update Worker (`cloudflare-updater/`). Built and tested on emulators with a test
@@ -117,6 +303,36 @@ incident details or unreleased vulnerability exploitation instructions here.
   force sign-out, suspend and archive, welcome message on add, and a theme
   preference saved per person. See ADR 0007.
 
+- Android app V1.1.0, with native screens. The drawer, WhatsApp inbox and a new Phone
+  contacts screen are Flutter; every other module stays the CRM in a WebView. See ADR
+  0012.
+  - The inbox pages through every chat (30 at a time) with server search, opens a chat on
+    its newest 50 messages, and updates live over its own realtime connection. All of
+    the browser inbox's actions are there: reply, media, voice notes, reactions, stars,
+    pins, forwards, rich messages, templates, clear, delete, block.
+  - Phone contacts lists the phone's own contacts, which stay on the phone. Call places
+    the call directly, and a WhatsApp template can go to any number, with consent asked
+    and a daily ceiling across all staff (`WHATSAPP_DIRECT_TEMPLATE_DAILY_CAP`).
+  - Voice notes record natively as OGG/Opus on Android 10 and later.
+  - The session moves from WebView storage to Keystore-encrypted storage.
+  - A release can be required, which blocks the app until it is installed. Optional
+    updates can be put off until the app is next opened, and the newest release always
+    replaces anything ignored before it.
+  - The launcher logo animation is drawn natively and no longer waits on the page.
+  - Release builds strip Android logging and obfuscate Dart, and there is a separate
+    build for Google Play with no self-update.
+- Clients is native in the Android app: the list as you scroll, a server search, details
+  with Call and Email, adding and editing a client with the web form's fields and rules, and
+  New order, which opens the CRM's sales order form with that client chosen. Saves go
+  through Supabase with the person's own session, so RLS decides who may add or edit.
+- Back in the Android app no longer jumps to some other page from the screen the app opened
+  on. It asks before leaving, as from any first screen.
+- Leads is native in the Android app too: a page of 25 at a time as you scroll, a server
+  search, the WhatsApp confirmation for each lead, and details with Call, WhatsApp and
+  Email. It reads Supabase with the person's own session, so RLS decides what it sees.
+- API for the app: `limit`, `cursor`, `q` and `unread` on the conversation list, `limit` on
+  a thread, and `POST /api/whatsapp/conversations/template` to send to a phone number.
+  D1 migration 0013 adds the indexes and the daily counter.
 - Canonical repository and nested `AGENTS.md` guidance for AI-assisted work.
 - Product, invariant, architecture, database, testing, deployment, branding,
   configuration, permissions, upgrade and security-audit documentation.
@@ -127,6 +343,30 @@ incident details or unreleased vulnerability exploitation instructions here.
 
 ### Changed
 
+- In the Android app, "Saved … to Downloads" with Open now goes after its 10 seconds.
+  Flutter keeps any message with a button until it is dismissed, so it stayed over the
+  screen and, on native screens, over their own buttons (a tap on New order opened the
+  file instead). With a screen reader on, it still stays until dismissed.
+- Searching Leads works again. `mobile` is a numeric column, and the search also asked
+  for a text match on it, which the database refuses, so searches most likely failed.
+  A whole number, with or without its country code, now finds its lead.
+- Leads can be opened on a phone. Tapping a lead did nothing, and the columns with its
+  number, email and city are hidden at that width. A tap now opens its details with
+  Call, WhatsApp and Email.
+- WhatsApp Contacts loads 30 at a time as you scroll, searches on the server, shows real
+  totals and uses cards on phones. It used to draw every contact at once, which froze
+  phones.
+- The web app no longer shows its loading logo for routes that load within 300ms, and
+  fetches route code ahead of time. Files with a content hash in their name are cached
+  for a year, so returning visits do not ask for them again.
+- Inbox voice notes can record in browsers. `Permissions-Policy` said
+  `microphone=()`, so Chrome refused every recording before asking the person. It
+  now says `microphone=(self)`: this origin only, and a cross-origin frame still
+  cannot use it. Every other listed feature stays off.
+- The open chat no longer runs off the side of phones under about 400px wide,
+  which hid the mic, the message times and the chat menu, and no longer pushes
+  the conversation list out of view on a phone held sideways or a small tablet.
+- The Android launcher icon no longer has its corners cut by round icon masks.
 - The screens that still differed from the agreed mockups now match them:
   - Sign-in is one plain card; the blue welcome half is gone.
   - Sidebar in the mockup's order (Clients, Leads, Sales orders, Vendors,
@@ -236,6 +476,43 @@ incident details or unreleased vulnerability exploitation instructions here.
   build and the high-signal secret scan.
 - Documentation now distinguishes the production Cloudflare Pages SPA from the
   unused standalone SPA Worker deployment command.
+
+### Changed
+
+- Contact imports are read in the browser and shown for checking before
+  anything is saved: the WhatsApp number, spare phone columns, name (or first
+  plus last name), email and company are detected and can be changed. Numbers
+  are checked with `libphonenumber-js` (new dependency, MIT, no dependencies of
+  its own, loaded only when a file is chosen), so order IDs, landlines,
+  placeholders and numbers Excel rounded to 9.19877E+11 are skipped with a
+  reason. Title rows above the headers and sheets with no header row are
+  handled, blank or repeated headers keep their columns, and names in one case
+  are tidied. A re-import writes only contacts that changed. In the campaign
+  wizard the imported file's contacts are selected, even ones older than the
+  newest 2,000 the list shows.
+- WhatsApp campaigns are sent at a chosen pace (a batch of 40 every 30 seconds
+  by default, or every minute, or without pauses), with live progress and a
+  Stop button. Sending stops by itself when Meta reports a spam limit, a paused
+  or mismatched template, an account block, a payment problem, a bad token or a
+  rate limit, or when most of a batch fails; people not yet messaged stay on
+  the campaign to send later. Campaigns stopped this way show as Stopped.
+- A template's header video, photo or PDF can be uploaded from the wizard; it
+  goes to Meta once and every message reuses the media ID.
+- People who choose "Stop promotions" in WhatsApp (Meta error 131050) are
+  opted out of campaigns automatically.
+
+### Fixed
+
+- WhatsApp campaigns with a photo, video or document header no longer fail
+  every message with Meta error 132012 ("Parameter format does not match").
+  The send left the header out and only sent the body. The campaign wizard now
+  asks for the header file (a public https link or a WhatsApp media ID) and
+  sends it as the header component, next to the body variables (named ones
+  with `parameter_name`). The API refuses such a campaign without a valid file
+  before anything is stored or sent. The file is kept with the campaign's
+  variables, so a retry sends it too; a campaign sent before this fix has no
+  file saved and its retry is refused with a message saying so. The inbox,
+  lead confirmations and staff welcome still do not fill media headers.
 
 ### Security
 

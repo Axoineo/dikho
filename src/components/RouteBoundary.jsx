@@ -12,6 +12,12 @@ export default class RouteBoundary extends Component {
     return { failed: true }
   }
 
+  // One page failing must not take every other page with it. Moving to another page
+  // tries again, and that page may well work.
+  componentDidUpdate(previous) {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false })
+  }
+
   componentDidCatch(error) {
     console.error('Route failed to load:', error)
     // AppReady lives inside the subtree this just replaced, so nothing else
@@ -26,7 +32,7 @@ export default class RouteBoundary extends Component {
     return (
       <div className="route-boundary" role="alert">
         <strong>We couldn&rsquo;t load this page</strong>
-        <p>Your connection dropped while the page was loading.</p>
+        <p>Something stopped this page from loading. Check your connection and try again.</p>
         <button type="button" className="primary-button" onClick={() => window.location.reload()}>
           Try again
         </button>

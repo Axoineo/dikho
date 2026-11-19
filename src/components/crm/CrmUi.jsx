@@ -179,7 +179,7 @@ export function RowChevron() {
 
 export function SkeletonRows({ rows = 8, columns }) {
   return Array.from({ length: rows }).map((_, row) => (
-    <tr key={`skeleton-${row}`}>
+    <tr key={`skeleton-${row}`} className="crm-skeleton-row">
       {Array.from({ length: columns }).map((__, cell) => (
         <td key={cell}>
           <span className="crm-skeleton" style={{ width: `${cell === 0 ? 70 : 45 + ((row + cell) % 4) * 10}%` }} />

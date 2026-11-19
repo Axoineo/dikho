@@ -21,10 +21,7 @@ class FileEvents {
     switch (event['type']) {
       case 'downloadStarted':
         // Until the result replaces it: a large file can take a while.
-        _show(
-          'Downloading ${event['name']}...',
-          duration: const Duration(minutes: 5),
-        );
+        _show('Downloading ${event['name']}...', duration: const Duration(minutes: 5));
       case 'downloadFinished':
         _finished(event);
       case 'downloadFailed':
@@ -42,10 +39,7 @@ class FileEvents {
     _show(
       'Saved ${event['name']} to Downloads',
       duration: const Duration(seconds: 10),
-      action: SnackBarAction(
-        label: 'Open',
-        onPressed: () => unawaited(_open(uri, mime)),
-      ),
+      action: SnackBarAction(label: 'Open', onPressed: () => unawaited(_open(uri, mime))),
       share: () => unawaited(platform.shareFile(uri, mime)),
     );
   }
@@ -54,10 +48,7 @@ class FileEvents {
     if (!await platform.openFile(uri, mime)) {
       _show(
         'No app on this phone can open this file.',
-        action: SnackBarAction(
-          label: 'Share',
-          onPressed: () => unawaited(platform.shareFile(uri, mime)),
-        ),
+        action: SnackBarAction(label: 'Share', onPressed: () => unawaited(platform.shareFile(uri, mime))),
       );
     }
   }
@@ -67,10 +58,7 @@ class FileEvents {
     final mime = event['mime'] as String;
     _show(
       'No app on this phone can open ${event['name']}.',
-      action: SnackBarAction(
-        label: 'Share',
-        onPressed: () => unawaited(platform.shareFile(uri, mime)),
-      ),
+      action: SnackBarAction(label: 'Share', onPressed: () => unawaited(platform.shareFile(uri, mime))),
     );
   }
 
@@ -84,12 +72,7 @@ class FileEvents {
     };
   }
 
-  void _show(
-    String text, {
-    Duration duration = const Duration(seconds: 8),
-    SnackBarAction? action,
-    VoidCallback? share,
-  }) {
+  void _show(String text, {Duration duration = const Duration(seconds: 8), SnackBarAction? action, VoidCallback? share}) {
     final messenger = messengerOf();
     if (messenger == null) return;
     // Clears any queued message too. Hiding only the current one lets messages
@@ -98,6 +81,11 @@ class FileEvents {
     messenger.showSnackBar(
       SnackBar(
         duration: duration,
+        // Flutter keeps a message with a button up until it is dismissed, which here
+        // left "Saved … Open" over a native screen's own button for good. It goes
+        // after [duration], except for someone using a screen reader, who needs the
+        // time to reach the button.
+        persist: action != null && MediaQuery.accessibleNavigationOf(messenger.context),
         action: action,
         content: Row(
           children: [
@@ -107,10 +95,7 @@ class FileEvents {
               Builder(
                 builder: (context) => IconButton(
                   tooltip: 'Share',
-                  icon: Icon(
-                    Icons.share,
-                    color: Theme.of(context).colorScheme.onInverseSurface,
-                  ),
+                  icon: Icon(Icons.share, color: Theme.of(context).colorScheme.onInverseSurface),
                   onPressed: share,
                 ),
               ),

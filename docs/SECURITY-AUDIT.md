@@ -124,7 +124,9 @@ unknown) is forced to download in a CSP sandbox.
 
 The build writes `dist/_headers` for Pages: a hash-based CSP without
 `unsafe-inline` (inline handlers were removed from `index.html`),
-`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`,
+`X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`
+(every listed feature off, except the microphone for the CRM's own origin, which
+inbox voice notes need; a cross-origin frame cannot get it even through `allow=`),
 HSTS and COOP. The CSP starts as `Content-Security-Policy-Report-Only`; set
 `CSP_MODE=enforce` after a clean pass through the signed-in screens. API
 responses carry `nosniff` and `Referrer-Policy: no-referrer`.

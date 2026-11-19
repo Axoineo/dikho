@@ -206,6 +206,37 @@ internal class FileTransfers(
         }
     }
 
+    /* ── A file the app downloaded itself ──────────────────────────────── */
+
+    /**
+     * A file the Dart side downloaded with the person's session (an email attachment,
+     * which needs the token this class never sends), saved or shown like any other.
+     * Only a file inside this app's own transfer folder is accepted.
+     */
+    fun keep(path: String, view: Boolean, name: String?, mime: String?) {
+        val label = safeFileName(name, "download")
+        background(label) {
+            val file = File(path)
+            val inside = try {
+                file.canonicalFile.parentFile == transferDir.canonicalFile && file.isFile
+            } catch (_: IOException) {
+                false
+            }
+            if (!inside) {
+                reportFailure(label, "failed")
+                return@background
+            }
+            try {
+                emit(mapOf("type" to "downloadStarted", "name" to label))
+                val finalMime = normalizedMime(mime.orEmpty(), label)
+                if (view) showInViewer(file, label, finalMime) else saveToDownloads(file, label, finalMime)
+            } catch (_: IOException) {
+                file.delete()
+                reportFailure(label, "failed")
+            }
+        }
+    }
+
     private class TooLarge : Exception()
     private class Expired : Exception()
 
@@ -384,11 +415,16 @@ internal class FileTransfers(
         }
     }
 
-    /** Viewed files are private copies. They should not outlive being looked at. */
+    /**
+     * Viewed files are private copies, and they should not outlive being looked at. Files
+     * being sent from the inbox are removed as they finish, so anything left in those
+     * two folders is from a send the phone killed halfway.
+     */
     fun removeStaleFiles() {
         background("the file") {
             val cutoff = System.currentTimeMillis() - STALE_AFTER_MS
-            for (dir in listOf(transferDir, sharedDir)) {
+            val folders = listOf(transferDir, sharedDir, File(context.cacheDir, "outgoing"), File(context.cacheDir, "voice"))
+            for (dir in folders) {
                 dir.listFiles()?.filter { it.lastModified() < cutoff }?.forEach { it.deleteRecursively() }
             }
         }

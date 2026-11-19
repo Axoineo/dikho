@@ -4,8 +4,13 @@
 // It never deploys. Review the diff, then deploy as a separate deliberate step.
 //
 //   node cloudflare-updater/scripts/add-release.mjs \
-//     --apk <file> --notes "<text>" [--channel stable] [--min-supported <code>] \
-//     [--apk-url <https url>] [--allow-new-cert]
+//     --apk <file> --notes "<text>" [--required] [--channel stable] \
+//     [--min-supported <code>] [--apk-url <https url>] [--allow-new-cert]
+//
+// --required makes this a major update: anyone on an older version must install it
+// before the app will open. Without it the update is optional, except for anyone
+// still below a major update released earlier, who must update all the same. The
+// minimum never goes down by accident: a version once required stays required.
 //
 // Version, versionCode, application ID and signing certificate are read from
 // the APK itself, so the manifest cannot disagree with what was built.
@@ -62,6 +67,7 @@ const { values } = parseArgs({
     notes: { type: 'string' },
     channel: { type: 'string', default: 'stable' },
     'min-supported': { type: 'string' },
+    required: { type: 'boolean' },
     'apk-url': { type: 'string' },
     'allow-new-cert': { type: 'boolean', default: false },
   },
@@ -100,9 +106,18 @@ if (!values['apk-url']) {
   if (existsSync(target)) fail(`${fileName} already exists. Versioned files are immutable: raise the version instead.`)
 }
 
-const minSupported = values['min-supported'] === undefined
-  ? (current?.minSupportedVersionCode ?? apk.versionCode)
-  : Number(values['min-supported'])
+if (values.required && values['min-supported'] !== undefined) {
+  fail('use --required or --min-supported, not both')
+}
+const currentMinimum = current?.minSupportedVersionCode ?? 0
+const minSupported = values.required
+  ? apk.versionCode
+  : values['min-supported'] === undefined
+    ? (current?.minSupportedVersionCode ?? apk.versionCode)
+    : Number(values['min-supported'])
+if (minSupported < currentMinimum) {
+  fail(`--min-supported ${minSupported} is below the current ${currentMinimum}: versions already required would stop being required. Edit releases/manifest.json by hand if that is really meant.`)
+}
 
 const release = {
   version: apk.version,

@@ -54,9 +54,11 @@ before relying on details that may have changed.
 - `supabase/functions/` contains Supabase Edge Functions.
 - `scripts/` contains operational/developer utilities and is not application
   code.
-- `dikho-mobile/` is the Flutter Android app, a thin shell around the deployed
-  CRM. It holds no business logic. `cloudflare-updater/` is its separate
-  read-only update Worker. Signing keys never enter this repository.
+- `dikho-mobile/` is the Flutter Android app: a native drawer, Clients, Leads, WhatsApp
+  inbox and phone contacts, with every other module from the deployed CRM in a WebView (ADR
+  0012). Authorization stays in the API and RLS, never in the app.
+  `cloudflare-updater/` is its separate read-only update Worker. Signing keys never
+  enter this repository.
 
 Never import server-only code, credentials or privileged logic into the browser
 bundle.

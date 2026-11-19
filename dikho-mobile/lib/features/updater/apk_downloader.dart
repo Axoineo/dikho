@@ -49,11 +49,8 @@ class DownloadCancelToken {
 /// Streams an APK to app-private storage, hashing as it goes. The final file
 /// only exists once its size and SHA-256 have both been verified.
 class ApkDownloader {
-  ApkDownloader({
-    required this.isAllowedRedirect,
-    this.idleTimeout = const Duration(seconds: 30),
-    HttpClient? httpClient,
-  }) : _http = httpClient ?? HttpClient();
+  ApkDownloader({required this.isAllowedRedirect, this.idleTimeout = const Duration(seconds: 30), HttpClient? httpClient})
+    : _http = httpClient ?? HttpClient();
 
   /// Applied to every hop, so a redirect cannot leave HTTPS.
   final bool Function(Uri) isAllowedRedirect;
@@ -87,11 +84,7 @@ class ApkDownloader {
         await target.delete();
       }
 
-      final response = await _open(
-        url,
-        cancel,
-        (request) => activeRequest = request,
-      );
+      final response = await _open(url, cancel, (request) => activeRequest = request);
       final declared = response.contentLength;
       if (declared >= 0 && declared != expectedSize) {
         activeRequest?.abort();
@@ -137,9 +130,7 @@ class ApkDownloader {
             },
             cancelOnError: true,
           );
-      unawaited(
-        cancel.whenCancelled.then((_) => stop(const DownloadCancelled())),
-      );
+      unawaited(cancel.whenCancelled.then((_) => stop(const DownloadCancelled())));
       await finished.future;
       if (cancel.isCancelled) throw const DownloadCancelled();
 
@@ -180,11 +171,7 @@ class ApkDownloader {
     return (await sha256.bind(file.openRead()).first).toString() == hash;
   }
 
-  Future<HttpClientResponse> _open(
-    Uri start,
-    DownloadCancelToken cancel,
-    void Function(HttpClientRequest) onRequest,
-  ) async {
+  Future<HttpClientResponse> _open(Uri start, DownloadCancelToken cancel, void Function(HttpClientRequest) onRequest) async {
     var url = start;
     for (var hop = 0; hop <= _maxRedirects; hop++) {
       if (!isAllowedRedirect(url)) {

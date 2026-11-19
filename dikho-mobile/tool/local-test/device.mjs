@@ -47,11 +47,13 @@ function dumpNodes() {
   if (!ok) return []
   const xml = adbTry('shell', 'cat /sdcard/dikho-ui.xml').out
   return [...xml.matchAll(/<node [^>]*>/g)].map(([node]) => {
-    const attr = (name) => (node.match(new RegExp(`${name}="([^"]*)"`)) ?? [])[1] ?? ''
+    const attr = (name) => ((node.match(new RegExp(`${name}="([^"]*)"`)) ?? [])[1] ?? '')
+      .replace(/&#10;/g, '\n').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     const box = attr('bounds').match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/)
     return {
       text: attr('text'),
       desc: attr('content-desc'),
+      hint: attr('hint'),
       id: attr('resource-id'),
       pkg: attr('package'),
       x: box ? (Number(box[1]) + Number(box[3])) / 2 : 0,
@@ -62,7 +64,7 @@ function dumpNodes() {
 
 const matches = (node, label) => {
   const wanted = label instanceof RegExp ? label : new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
-  return wanted.test(node.text) || wanted.test(node.desc)
+  return wanted.test(node.text) || wanted.test(node.desc) || wanted.test(node.hint)
 }
 
 export const uiHas = (label) => dumpNodes().some((node) => matches(node, label))
@@ -73,6 +75,17 @@ export const uiFind = (label, options) => waitFor(`"${label}" on screen`, () => 
 
 export async function uiTap(label, options) {
   const node = await uiFind(label, options)
+  shell(`input tap ${node.x} ${node.y}`)
+  return node
+}
+
+/** Taps the lowest of several matches: a sheet's button rather than its title. */
+export async function uiTapLast(label, options) {
+  const nodes = await waitFor(`"${label}" on screen`, () => {
+    const found = dumpNodes().filter((n) => matches(n, label))
+    return found.length ? found : null
+  }, options)
+  const node = nodes.reduce((low, n) => (n.y > low.y ? n : low))
   shell(`input tap ${node.x} ${node.y}`)
   return node
 }
@@ -228,5 +241,10 @@ export function connectBackends({ updateService = true } = {}) {
 }
 
 export async function backendEvents() {
-  return (await fetch('http://127.0.0.1:54321/__events')).json()
+  // A kept-alive connection the server has just closed fails once: ask again.
+  try {
+    return await (await fetch('http://127.0.0.1:54321/__events')).json()
+  } catch {
+    return (await fetch('http://127.0.0.1:54321/__events', { keepalive: false })).json()
+  }
 }

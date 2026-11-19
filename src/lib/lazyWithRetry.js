@@ -19,7 +19,10 @@ const BASE_DELAY = 600
  * screen too long, which is the only real recovery for that case.
  */
 export function lazyWithRetry(load) {
-  return lazy(() => attempt(load, ATTEMPTS))
+  const component = lazy(() => attempt(load, ATTEMPTS))
+  // Fetches the chunk ahead of time. The import above then finds it cached.
+  component.preload = load
+  return component
 }
 
 function attempt(load, left) {

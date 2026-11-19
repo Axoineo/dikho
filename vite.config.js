@@ -124,9 +124,15 @@ function securityHeaders(env) {
         '  X-Frame-Options: DENY',
         '  X-Content-Type-Options: nosniff',
         '  Referrer-Policy: strict-origin-when-cross-origin',
-        '  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=()',
+        // The microphone is on for this origin alone: inbox voice notes record with
+        // it. With (self), a cross-origin frame cannot get it even through allow=.
+        '  Permissions-Policy: camera=(), microphone=(self), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=()',
         '  Strict-Transport-Security: max-age=31536000; includeSubDomains',
         '  Cross-Origin-Opener-Policy: same-origin',
+        // Vite puts a content hash in every name under /assets/, so a file there
+        // never changes. Without this each one is revalidated on every load.
+        '/assets/*',
+        '  Cache-Control: public, max-age=31536000, immutable',
         '',
       ].join('\n')
 

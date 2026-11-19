@@ -2,8 +2,10 @@ import 'package:dikho_crm/app/app_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  const supabase = 'https://project.supabase.co';
+
   test('the defaults this app ships with are valid and use https', () {
-    expect(AppConfig.problems(localTest: false), isEmpty);
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'publishable', localTest: false), isEmpty);
     expect(AppConfig.crmUri.scheme, 'https');
     expect(AppConfig.updateUri.scheme, 'https');
     expect(AppConfig.localTestBuild, isFalse);
@@ -11,31 +13,31 @@ void main() {
 
   test('plain http is refused unless this is a local test build', () {
     expect(
-      AppConfig.problems(crm: 'http://manage.dikho.in', localTest: false),
+      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://manage.dikho.in', localTest: false),
       isNotEmpty,
     );
     expect(
-      AppConfig.problems(crm: 'http://localhost:5199', localTest: false),
+      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://localhost:5199', localTest: false),
       isNotEmpty,
     );
     expect(
-      AppConfig.problems(update: 'http://localhost:8799', localTest: false),
+      AppConfig.problems(supabase: supabase, supabaseKey: 'k', update: 'http://localhost:8799', localTest: false),
       isNotEmpty,
     );
     expect(
-      AppConfig.problems(crm: 'http://example.com', localTest: true),
+      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://example.com', localTest: true),
       isNotEmpty,
     );
     expect(
-      AppConfig.problems(crm: 'http://localhost:5199', localTest: true),
+      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://localhost:5199', localTest: true),
       isEmpty,
     );
   });
 
   test('malformed or credentialed addresses are refused', () {
-    expect(AppConfig.problems(api: 'not a url', localTest: false), isNotEmpty);
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', api: 'not a url', localTest: false), isNotEmpty);
     expect(
-      AppConfig.problems(api: 'https://u:p@example.com', localTest: false),
+      AppConfig.problems(supabase: supabase, supabaseKey: 'k', api: 'https://u:p@example.com', localTest: false),
       isNotEmpty,
     );
   });
@@ -117,5 +119,17 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('a build without the Supabase address or key cannot sign anyone in, so it says so', () {
+    expect(AppConfig.problems(supabase: '', supabaseKey: 'k', localTest: false), contains('Supabase address or key is not set'));
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: '', localTest: false), contains('Supabase address or key is not set'));
+    expect(AppConfig.problems(supabase: 'http://project.supabase.co', supabaseKey: 'k', localTest: false), isNotEmpty);
+    expect(AppConfig.problems(supabase: 'http://localhost:54321', supabaseKey: 'k', localTest: true), isEmpty);
+  });
+
+  test('the session key is the one supabase-js uses, so the page and the app share it', () {
+    expect(AppConfig.sessionKeyFor('https://abcdef.supabase.co'), 'sb-abcdef-auth-token');
+    expect(AppConfig.sessionKeyFor('http://localhost:54321'), 'sb-localhost-auth-token');
   });
 }

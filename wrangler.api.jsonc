@@ -100,6 +100,10 @@
     // entirely (fails OPEN, unlike an unset/invalid value — see
     // consumeCgLeadWhatsappBudget, which fails CLOSED on those).
     "WHATSAPP_CG_LEAD_DAILY_CAP": "200",
+    // Daily ceiling, across all staff, on templates sent to a phone number from
+    // the Android app's Device Contacts (migrations/0013_android_inbox.sql). Must
+    // be positive: absent, invalid or 0 refuses those sends.
+    "WHATSAPP_DIRECT_TEMPLATE_DAILY_CAP": "200",
     // Hard ceiling on GSTIN lookups sent to API Setu per UTC day, counted in D1
     // (migrations/0007_gstn_lookup_budget.sql). This — not the per-IP rate limit
     // below — is what actually protects the subscription, because it is the only

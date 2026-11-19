@@ -3216,3 +3216,25 @@ select.pvf-input.has-error:focus,
   .pvf-btn-submit,
   .pvf-btn-back { height: 44px; border-radius: 8px !important; }
 }
+
+/* ============================================================
+   INSIDE THE ANDROID APP
+   The drawer and top bar are native there (dikho-mobile), so the page's own are
+   not drawn. page_bridge.js marks the document before anything paints.
+   ============================================================ */
+html[data-shell='android'] .sidebar,
+html[data-shell='android'] .sidebar-overlay,
+html[data-shell='android'] .mobile-topbar {
+  display: none !important;
+}
+html[data-shell='android'] .app-shell,
+html[data-shell='android'] .app-shell.sidebar-is-closed {
+  --sidebar-w: 0px;
+}
+html[data-shell='android'] .app-shell .app-main {
+  width: 100%;
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+  border-radius: 0;
+}

@@ -18,11 +18,7 @@ enum NavigationTarget {
 }
 
 class NavigationPolicy {
-  NavigationPolicy({
-    required this.crmOrigin,
-    required this.apiOrigin,
-    this.extraFileOrigins = const {},
-  });
+  NavigationPolicy({required this.crmOrigin, required this.apiOrigin, this.extraFileOrigins = const {}});
 
   final Uri crmOrigin;
   final Uri apiOrigin;
@@ -32,15 +28,7 @@ class NavigationPolicy {
 
   /// Schemes another app may handle. `intent:` and `market:` are deliberately
   /// absent: a page must never be able to pick the component that opens.
-  static const _externalSchemes = {
-    'http',
-    'https',
-    'mailto',
-    'tel',
-    'sms',
-    'whatsapp',
-    'geo',
-  };
+  static const _externalSchemes = {'http', 'https', 'mailto', 'tel', 'sms', 'whatsapp', 'geo'};
 
   /// The only CRM paths another app may open inside the WebView.
   static const _deepLinkPaths = {'/email/connect'};
@@ -71,8 +59,7 @@ class NavigationPolicy {
     if (uri.host.endsWith('.supabase.co')) {
       return uri.path.startsWith('/storage/v1/object/');
     }
-    return _sameOrigin(uri, apiOrigin) &&
-        uri.path.startsWith('/api/whatsapp/media/');
+    return _sameOrigin(uri, apiOrigin) && uri.path.startsWith('/api/whatsapp/media/');
   }
 
   static bool _sameOrigin(Uri a, Uri b) {

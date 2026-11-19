@@ -48,9 +48,20 @@ app cannot start sending more than this by accident.
 
 `mandatory` is worked out per caller: it is true only when the caller's version
 code is below that release's `minSupportedVersionCode`. Raising the minimum never
-affects anyone already above it. A mandatory update still cannot lock anyone out:
-if it fails to install the app offers "Continue for now" and asks again at the
-next launch.
+affects anyone already above it.
+
+A mandatory update blocks the app until it is installed, and is remembered across
+restarts. An optional one can be put off until the app is next opened. Only the
+latest release is ever offered, so someone who ignored a minor update goes straight to
+the next major one, which contains it. Release a major update with `--required`:
+
+```bash
+node cloudflare-updater/scripts/add-release.mjs --apk <file> --notes "<text>" --required
+```
+
+A later minor release keeps the minimum, so anyone still below it must update. If a
+required release was a mistake, lower `minSupportedVersionCode` by hand in
+`releases/manifest.json` and deploy: everyone is released at their next check.
 
 ## Where the service lives
 
@@ -94,7 +105,7 @@ source ~/.local/share/dikho-android/env.sh
 ```
 
 ```bash
-node cloudflare-updater/scripts/add-release.mjs --apk dikho-mobile/build/app/outputs/flutter-apk/app-release.apk --notes "What changed, in plain words."
+node cloudflare-updater/scripts/add-release.mjs --apk dikho-mobile/build/app/outputs/flutter-apk/app-direct-release.apk --notes "What changed, in plain words."
 ```
 
 ```bash

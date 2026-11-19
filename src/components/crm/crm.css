@@ -196,6 +196,8 @@
   font-size: var(--crm-text-md);
 }
 .crm-search input::placeholder { color: var(--crm-placeholder); }
+/* Long prompts end in dots on a phone rather than being cut mid-word. */
+.crm-search input:placeholder-shown { text-overflow: ellipsis; }
 .crm-search .crm-icon-btn { width: 26px; height: 26px; }
 .crm-kbd {
   display: inline-grid;
@@ -1071,6 +1073,9 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   .crm-search { flex-basis: 100%; max-width: none; min-width: 0; }
   .crm-count { margin-left: 0; }
   .crm-hide-sm { display: none; }
+  /* Every list keeps three columns on a phone. Loading rows know nothing of which, so
+     they show three, or their extra cells run past the header. */
+  .crm-skeleton-row td:not(:first-child):not(:nth-last-child(-n+2)) { display: none; }
   .crm-table { min-width: 0; }
   /* Fixed layout hands space freed by hidden columns to the auto column, so
      the name column takes it instead of the status pill. */
@@ -1082,6 +1087,8 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   .crm-pagination { justify-content: center; }
   .crm-pagination-summary { width: 100%; text-align: center; }
   .crm-pagination-controls { flex-wrap: wrap; justify-content: center; }
+  /* Its own line, so the page buttons stay together instead of breaking mid-row. */
+  .crm-page-size { flex: 0 0 100%; max-width: 160px; margin-inline: calc((100% - 160px) / 2); }
 
   /* Sized for a finger rather than a pointer. Phones only, so the desktop keeps
      its density. */
@@ -1091,6 +1098,12 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   .crm-search { height: 40px; }
   .crm-search .crm-icon-btn { width: 32px; height: 32px; }
   .crm-page-size { height: 40px; }
+  /* Forms too, or the fields on a phone are the one thing left too small to hit. */
+  .crm-input,
+  .crm-select { min-height: 44px; }
+  /* There is no keyboard to press it on. */
+  .crm-kbd { display: none; }
+  .crm-segmented button { min-height: 40px; }
   .crm-page-btn { min-width: 40px; height: 40px; }
 
   .crm-panel { inset: 0; width: 100%; border: 0; border-radius: 0; }
@@ -1106,3 +1119,7 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
   .crm-span-2 { grid-column: auto; }
   .crm-totals { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* One lead's ways to reach them: full-width and thumb-sized on a phone. */
+.crm-lead-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.crm-lead-actions .crm-btn { flex: 1 1 88px; min-height: 44px; justify-content: center; text-decoration: none; }

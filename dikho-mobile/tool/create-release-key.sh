@@ -32,17 +32,43 @@ PROPS
 
 fingerprint="$(keytool -list -v -keystore "$DIR/release.keystore" -storepass "$password" -alias dikho-crm | sed -n 's/^.*SHA256: //p')"
 
+# Public, and needed so the Gmail sign-in can return to the app. Only the public
+# fingerprint goes in it. Written for you to review and commit.
+links="$(cd "$(dirname "$0")/../.." && pwd)/public/.well-known/assetlinks.json"
+mkdir -p "$(dirname "$links")"
+cat > "$links" <<LINKS
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "in.dikho.crm",
+    "sha256_cert_fingerprints": ["$fingerprint"]
+  }
+}]
+LINKS
+
 cat <<DONE
 
 Production key created in $DIR
 
-Do these before building anything with it:
-  1. Copy release.keystore and key.properties to two separate encrypted backups
-     that do not live on this machine. Neither file belongs in Git or a chat.
-  2. Build with: export DIKHO_KEY_PROPERTIES=$DIR/key.properties
+Do this now, before building anything with it. Lose this key and no installed copy
+can ever be updated again.
 
-The certificate fingerprint below is public. It goes in
-public/.well-known/assetlinks.json so the Gmail sign-in can return to the app:
+  1. Make an encrypted backup. It asks you to choose a passphrase. Save that in a
+     password manager:
+
+       tar -C "$(dirname "$DIR")" -czf - release | gpg --symmetric --cipher-algo AES256 -o dikho-android-key-backup.gpg
+
+  2. Put dikho-android-key-backup.gpg in two separate places that are not this
+     machine, for example a USB drive and your Google Drive. Encrypted, it is safe in
+     cloud storage. Without the passphrase it is useless, so keep the two apart.
+
+  3. Build with: export DIKHO_KEY_PROPERTIES=$DIR/key.properties
+
+Never put release.keystore or key.properties themselves in Git, chat or email.
+
+This certificate fingerprint is public, not a secret. It has been written to
+public/.well-known/assetlinks.json, for you to commit with the release:
 
   $fingerprint
 DONE

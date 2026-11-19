@@ -78,14 +78,18 @@ nothing is applied or deployed. State and rollout:
 
 ## Android app
 
-Built and tested on emulators, not yet distributed. See `docs/ANDROID.md`.
+V1.1.0 built and tested on emulators, not yet distributed. See `docs/ANDROID.md`.
 
 - [ ] Owner: create the production signing key and back it up.
+- [ ] Owner: apply D1 migration 0013, then deploy the API, web app and APK, in that order.
 - [ ] Owner: decide the update address, then approve deploying the update Worker.
 - [ ] Add `public/.well-known/assetlinks.json` once the production key exists.
 - [ ] Test on real phones, including a low-end one, and with a real staff sign-in.
 - [ ] Owner: get a D-U-N-S number and register `in.dikho.crm` under Android
       developer verification before the global rollout in 2027.
+- [ ] Push notifications for inbound WhatsApp messages (Firebase, Worker change).
+- [ ] Move the remaining modules native, one at a time (owner's decision, ADR 0012).
+- [ ] Google Play: Play Console account, who holds the signing key, privacy policy.
 
 ## Product evolution
 

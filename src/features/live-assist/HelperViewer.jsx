@@ -10,13 +10,14 @@ const SUGGESTIBLE = PAGE_ACCESS
   .filter((p) => !['/settings', '/dashboard'].includes(p.path))
   .map((p) => ({ path: p.path, label: SECTION_LABELS[p.section] ?? p.path }))
 
-// Where the video's picture actually sits inside the element: the frame is
-// letterboxed (object-fit: contain), so the edges of the element are not the
-// edges of the employee's screen.
-function contentRect(video) {
-  const box = video.getBoundingClientRect()
-  const vw = video.videoWidth
-  const vh = video.videoHeight
+// Where the picture actually sits inside the element (a computer's video, or a
+// phone's screen picture): it is letterboxed (object-fit: contain), so the edges
+// of the element are not the edges of the employee's screen.
+function contentRect(el) {
+  if (!el) return null
+  const box = el.getBoundingClientRect()
+  const vw = el.videoWidth ?? el.naturalWidth
+  const vh = el.videoHeight ?? el.naturalHeight
   if (!vw || !vh) return null
   const scale = Math.min(box.width / vw, box.height / vh)
   const width = vw * scale
@@ -24,8 +25,8 @@ function contentRect(video) {
   return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height }
 }
 
-function normalise(video, event) {
-  const r = contentRect(video)
+function normalise(el, event) {
+  const r = contentRect(el)
   if (!r) return null
   const x = (event.clientX - r.left) / r.width
   const y = (event.clientY - r.top) / r.height
@@ -33,9 +34,12 @@ function normalise(video, event) {
 }
 
 export default function HelperViewer({ helper, chat, chatActions, endMessages, onSend, onEnd, onClose }) {
-  const { session, phase, reason, stream, section } = helper
+  const { session, phase, reason, stream, frame, section } = helper
   const who = firstName(session.employee_name)
   const videoRef = useRef(null)
+  const imageRef = useRef(null)
+  // What their screen is drawn in: pictures from the Android app, else video.
+  const screen = () => (frame ? imageRef.current : videoRef.current)
   const inputRef = useRef(null)
   const lastSent = useRef(0)
   const [ripple, setRipple] = useState(null)
@@ -66,12 +70,12 @@ export default function HelperViewer({ helper, chat, chatActions, endMessages, o
     const now = performance.now()
     if (now - lastSent.current < 50) return
     lastSent.current = now
-    const point = normalise(videoRef.current, e)
+    const point = normalise(screen(), e)
     onSend(point ? { t: 'pointer', ...point } : { t: 'pointer_hide' })
   }
 
   function click(e) {
-    const point = normalise(videoRef.current, e)
+    const point = normalise(screen(), e)
     if (!point) return
     onSend({ t: 'highlight', ...point })
     const box = e.currentTarget.getBoundingClientRect()
@@ -102,7 +106,7 @@ export default function HelperViewer({ helper, chat, chatActions, endMessages, o
     if (path) onSend({ t: 'goto', path })
   }
 
-  const live = phase === 'live' && stream
+  const live = phase === 'live' && (stream || frame)
   return (
     <div className="la-viewer" role="dialog" aria-modal="true" aria-labelledby="la-viewer-title">
       <header className="la-viewer-head">
@@ -142,7 +146,8 @@ export default function HelperViewer({ helper, chat, chatActions, endMessages, o
               onMouseLeave={live ? () => onSend({ t: 'pointer_hide' }) : undefined}
               onClick={live ? click : undefined}
             >
-              <video ref={videoRef} autoPlay playsInline muted />
+              <video ref={videoRef} autoPlay playsInline muted hidden={Boolean(frame)} />
+              {frame && <img ref={imageRef} src={frame} alt={`${who}'s Dikho screen`} draggable={false} />}
               {ripple && live && <span key={ripple.at} className="la-ripple" style={{ left: ripple.x, top: ripple.y }} aria-hidden="true" />}
             </div>
             {!live && (

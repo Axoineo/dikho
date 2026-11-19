@@ -14,13 +14,18 @@ ENV_FILE="${DIKHO_ANDROID_HOME:-$HOME/.local/share/dikho-android}/env.sh"
 [ -f "$ENV_FILE" ] && source "$ENV_FILE"
 
 export DIKHO_KEY_PROPERTIES="${DIKHO_KEY_PROPERTIES:-${DIKHO_KEY_HOME:-$HOME/.config/dikho-android}/test/key.properties}"
-flutter build apk --release \
+# Obfuscated like a real release, so the tests exercise the same compiled code.
+flutter build apk --release --flavor direct \
+  --obfuscate --split-debug-info=build/app/outputs/symbols-local-test \
   --build-name="$version" --build-number="$code" \
   --android-project-arg=dikhoLocalTest=true \
   --dart-define=LOCAL_TEST_BUILD=true \
   --dart-define=CRM_ORIGIN=http://localhost:5199 \
   --dart-define=API_ORIGIN=http://localhost:54321 \
   --dart-define=UPDATE_BASE_URL=http://localhost:8799 \
+  --dart-define=SUPABASE_URL=http://localhost:54321 \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=local-test-only \
+  --dart-define=EMAIL_HUB=true \
   "$@"
-cp build/app/outputs/flutter-apk/app-release.apk "$output"
+cp build/app/outputs/flutter-apk/app-direct-release.apk "$output"
 echo "$output: $(stat -c %s "$output") bytes"

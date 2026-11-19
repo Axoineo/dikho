@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
 import { apiGet } from '../../lib/api'
 import { CampaignWizard } from './CampaignWizard'
@@ -10,6 +11,7 @@ import { useAccess } from '../../lib/access'
 const STATUS_TONE = {
   completed: 'success',
   sending: 'info',
+  stopped: 'warn',
   failed: 'danger',
   draft: 'neutral',
 }
@@ -22,9 +24,12 @@ function formatDate(value) {
   })
 }
 
-export default function WhatsAppCampaigns() {
+// startCreating: opened at /whatsapp/campaigns/new, straight into the wizard. When it
+// finishes, the list's own route takes over (in the app, the native list).
+export default function WhatsAppCampaigns({ startCreating = false }) {
   const { can } = useAccess()
-  const [creating, setCreating] = useState(false)
+  const navigate = useNavigate()
+  const [creating, setCreating] = useState(startCreating)
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -43,21 +48,26 @@ export default function WhatsAppCampaigns() {
 
   useEffect(() => { load() }, [load])
 
-  if (creating) {
+  // Checked here, not when starting: permissions can arrive after the first draw.
+  if (creating && can('campaigns.send')) {
     return (
       <div className="wa-page">
         <PageHeader
           title="New campaign"
           subtitle="Pick an audience, choose an approved template, preview it, then send."
         />
-        <CampaignWizard onDone={() => { setCreating(false); load() }} />
+        <CampaignWizard onDone={() => {
+          if (startCreating) { navigate('/whatsapp/campaigns', { replace: true }); return }
+          setCreating(false)
+          load()
+        }} />
       </div>
     )
   }
 
   return (
     <div className="wa-page">
-      <PageHeader title="Campaigns" subtitle="Every bulk send, with live delivery and read counts.">
+      <PageHeader title="Campaigns" subtitle="Every bulk send, with live delivery and read counts. Open one to see how it did.">
         {can('campaigns.send') && (
           <button type="button" className="primary-button" onClick={() => setCreating(true)}>
             <Icon name="plus" size={16} /> New campaign
@@ -99,7 +109,11 @@ export default function WhatsAppCampaigns() {
               return (
                 <Fragment key={campaign.id}>
                   <tr className="transition-colors hover:bg-line-soft">
-                    <Td className="font-medium">{campaign.name}</Td>
+                    <Td className="font-medium">
+                      <Link to={`/whatsapp/campaigns/${campaign.id}`} className="text-brand-ink no-underline hover:underline" title="See how this campaign did">
+                        {campaign.name}
+                      </Link>
+                    </Td>
                     <Td className="text-muted">{campaign.template_name}</Td>
                     <Td tight>
                       <Badge tone={STATUS_TONE[campaign.status] ?? 'neutral'}>{sentenceCase(campaign.status)}</Badge>

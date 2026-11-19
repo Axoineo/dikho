@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { frameAssembler } from './frames'
 
 // The browser-to-browser part of Live Assist.
 //
@@ -157,10 +158,11 @@ export function shareTab({ sessionId, stream, onData, onState }) {
 
 /**
  * Helper side: receives the employee's tab.
- * onStream(mediaStream) fires once video arrives; onData receives the
+ * onStream(mediaStream) fires once video arrives from a computer; onFrame(bytes)
+ * with each picture of a phone's Dikho screen (frames.js); onData receives the
  * employee's messages (current section); onState as above.
  */
-export function viewTab({ sessionId, onStream, onData, onState }) {
+export function viewTab({ sessionId, onStream, onFrame, onData, onState }) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
   const sender = dataSender()
   let gotOffer = false
@@ -198,6 +200,15 @@ export function viewTab({ sessionId, onStream, onData, onState }) {
   pc.onconnectionstatechange = () => onState?.(pc.connectionState)
   pc.ontrack = (e) => onStream?.(e.streams[0] ?? new MediaStream([e.track]))
   pc.ondatachannel = (e) => {
+    if (e.channel.label === 'frames') {
+      const frames = frameAssembler()
+      e.channel.binaryType = 'arraybuffer'
+      e.channel.onmessage = (event) => {
+        const picture = frames.add(event.data)
+        if (picture) onFrame?.(picture)
+      }
+      return
+    }
     e.channel.onmessage = (event) => {
       const message = parseData(event)
       if (message) onData?.(message)

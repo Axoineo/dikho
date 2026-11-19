@@ -14,7 +14,18 @@ import { useEffect, useState } from 'react'
  */
 const STALL_MS = 8000
 
+// A chunk that arrives quickly shows nothing at all. Without this the whole
+// logo sequence started over on the first visit to every section, which read as
+// the app reloading itself.
+const SHOW_AFTER_MS = 300
+
 export default function BrandLoader() {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), SHOW_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
   /* A chunk request that never settles cannot be retried, because the browser
    * keys module requests by URL, so the only way out is a fresh load.
    * Without this the animation just loops, which reads as a hung page. */
@@ -26,17 +37,19 @@ export default function BrandLoader() {
 
   return (
     <div className="brand-loader" role="status" aria-label="Loading">
-      <svg className="dk-mark" viewBox="0 0 1241 420" aria-hidden="true">
-        <g className="dk-logo">
-          <use className="dk-dot" href="#dk-dot" />
-          <g className="dk-word" mask="url(#dk-tunnel)">
-            {['i', 'k', 'h', 'o'].map((glyph, n) => (
-              <use key={glyph} className={`dk-g dk-g${n + 1}`} href={`#dk-${glyph}`} />
-            ))}
+      {visible && (
+        <svg className="dk-mark" viewBox="0 0 1241 420" aria-hidden="true">
+          <g className="dk-logo">
+            <use className="dk-dot" href="#dk-dot" />
+            <g className="dk-word" mask="url(#dk-tunnel)">
+              {['i', 'k', 'h', 'o'].map((glyph, n) => (
+                <use key={glyph} className={`dk-g dk-g${n + 1}`} href={`#dk-${glyph}`} />
+              ))}
+            </g>
+            <use className="dk-d" href="#dk-d" />
           </g>
-          <use className="dk-d" href="#dk-d" />
-        </g>
-      </svg>
+        </svg>
+      )}
 
       {stalled && (
         <div className="brand-loader-stall">

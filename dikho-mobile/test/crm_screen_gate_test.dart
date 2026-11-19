@@ -1,4 +1,7 @@
+import 'package:dikho_crm/features/auth/auth_api.dart';
+import 'package:dikho_crm/features/auth/auth_controller.dart';
 import 'package:dikho_crm/features/crm_webview/crm_screen.dart';
+import 'package:dikho_crm/features/shell/shell_controller.dart';
 import 'package:dikho_crm/shared/platform_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,6 +44,12 @@ void main() {
         platform: PlatformApi(),
         info: info(webViewMajor),
         navigatorKey: GlobalKey<NavigatorState>(),
+        shell: ShellController(),
+        // Signed out: the explanation still comes first.
+        auth: AuthController(api: AuthApi(base: Uri.parse('http://localhost:1'), apiKey: 'k'), storageKey: 'sb-x-auth-token')
+          ..state = AuthState.signedOut,
+        assistHost: ValueNotifier(null),
+        captureKey: GlobalKey(),
       ),
     ),
   );
@@ -52,6 +61,7 @@ void main() {
     await tester.pump();
     expect(find.text('Update Android System WebView'), findsOneWidget);
     expect(find.text('Open Play Store'), findsOneWidget);
+    expect(find.text('Sign in to Dikho CRM'), findsNothing);
     // The gate comes first: no WebView is created or attached behind it.
     expect(calls.where((call) => call.method == 'attachWebView'), isEmpty);
   });
