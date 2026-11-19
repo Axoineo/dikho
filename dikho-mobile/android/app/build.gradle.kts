@@ -32,6 +32,19 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Only the native code of the phones a build is for. Flutter trims its own
+        // libraries by --target-platform, but plugins ship theirs for every kind of
+        // phone (WebRTC alone is about 6 MB each), which pushed a 64-bit release over
+        // the 25 MiB the update service can store. No --target-platform: no filter.
+        val abiFor = mapOf("android-arm" to "armeabi-v7a", "android-arm64" to "arm64-v8a", "android-x64" to "x86_64")
+        val targets = (project.findProperty("target-platform") as String?)?.split(",")?.mapNotNull { abiFor[it.trim()] }.orEmpty()
+        // Flutter's plugin has already listed every kind of phone here, so replace its list.
+        if (targets.isNotEmpty()) {
+            ndk {
+                abiFilters.clear()
+                abiFilters += targets
+            }
+        }
     }
 
     signingConfigs {
@@ -98,6 +111,13 @@ flutter {
 dependencies {
     implementation("androidx.core:core:1.17.0")
     implementation("androidx.webkit:webkit:1.15.0")
+    // Tax invoices drawn onto the CRM's PDF template, as pdf-lib does on the web
+    // (TaxInvoice.kt). Apache 2.0.
+    // Bouncy Castle is only for encrypted PDFs; the template is not encrypted, and it
+    // would add about 4.5 MB.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
+        exclude(group = "org.bouncycastle")
+    }
 }
 
 if (signingProperties == null) {

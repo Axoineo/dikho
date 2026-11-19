@@ -188,6 +188,11 @@ class CrmPlatformPlugin :
                 )
                 result.success(null)
             }
+            "makeTaxInvoice" -> {
+                val texts = call.argument<List<*>>("texts").orEmpty()
+                val context = binding!!.applicationContext
+                onBackground(result) { TaxInvoice.make(context, texts) }
+            }
             "openFile" -> result.success(
                 transfers?.open(call.argument<String>("uri").orEmpty(), call.argument<String>("mime").orEmpty()) ?: false,
             )

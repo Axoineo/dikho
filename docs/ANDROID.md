@@ -10,9 +10,15 @@ and alternatives are in [ADR 0011](decisions/0011-android-app.md) and
 [ADR 0013](decisions/0013-native-sign-in.md)), the drawer, the top bar, Clients, Leads, Sales orders, Vendors, Purchase orders, Users, Settings, Live Assist ([ADR 0014](decisions/0014-live-assist-on-phones.md)), the whole Email Hub (overview, inbox, analytics, campaigns, templates, consent and Email settings, with Google's return finished by the app), the WhatsApp inbox, dashboard,
 campaigns (with a screen per campaign and the new-campaign wizard), contacts and
 templates, Phone contacts and the update screens. Importing contacts from a spreadsheet
-opens the web importer on purpose, and a sales order's Tax invoice opens the web page
-`/sales-orders/:id/invoice`, which draws the PDF from its template (pdf-lib), so the web
-must be deployed with that page before an APK with native Sales orders reaches phones.
+opens the web importer on purpose. A sales order's Tax invoice is drawn on the phone:
+`lib/features/sales_orders/tax_invoice.dart` lays it out exactly as
+`src/features/invoices/generateTaxInvoice.js` does, and `TaxInvoice.kt` draws that onto
+the same template with the same fonts using PdfBox-Android (Apache 2.0, about 3 MB),
+then it is saved to Downloads. The template and fonts in
+`android/app/src/main/assets/invoice/` are copies of `public/Temps`, and a test fails
+when they differ, so a template change must be copied to both. It is not made on the
+API: one invoice takes about 80 ms of computing, and the Workers free plan allows about
+10 ms.
 
 **The new-campaign wizard and repeated starts.** Starting a campaign
 (`POST /api/campaigns/send`) creates it and sends the first batch. On the API now live,
@@ -169,8 +175,11 @@ address stays out of this public repository: the script reads `VITE_SUPABASE_URL
 built with), or `DIKHO_SUPABASE_URL` and `DIKHO_SUPABASE_PUBLISHABLE_KEY` when set, and
 refuses to build without them. It never prints them.
 
-The script prints the APK path, size, SHA-256 and signer. It builds for `arm` and
-`arm64`, which covers real phones. With no key configured Gradle fails on purpose,
+The script prints the APK path, size, SHA-256 and signer. It builds for `arm64` only
+(64-bit phones, which is nearly every phone sold in recent years); a phone that can
+run only 32-bit apps cannot install it. `android/app/build.gradle.kts` keeps only the
+native libraries of the build's `--target-platform`: plugins ship theirs for every kind
+of phone, and WebRTC's alone would otherwise put about 10 MB of unused code in the APK. With no key configured Gradle fails on purpose,
 and it never falls back to a debug key.
 
 Release builds shrink and obfuscate: R8 for Kotlin and Java, with Android log calls
@@ -188,8 +197,9 @@ after the `+` is the version code, which must go up every time, for example
 
 | Build | Size |
 | --- | --- |
-| Release, `arm` + `arm64` | 15,082,355 bytes (14.4 MiB) |
-| With `x86_64` added | about 22.8 MB (21.7 MiB) |
+| Release, `arm` + `arm64`, before WebRTC and PdfBox (2026-11-07) | 15,082,355 bytes (14.4 MiB) |
+| Release, `arm64` only, with WebRTC and PdfBox (2026-11-19) | 17,575,806 bytes (16.8 MiB) |
+| The same before keeping one kind of phone's libraries and dropping Bouncy Castle | 28,752,238 bytes (27.4 MiB), over the limit below |
 | Cloudflare Static Assets limit, per file | 26,214,400 bytes (25 MiB) |
 
 ## Publish
@@ -484,7 +494,7 @@ obfuscated test APKs signed by the test key.
 | `flutter test` | 171 passed |
 | `npm run check` (lint, tests, build, secret scan) | passed |
 | `native`: drawer, native Clients (paging, details, edit and add through Supabase, unsaved-change prompt, New order into the native order form, Back on the start screen), native Leads (paging, search on the server, WhatsApp state, details, a link handed to another app), inbox paging, search, realtime, send, voice note recorded and accepted by the API's own check, microphone released on leaving a chat, Phone contacts, template to a number with consent and refusal, direct call, native Templates with previews, native WhatsApp dashboard (figures, changes, charts, range, button taps), a campaign's own screen and Back, the page handing `/whatsapp` to the app, native WhatsApp Contacts (server search, details, select and delete after asking, the web importer and Back), native Campaigns (progress, a campaign's screen, the new-campaign wizard sending once with a request id), native Vendors (details with the account masked, New PO into the web form, a new vendor saved vendor first then address), native Sales orders (purchase orders left out, the page handing `/sales-orders` to the app, figures and lines, Tax invoice saved as a PDF by the web page and Back to the list, a new order saved order first then its line with GST worked out), session across a restart, sign-out | 55 of 55 (2026-11-13) |
-| `orders`: signs in through the app, then native Sales orders and Purchase orders (lists, details, tax invoice PDF, a new order and a new purchase order saved step by step) | 6 of 6 (2026-11-17) |
+| `orders`: signs in through the app, then native Sales orders and Purchase orders (lists, details, the tax invoice drawn on the phone and its text read back from the saved PDF, tax total included, a new order and a new purchase order saved step by step) | 6 of 6 (2026-11-19) |
 | `signin`: the app's own sign-in on a fresh install with nothing of the CRM loaded, a WhatsApp code with a wrong one first, the session kept across a force-stop, a session ended on the server signing out with the reason shown, email sign-in then sign-out from the drawer ending only this session, signed out after a relaunch | 6 of 6 (2026-11-17) |
 | `users`: signs in through the app, then native Users (the people with counts, the page handing `/users` to the app, a person's details and sessions naming the app, a permission switched off saved as the one change) | 4 of 4 (2026-11-17) |
 | `email`: signs in through the app, then the native email overview (figures, the mailbox) and analytics, native email templates and campaigns (a draft written on the phone, its audience counted, saved with the audience), native consent (an address looked up, consent recorded with how they agreed), native Email settings (the shared mailbox, a person added to it, Google's return finished by the app), and the native email inbox (opened from the drawer with the page left where it was, the page handing `/email/inbox` to the app, a conversation marked read and its message shown in the locked view, a link asked about and not followed, an attachment downloaded with the session and saved, status set to Done, a reply sent once to the sender in the conversation) | 10 of 10 (2026-11-19; the attachment check now waits for the app's record of the save, since the short "Saved" message could fall between two screen reads) |

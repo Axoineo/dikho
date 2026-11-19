@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parseArgs } from 'node:util'
 import {
@@ -803,7 +804,10 @@ async function nativeScenario() {
 async function orderChecks(page) {
   await check('Sales orders is native: the list from Supabase, without purchase orders, and the page hands /sales-orders over', async () => {
     await page.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
-    await openFromDrawer(page, 'Email settings', '/email/settings')
+    // Away on another native screen, then the page goes to /sales-orders itself: the app takes it.
+    await openDrawer()
+    await uiTap(/^Clients/)
+    await sleep(1500)
     await page.eval(`history.pushState({}, '', '/sales-orders'); dispatchEvent(new PopStateEvent('popstate'))`)
     await uiWait(/^1 order/, { timeout: 15000 })
     assert(uiHas(/SO-TEST-1/) && !uiHas(/PO-TEST-1/), 'the purchase order showed, or the order did not')
@@ -812,21 +816,31 @@ async function orderChecks(page) {
     shot('92-sales-orders')
   })
 
-  await check('an order opens with its figures and lines, and Tax invoice saves the CRM page\'s PDF', async () => {
+  await check('an order opens with its figures and lines, and Tax invoice is drawn on the phone and saved', async () => {
     adbTry('shell', `rm -f "${DOWNLOADS}/TI_SO-TEST-1"*.pdf`)
     await uiTap(/SO-TEST-1/)
     await uiWait(/Test billboard/, { timeout: 10000 })
     await uiWait(/₹1,180\.00/)
     shot('93-sales-order')
+    const pathBefore = await pagePath(page)
     await uiTap(/^Tax invoice/)
-    await waitFor('the invoice page', async () => (await pagePath(page)) === '/sales-orders/1/invoice', { timeout: 15000 })
     await waitFor('the invoice file', () => listDownloads().split('\n').some((line) => line.trim().startsWith('TI_SO-TEST-1')), { timeout: 40000 })
+    assert((await pagePath(page)) === pathBefore, 'the CRM page was used for the invoice')
     const name = listDownloads().split('\n').map((line) => line.trim()).find((line) => line.startsWith('TI_SO-TEST-1'))
-    const header = adb('shell', `head -c 4 "${DOWNLOADS}/${name}"`)
-    assert(header === '%PDF', `not a PDF: ${JSON.stringify(header)}`)
+    // Read on the computer: the template's own words and the order's, as the web draws them.
+    const local = join(values.shots ?? tmpdir(), 'tax-invoice.pdf')
+    if (values.shots) mkdirSync(values.shots, { recursive: true })
+    adb('pull', `${DOWNLOADS}/${name}`, local)
+    const text = execFileSync('pdftotext', ['-layout', local, '-']).toString()
+    for (const wanted of ['DIKHO GLOBAL MEDIA LLP', 'Invoice Details', 'SO-TEST-1', 'Test billboard', '1,180.00', 'One Thousand One Hundred and Eighty Rupees Only']) {
+      assert(text.toLowerCase().includes(wanted.toLowerCase()), `${wanted} is not on the invoice`)
+    }
+    assert(/\b18\b/.test(text), 'the GST % is not on the invoice')
+    // The tax table's total sits clear of the template's own ₹ sign (it once read ₹80.00).
+    assert(/₹\s+180\.00/.test(text), 'the tax total is not 180.00 on the invoice')
+    if (values.shots) execFileSync('pdftoppm', ['-png', '-r', '80', '-singlefile', local, join(values.shots, '94-invoice')])
     await sleep(800)
-    shot('94-invoice-page')
-    // Back from the page returns to the native list, not to another CRM page.
+    shot('94-invoice-saved')
     pressBack()
     await uiWait(/^1 order/, { timeout: 15000 })
     // "Saved … Open" sits where New order is; it must go by itself after its 10 seconds.
@@ -880,7 +894,9 @@ async function orderChecks(page) {
   })
 
   await check('Purchase orders is native: only purchase orders, each with its vendor and sales order, and the page hands the route over', async () => {
-    await openFromDrawer(page, 'Email settings', '/email/settings')
+    await openDrawer()
+    await uiTap(/^Clients/)
+    await sleep(1500)
     await page.eval(`history.pushState({}, '', '/purchase-orders'); dispatchEvent(new PopStateEvent('popstate'))`)
     await uiWait(/^1 purchase order/, { timeout: 15000 })
     // The purchase order's own row says "for SO-TEST-1"; a sales order's row would start with it.

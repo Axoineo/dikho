@@ -77,7 +77,8 @@ export async function generateTaxInvoice(templatePath, orderData) {
       draw(item.name || item.short_name || 'Item', 50.297, currentY, 9.0) // Name
       draw(item.hsn_sac || '', 226, currentY, 9.0) // HSN/SAC
       drawRight('1 PCS', 315, currentY, 9.0) // Qty
-      drawRight(formatMoney(item.taxable_amount), 375, currentY, 9.0) // Rate
+      // Ends before the column's line at 375, which hid the last digit.
+      drawRight(formatMoney(item.taxable_amount), 372, currentY, 9.0) // Rate
       
       // gst_type is 'Intra-State', 'Inter-State' or 'Union Territory', never a
       // rate, so the rate comes from the line's own amounts.
@@ -121,13 +122,15 @@ export async function generateTaxInvoice(templatePath, orderData) {
     draw(group.hsn, 110, taxY, 9.0) // HSN
     drawRight(formatMoney(group.taxable), 310, taxY, 9.0) // Taxable
     drawRight(group.gstPct, 420, taxY, 9.0) // GST %
-    drawRight(formatMoney(group.tax), 540, taxY, 9.0) // Total Tax
+    // The template prints ₹ at x 510 to 516 here: ending at 540 put a 6-character
+    // amount under it, so 180.00 read as ₹80.00.
+    drawRight(formatMoney(group.tax), 572, taxY, 9.0) // Total Tax
     taxY -= 12
   })
 
   // Tax Table Totals Row (Strictly fixed at Y=160.920 per the template's bottom line)
   drawRight(formatMoney(orderData.sub_total), 310, 160.920, 9.0, true)
-  drawRight(formatMoney(orderData.tax_total), 540, 160.920, 9.0, true)
+  drawRight(formatMoney(orderData.tax_total), 572, 160.920, 9.0, true)
 
   // 6. Output PDF
   const pdfBytes = await pdfDoc.save()
