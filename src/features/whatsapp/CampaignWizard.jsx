@@ -1096,10 +1096,12 @@ export function CampaignWizard({ onDone }) {
     setPartial(null)
     try {
       const shared = sharedSendPayload()
-      // First request creates the campaign and sends the first batch.
+      // First request creates the campaign and sends the first batch. The id makes
+      // a retry after a lost response the same campaign rather than a second one.
       const initial = await postWithRetry('/campaigns/send', {
         name: campaignName.trim(),
         contactIds: [...selected],
+        requestId: crypto.randomUUID(),
         ...shared,
       })
       const finished = await driveBatches(initial, shared)

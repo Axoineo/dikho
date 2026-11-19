@@ -84,11 +84,11 @@ export function createApiApp() {
   // itself. See routes/avatars/index.js for why the read side is safe.
   app.route('/avatars', avatars)
 
-  // Dashboard routes: require a live session of an active staff member. Both
-  // the bare path and the wildcard are registered: Hono's `/x/*` does not
-  // match `/x`. Each route then checks its own permission (requirePermission).
+  // Dashboard routes: require a live session of an active staff member. Hono's
+  // `/x/*` also matches `/x`, so one registration covers both, and registering
+  // the bare path too would check the session twice on every list request. Each
+  // route then checks its own permission (requirePermission).
   for (const base of ['/contacts', '/campaigns', '/templates', '/cg-leads', '/users', '/me', '/assist']) {
-    app.use(base, requireAuth)
     app.use(`${base}/*`, requireAuth)
   }
   app.route('/contacts', contacts)

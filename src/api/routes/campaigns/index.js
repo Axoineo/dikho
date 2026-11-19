@@ -447,47 +447,6 @@ campaigns.get('/', requirePermission('campaigns.view', 'campaigns.send'), async 
   return ok(c, { campaigns: results })
 })
 
-/* ── GET /api/campaigns/stats ──────────────────────────────────────────── */
-
-campaigns.get('/stats', requirePermission('campaigns.view', 'campaigns.send'), async (c) => {
-  const [contactCount, campaignCount, messageStats] = await c.env.DB.batch([
-    c.env.DB.prepare('SELECT COUNT(*) AS total FROM contacts WHERE opted_out = 0'),
-    c.env.DB.prepare('SELECT COUNT(*) AS total FROM campaigns'),
-    // Campaign sends only. `messages` also carries the inbox — inbound customer
-    // messages and the free-form replies agents type — and counting those here
-    // inflated every campaign number on the overview (12 agent replies were
-    // being reported as marketing sends).
-    //
-    // `accepted` is everything Meta's API took from us. `awaiting` is the
-    // subset still holding a `sent` with no terminal receipt: Meta accepted it
-    // and has told us nothing since. Meta's own reporting does not count those
-    // as sent, which is most of why the two dashboards disagree.
-    c.env.DB.prepare(
-      `SELECT
-         COUNT(*) AS total,
-         SUM(CASE WHEN status IN ('sent','delivered','read','failed') THEN 1 ELSE 0 END) AS accepted,
-         SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS awaiting,
-         SUM(CASE WHEN status IN ('delivered','read') THEN 1 ELSE 0 END) AS delivered,
-         SUM(CASE WHEN status = 'read' THEN 1 ELSE 0 END) AS read_count,
-         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-       FROM messages
-       WHERE campaign_id IS NOT NULL AND direction = 'outbound'`,
-    ),
-  ])
-
-  const stats = messageStats.results[0] ?? {}
-  return ok(c, {
-    contacts: contactCount.results[0]?.total ?? 0,
-    campaigns: campaignCount.results[0]?.total ?? 0,
-    messages: stats.total ?? 0,
-    accepted: stats.accepted ?? 0,
-    awaiting: stats.awaiting ?? 0,
-    delivered: stats.delivered ?? 0,
-    read: stats.read_count ?? 0,
-    failed: stats.failed ?? 0,
-  })
-})
-
 /* ── POST /api/campaigns/send ──────────────────────────────────────────── */
 // Creates the campaign row AND sends the first batch (up to BATCH_LIMIT).
 // For audiences > BATCH_LIMIT, the frontend follows up with /send-batch.
@@ -497,6 +456,12 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
   const { name, contactIds, templateName, templateLanguage = 'en' } = body
+
+  // One id per press of Send. The wizard retries this request when a response is
+  // lost, and each retry used to create a new campaign and message everyone again.
+  // The same id now means the same campaign, and claimRecipients sends to each
+  // person once within a campaign.
+  const requestId = typeof body.requestId === 'string' && /^[0-9a-f-]{16,64}$/i.test(body.requestId) ? body.requestId : null
 
   if (!name?.trim()) throw new HTTPException(400, { message: 'Campaign name is required' })
   if (!templateName?.trim()) throw new HTTPException(400, { message: 'Template name is required' })
@@ -531,23 +496,42 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
   // Store the whole intended audience, not just this first batch. If the send
   // is interrupted later, this is the only record of who was meant to get it
   // — see migration 0006 and loadUnsentRecipients.
-  const campaign = await c.env.DB.prepare(
-    `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by, variables, audience)
-     VALUES (?, ?, ?, 'sending', ?, ?, ?, ?)
-     RETURNING id`,
-  ).bind(
+  const fields = [
     name.trim(), templateName.trim(), templateLanguage, totalRecipients, user?.id ?? null,
     withComponents ? JSON.stringify(variableMap) : null,
     JSON.stringify([...batchIds, ...remainingIds]),
-  ).first()
+  ]
+  const campaign = requestId
+    ? await c.env.DB.prepare(
+      `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by, variables, audience, request_id)
+       VALUES (?, ?, ?, 'sending', ?, ?, ?, ?, ?)
+       ON CONFLICT(request_id) DO NOTHING
+       RETURNING id`,
+    ).bind(...fields, requestId).first()
+    : await c.env.DB.prepare(
+      `INSERT INTO campaigns (name, template_name, template_language, status, total_count, created_by, variables, audience)
+       VALUES (?, ?, ?, 'sending', ?, ?, ?, ?)
+       RETURNING id`,
+    ).bind(...fields).first()
 
-  const campaignId = campaign.id
+  // No new row: this is a retry of a send already under way.
+  const earlier = campaign ? null : await c.env.DB.prepare('SELECT id FROM campaigns WHERE request_id = ?').bind(requestId).first()
+  const campaignId = campaign?.id ?? earlier?.id
+  if (!campaignId) throw new HTTPException(500, { message: 'The campaign could not be created' })
 
   const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
   const run = claimed.length > 0
     ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, withComponents, variableMap })
     : NOTHING_SENT
   const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
+
+  // The first attempt's outcomes went with the lost response: report the campaign's
+  // real totals, so the wizard's counts are right.
+  if (earlier) {
+    const totals = await c.env.DB.prepare('SELECT sent_count, failed_count FROM campaigns WHERE id = ?').bind(campaignId).first()
+    next.sent = totals?.sent_count ?? next.sent
+    next.failed = totals?.failed_count ?? next.failed
+  }
 
   // `remaining` tells the frontend to continue with /send-batch.
   return ok(c, { campaignId, total: recipients.length, ...next })
@@ -561,12 +545,19 @@ campaigns.post('/send-batch', requirePermission('campaigns.send'), async (c) => 
   const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
-  const { campaignId, contactIds, templateName, templateLanguage = 'en' } = body
+  const { campaignId, contactIds } = body
 
   if (!campaignId) throw new HTTPException(400, { message: 'campaignId is required' })
   if (!Array.isArray(contactIds) || contactIds.length === 0) {
     throw new HTTPException(400, { message: 'contactIds is required' })
   }
+
+  // Which template goes out is the campaign's, as recorded when it was created. A
+  // request cannot file sends under another campaign with a different template.
+  const stored = await c.env.DB.prepare('SELECT template_name, template_language FROM campaigns WHERE id = ?').bind(Number(campaignId)).first()
+  if (!stored) throw new HTTPException(404, { message: 'Campaign not found' })
+  const templateName = stored.template_name
+  const templateLanguage = stored.template_language
 
   const allIds = contactIds.map(Number).filter(Number.isInteger)
   const limit = batchLimit(c.env)

@@ -3,9 +3,11 @@ import { supabase } from '../../lib/supabase'
 import { apiGet } from '../../lib/api'
 import { formatCount, formatDisplayDate } from '../../lib/format'
 import { preferredPageSize } from '../../lib/settings'
+import { leadSearchFilter } from './leadSearch'
 import { Icon } from '../../components/Icon'
 import {
-  PageHeader, SearchField, ResultCount, Pagination, StatusPill, Cell, SkeletonRows, EmptyState, Metrics, MetricTile,
+  PageHeader, SearchField, ResultCount, Pagination, StatusPill, Cell, RowTitle, RowChevron, SkeletonRows, EmptyState,
+  Metrics, MetricTile, DetailsPanel, Section, KeyValues,
 } from '../../components/crm/CrmUi'
 
 // The manual follow-up message staff send from this page's WhatsApp button —
@@ -55,6 +57,7 @@ function RowAction({ kind, href, label, external }) {
       aria-label={label}
       target={external ? '_blank' : undefined}
       rel={external ? 'noopener noreferrer' : undefined}
+      onClick={(event) => event.stopPropagation()}
     >
       {ActIcon[kind]}
     </a>
@@ -74,7 +77,60 @@ function WhatsAppStatusPill({ entry }) {
   )
 }
 
-const COLUMNS = 5
+const COLUMNS = 6
+
+function leadPhone(lead) {
+  return lead.mobile ? `${lead.country_code || ''} ${lead.mobile}`.trim() : null
+}
+
+/* Everything known about one lead, with the ways to reach them. A phone's table
+   shows only the company and the WhatsApp state, so without this panel a lead's
+   number, email and city could not be seen there at all. */
+function LeadDetails({ lead, statusEntry, onClose }) {
+  const phone = leadPhone(lead)
+  const failure = statusEntry?.status === 'failed' ? statusEntry.error_message : null
+  return (
+    <DetailsPanel
+      label="Lead details"
+      title={lead.company_name || lead.name || 'Lead'}
+      meta={<WhatsAppStatusPill entry={statusEntry} />}
+      monogram={lead.company_name || lead.name}
+      onClose={onClose}
+    >
+      {(phone || lead.email) && (
+        <Section title="Contact">
+          <div className="crm-lead-actions">
+            {phone && (
+              <>
+                <a className="crm-btn crm-btn--secondary" href={`tel:${phone.replace(/\s/g, '')}`}>Call</a>
+                <a className="crm-btn crm-btn--secondary" href={`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(FOLLOWUP_MESSAGE)}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+              </>
+            )}
+            {lead.email && <a className="crm-btn crm-btn--secondary" href={`mailto:${lead.email}`}>Email</a>}
+          </div>
+        </Section>
+      )}
+      <Section title="Details">
+        <KeyValues
+          items={[
+            { label: 'Name', value: lead.name },
+            { label: 'Company', value: lead.company_name },
+            { label: 'Mobile', value: phone, mono: true },
+            { label: 'Email', value: lead.email, wide: true },
+            { label: 'City', value: lead.city },
+            { label: 'Source', value: LEAD_SOURCE },
+            { label: 'Submitted', value: lead.created_at ? formatDisplayDate(lead.created_at) : null },
+          ]}
+        />
+      </Section>
+      {failure && (
+        <Section title="WhatsApp confirmation">
+          <p className="crm-section-note">{failure}</p>
+        </Section>
+      )}
+    </DetailsPanel>
+  )
+}
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([])
@@ -85,6 +141,7 @@ export default function LeadsPage() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedLead, setSelectedLead] = useState(null)
 
   // WhatsApp confirmation status, keyed by the same digits-only phone the
   // Worker sent to. Fetched once (not per page/search) — it's a small, D1-
@@ -147,14 +204,8 @@ export default function LeadsPage() {
         .order('created_at', { ascending: false })
         .range(from, to)
 
-      if (query) {
-        const safeQuery = query.replace(/[%_]/g, '').replace(/[(),]/g, ' ').trim()
-        if (safeQuery) {
-          request = request.or(
-            `company_name.ilike.%${safeQuery}%,name.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,city.ilike.%${safeQuery}%,mobile.ilike.%${safeQuery}%`
-          )
-        }
-      }
+      const filter = query ? leadSearchFilter(query) : null
+      if (filter) request = request.or(filter)
 
       const { data, count, error: fetchError } = await request
 
@@ -223,6 +274,7 @@ export default function LeadsPage() {
                 <th className="crm-hide-sm" style={{ width: '14%' }}>City</th>
                 <th style={{ width: '120px' }}>WhatsApp</th>
                 <th className="crm-hide-sm" style={{ width: '120px' }}>Submitted</th>
+                <th className="crm-col-tight" style={{ width: '36px' }} aria-label="Open" />
               </tr>
             </thead>
             <tbody>
@@ -240,12 +292,16 @@ export default function LeadsPage() {
                 </tr>
               ) : (
                 leads.map((lead) => {
-                  const phone = lead.mobile ? `${lead.country_code || ''} ${lead.mobile}`.trim() : null
+                  const phone = leadPhone(lead)
                   const statusEntry = statusByPhone.get(leadPhoneKey(lead))
                   return (
-                    <tr key={lead.id}>
+                    <tr
+                      key={lead.id}
+                      className={`crm-row${selectedLead?.id === lead.id ? ' is-selected' : ''}`}
+                      onClick={() => setSelectedLead(lead)}
+                    >
                       <td>
-                        <Cell main={lead.company_name} sub={[lead.name, LEAD_SOURCE].filter(Boolean).join(' · ')} strong title={lead.company_name || ''} />
+                        <RowTitle name={lead.company_name || lead.name} sub={[lead.company_name ? lead.name : null, LEAD_SOURCE].filter(Boolean).join(' · ')} onOpen={() => setSelectedLead(lead)} />
                       </td>
                       <td className="crm-hide-sm">
                         <div className="crm-cell">
@@ -267,6 +323,7 @@ export default function LeadsPage() {
                       <td className="crm-hide-sm"><Cell main={lead.city} /></td>
                       <td><WhatsAppStatusPill entry={statusEntry} /></td>
                       <td className="crm-hide-sm"><Cell main={lead.created_at ? formatDisplayDate(lead.created_at) : null} /></td>
+                      <td className="crm-col-tight"><RowChevron /></td>
                     </tr>
                   )
                 })
@@ -287,6 +344,14 @@ export default function LeadsPage() {
           onPageSize={(size) => { setPageSize(size); setPage(1) }}
         />
       </section>
+
+      {selectedLead && (
+        <LeadDetails
+          lead={selectedLead}
+          statusEntry={statusByPhone.get(leadPhoneKey(selectedLead))}
+          onClose={() => setSelectedLead(null)}
+        />
+      )}
     </div>
   )
 }

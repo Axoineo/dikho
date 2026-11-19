@@ -112,7 +112,7 @@ supabase/
 └── migrations/           # PostgreSQL/RLS/Storage migrations
 scripts/                  # developer and operational utilities
 docs/                     # architecture, operations and security documentation
-dikho-mobile/             # Flutter Android app, a shell around the deployed CRM
+dikho-mobile/             # Flutter Android app: native inbox and drawer, CRM in a WebView
 cloudflare-updater/       # read-only update API and APK hosting for that app
 ```
 

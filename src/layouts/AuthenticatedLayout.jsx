@@ -1,8 +1,8 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import BrandLoader, { AppReady } from '../components/BrandLoader'
 import RouteBoundary from '../components/RouteBoundary'
 import { Outlet, useLocation } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, appOwnsSession } from '../lib/supabase'
 import { MobileTopBar, Sidebar } from '../components/Sidebar'
 import { loadSettings, applyPreferences } from '../lib/settings'
 import { MAX_SESSION_MS, INACTIVITY_MS, WARN_BEFORE_MS } from '../app/constants'
@@ -12,6 +12,8 @@ import { AccessContext, canOpen, sectionFor } from '../lib/access'
 import { apiPost } from '../lib/api'
 import { STAFF_EVENTS, emitStaffEvent } from '../lib/staffBus'
 import LiveAssistProvider from '../features/live-assist/LiveAssistProvider'
+import { AndroidShellBridge, inAndroidApp, nativeScreens, reportActivity, reportSessionWarning, reportSignedOut, setShellHandlers } from '../lib/androidShell'
+import { preloadRoutes } from '../routes'
 
 // Why a session ended, shown on the sign-in screen afterwards.
 const SIGNOUT_NOTICE_KEY = 'dikho-signout-notice'
@@ -79,7 +81,11 @@ export default function AuthenticatedLayout() {
   const [accessState, setAccessState] = useState('checking')
   const accessUserRef = useRef(null)
 
+  // Why this page last signed out, for the Android app's sign-in screen.
+  const signOutReasonRef = useRef(null)
+
   const signOutWithNotice = useCallback((reason) => {
+    signOutReasonRef.current = SIGNOUT_NOTICES[reason] ? reason : 'ended'
     try { sessionStorage.setItem(SIGNOUT_NOTICE_KEY, SIGNOUT_NOTICES[reason] ?? SIGNOUT_NOTICES.ended) } catch { /* private mode */ }
     // The server session is already gone; only this browser's copy is left.
     supabase.auth.signOut({ scope: 'local' })
@@ -188,8 +194,20 @@ export default function AuthenticatedLayout() {
     if (granted) loadSettings()
   }, [granted])
 
+  // The Android app's own Settings screen changed something: load the person's
+  // access (theme, preferences) and the organization's settings again.
+  useEffect(() => {
+    if (!inAndroidApp || !granted) return undefined
+    setShellHandlers({ settingsChanged() { loadAccess(); loadSettings() } })
+    return () => setShellHandlers({ settingsChanged: null })
+  }, [granted, loadAccess])
+
+  // True while the person works on one of the Android app's native screens. The
+  // page is hidden behind them then, but they are at the screen all the same.
+  const nativeScreenRef = useRef(false)
+
   const beat = useCallback(async () => {
-    if (document.visibilityState !== 'visible') return
+    if (document.visibilityState !== 'visible' && !nativeScreenRef.current) return
     if (Date.now() - lastActiveRef.current > HEARTBEAT_ACTIVE_WINDOW_MS) return
     const { data, error } = await supabase.rpc('touch_session', { p_section: sectionRef.current })
     if (error) return
@@ -197,17 +215,37 @@ export default function AuthenticatedLayout() {
     else if (data === 'no_access') loadAccess()
   }, [loadAccess, signOutWithNotice])
 
+  // In an Android app that owns the session, the app sends the heartbeat (ADR 0013).
   useEffect(() => {
-    if (!granted) return
+    if (!granted || appOwnsSession) return
     beat()
     const timer = setInterval(beat, HEARTBEAT_MS)
     return () => clearInterval(timer)
   }, [granted, beat])
 
+  // The native screens are activity like any other: without this the page would
+  // sign out someone who has spent an hour answering chats in the native inbox.
+  useEffect(() => {
+    if (!inAndroidApp) return undefined
+    let lastBeat = 0
+    setShellHandlers({
+      noteActivity(section) {
+        lastActiveRef.current = Date.now()
+        nativeScreenRef.current = Boolean(section)
+        sectionRef.current = section || sectionFor(window.location.pathname)
+        if (section && Date.now() - lastBeat >= HEARTBEAT_MS) {
+          lastBeat = Date.now()
+          beat()
+        }
+      },
+    })
+    return () => setShellHandlers({ noteActivity: null })
+  }, [beat])
+
   // A page change reports the new section, a moment after it settles.
   useEffect(() => {
     const section = sectionFor(pathname)
-    if (!granted || section === sectionRef.current) { sectionRef.current = section; return }
+    if (!granted || appOwnsSession || section === sectionRef.current) { sectionRef.current = section; return }
     sectionRef.current = section
     const timer = setTimeout(beat, 1500)
     return () => clearTimeout(timer)
@@ -223,6 +261,8 @@ export default function AuthenticatedLayout() {
     const channel = supabase
       .channel(`staff:${myId}`, { config: { private: true } })
       .on('broadcast', { event: 'signed_out' }, ({ payload }) => {
+        // The app listens on the same channel and signs out itself.
+        if (appOwnsSession) return
         if (payload?.session_id && payload.session_id !== mySession) return
         signOutWithNotice(payload?.reason ?? 'forced')
       })
@@ -237,7 +277,8 @@ export default function AuthenticatedLayout() {
   // Where this session signed in from (Cloudflare's approximate location),
   // recorded once per session for "last login" in User Management.
   useEffect(() => {
-    if (!granted || !mySession) return
+    // The app records its own sign-in.
+    if (!granted || !mySession || appOwnsSession) return
     try {
       if (localStorage.getItem('dikho-session-recorded') === mySession) return
       localStorage.setItem('dikho-session-recorded', mySession)
@@ -248,6 +289,14 @@ export default function AuthenticatedLayout() {
   // Activity tracking + inactivity / max-session enforcement
   useEffect(() => {
     if (!session) return
+
+    // In an app that owns the session the app keeps the clock: the page only says when
+    // it was used.
+    if (appOwnsSession) {
+      const events = ['keydown', 'pointerdown', 'scroll']
+      events.forEach((ev) => window.addEventListener(ev, reportActivity, { passive: true }))
+      return () => events.forEach((ev) => window.removeEventListener(ev, reportActivity))
+    }
 
     function resetActivity() {
       lastActiveRef.current = Date.now()
@@ -263,12 +312,14 @@ export default function AuthenticatedLayout() {
 
       // Hard max-session cap (security boundary is the Supabase JWT, this is UX defence)
       if (sessionAge >= MAX_SESSION_MS) {
+        signOutReasonRef.current = 'ended'
         supabase.auth.signOut()
         return
       }
 
       // Inactivity logout
       if (idle >= INACTIVITY_MS) {
+        signOutReasonRef.current = 'idle'
         supabase.auth.signOut()
         return
       }
@@ -293,6 +344,28 @@ export default function AuthenticatedLayout() {
       clearInterval(tick)
     }
   }, [session])
+
+  useEffect(() => {
+    if (inAndroidApp) reportSessionWarning(showSessionWarning)
+  }, [showSessionWarning])
+
+  useEffect(() => {
+    if (!inAndroidApp) return
+    if (session === null) reportSignedOut(signOutReasonRef.current)
+    else if (session && ['suspended', 'archived', 'not_staff'].includes(accessState)) reportSignedOut(accessState)
+    else if (session && !['checking', 'granted'].includes(accessState)) reportSignedOut()
+  }, [session, accessState])
+
+  // Route chunks fetched once the person is settled, so opening a section does
+  // not stop to download it. One at a time, and never on a data-saving connection.
+  useEffect(() => {
+    if (accessState !== 'granted' || navigator.connection?.saveData) return undefined
+    const idle = window.requestIdleCallback ?? ((run) => setTimeout(run, 1500))
+    const cancel = window.cancelIdleCallback ?? clearTimeout
+    const handle = idle(() => preloadRoutes(access))
+    return () => cancel(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessState])
 
   function staySignedIn() {
     lastActiveRef.current = Date.now()
@@ -345,9 +418,14 @@ export default function AuthenticatedLayout() {
   const warnMins = Math.floor(warnSecsLeft / 60)
   const warnSecs = String(warnSecsLeft % 60).padStart(2, '0')
 
+  // In an Android app that does Live Assist itself, the page leaves it to the app:
+  // one incoming request, one dialog.
+  const LiveAssistShell = nativeScreens.has('live-assist') ? Fragment : LiveAssistProvider
+
   return (
     <AccessContext.Provider value={access}>
-    <LiveAssistProvider>
+    <LiveAssistShell>
+    {inAndroidApp && <AndroidShellBridge access={access} session={session} />}
     <div className={`app-shell${collapsed ? ' sidebar-is-closed' : ''}`}>
       <Sidebar
         collapsed={collapsed}
@@ -364,7 +442,7 @@ export default function AuthenticatedLayout() {
       <div className="app-main">
         <MobileTopBar menuOpen={!collapsed} onMenu={toggleSidebar} />
         <main className="workspace">
-          <RouteBoundary>
+          <RouteBoundary resetKey={pathname}>
             <Suspense fallback={<BrandLoader />}>
               {canOpen(access, pathname)
                 ? <Outlet context={{ session, access, themeMode, onThemeChange: handleThemeChange, reloadAccess: loadAccess }} />
@@ -389,7 +467,7 @@ export default function AuthenticatedLayout() {
         </div>
       )}
     </div>
-    </LiveAssistProvider>
+    </LiveAssistShell>
     </AccessContext.Provider>
   )
 }

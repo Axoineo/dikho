@@ -168,3 +168,29 @@ test('the manifest committed to this repo is valid', () => {
   const committed = JSON.parse(readFileSync(new URL('../releases/manifest.json', import.meta.url), 'utf8'))
   assert.deepEqual(manifestProblems(committed), [])
 })
+
+test('someone who ignored a minor update is taken straight to the later major one', async () => {
+  const at = (versionCode, minSupportedVersionCode) => ({
+    schema: 1, appId: 'in.dikho.crm', channels: { stable: { ...RELEASE, versionCode, minSupportedVersionCode } },
+  })
+  const answer = async (installed, manifest) => (await get(`/api/update?appId=in.dikho.crm&versionCode=${installed}`, manifest)).json()
+
+  // Version 1 is installed. 2 is minor: it can be ignored.
+  let body = await answer(1, at(2, 1))
+  assert.equal(body.versionCode, 2)
+  assert.equal(body.mandatory, false)
+
+  // 3 is major. Nobody hears about 2 again, and 3 cannot be ignored.
+  body = await answer(1, at(3, 3))
+  assert.equal(body.versionCode, 3)
+  assert.equal(body.mandatory, true)
+
+  // 4 is minor after the major. Whoever never took the major must take 4, which
+  // contains it. Whoever did take it may ignore 4.
+  body = await answer(1, at(4, 3))
+  assert.equal(body.versionCode, 4)
+  assert.equal(body.mandatory, true)
+  body = await answer(3, at(4, 3))
+  assert.equal(body.versionCode, 4)
+  assert.equal(body.mandatory, false)
+})

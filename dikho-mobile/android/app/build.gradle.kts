@@ -45,6 +45,16 @@ android {
         }
     }
 
+    // Same app ID in both: these are two ways to deliver one app, not two apps.
+    flavorDimensions += "distribution"
+    productFlavors {
+        // Downloaded from our own update Worker, and able to install its own updates.
+        create("direct") { dimension = "distribution" }
+        // For Google Play, which forbids an app installing its own updates. Lacks that
+        // permission, and sends people to the Play listing instead (AppConfig).
+        create("play") { dimension = "distribution" }
+    }
+
     buildTypes {
         release {
             // Never falls back to a debug key: an APK signed with one could not
@@ -91,7 +101,7 @@ dependencies {
 }
 
 if (signingProperties == null) {
-    tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    tasks.matching { it.name.startsWith("pre") && it.name.endsWith("ReleaseBuild") }.configureEach {
         doFirst {
             throw GradleException(
                 "No release signing key. Set DIKHO_KEY_PROPERTIES to a key.properties file. See docs/ANDROID.md.",

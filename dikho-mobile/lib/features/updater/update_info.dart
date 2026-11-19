@@ -24,6 +24,19 @@ class UpdateInfo {
   final int sizeBytes;
   final DateTime publishedAt;
 
+  /// The API's own shape, so a saved copy goes back through [parse].
+  Map<String, Object?> toJson() => {
+    'updateAvailable': true,
+    'version': version,
+    'versionCode': versionCode,
+    'mandatory': mandatory,
+    'releaseNotes': releaseNotes,
+    'apkUrl': apkUrl.toString(),
+    'sha256': sha256,
+    'sizeBytes': sizeBytes,
+    'publishedAt': publishedAt.toUtc().toIso8601String(),
+  };
+
   static const maxApkBytes = 200 * 1024 * 1024;
   static const _maxNotesLength = 2000;
   static final _version = RegExp(r'^\d{1,4}\.\d{1,4}\.\d{1,4}$');
@@ -31,11 +44,7 @@ class UpdateInfo {
 
   /// Returns null when the server reports no update. Throws [FormatException]
   /// for anything malformed, including a "newer" version that is not newer.
-  static UpdateInfo? parse(
-    Object? json, {
-    required int installedVersionCode,
-    required bool Function(Uri) isAllowedApkUrl,
-  }) {
+  static UpdateInfo? parse(Object? json, {required int installedVersionCode, required bool Function(Uri) isAllowedApkUrl}) {
     if (json is! Map) throw const FormatException('response is not an object');
     final available = json['updateAvailable'];
     if (available == false) return null;

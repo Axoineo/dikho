@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only the build we distribute ourselves can install its own updates, and Android
+         still asks the person each time. Google Play forbids this, so the play build
+         does not have it. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+</manifest>

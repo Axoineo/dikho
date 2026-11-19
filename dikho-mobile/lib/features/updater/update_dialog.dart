@@ -4,10 +4,7 @@ import 'update_controller.dart';
 import 'update_info.dart';
 
 /// Shows the update flow. Returns true when the user chose to put it off.
-Future<bool> showUpdateDialog(
-  BuildContext context,
-  UpdateController controller,
-) async {
+Future<bool> showUpdateDialog(BuildContext context, UpdateController controller) async {
   final later = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
@@ -16,10 +13,75 @@ Future<bool> showUpdateDialog(
   return later ?? true;
 }
 
-class UpdateDialog extends StatelessWidget {
-  const UpdateDialog({super.key, required this.controller});
+/// Instead of the app, while an update is required: there is no way past it but
+/// installing the update, and Back leaves the app rather than entering it.
+class UpdateRequiredScreen extends StatefulWidget {
+  const UpdateRequiredScreen({super.key, required this.controller, required this.onCheckAgain});
 
   final UpdateController controller;
+  final Future<void> Function() onCheckAgain;
+
+  @override
+  State<UpdateRequiredScreen> createState() => _UpdateRequiredScreenState();
+}
+
+class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
+  bool _checking = false;
+  bool _checked = false;
+
+  Future<void> _checkAgain() async {
+    setState(() {
+      _checking = true;
+      _checked = false;
+    });
+    try {
+      await widget.onCheckAgain();
+    } finally {
+      // Still here means nothing changed. If the block lifted, this screen is gone.
+      if (mounted) {
+        setState(() {
+          _checking = false;
+          _checked = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset('assets/brand/logo.png', width: 120),
+                const SizedBox(height: 8),
+                UpdateDialog(controller: widget.controller, blocking: true),
+                TextButton(onPressed: _checking ? null : _checkAgain, child: Text(_checking ? 'Checking…' : 'Check again')),
+                if (_checked)
+                  Text('This update is still required.', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class UpdateDialog extends StatelessWidget {
+  const UpdateDialog({super.key, required this.controller, this.blocking = false});
+
+  final UpdateController controller;
+
+  /// Part of [UpdateRequiredScreen] rather than a dialog on its own route, so
+  /// nothing here may offer a way out or pop a route.
+  final bool blocking;
 
   UpdateInfo get _info => controller.info;
 
@@ -28,21 +90,17 @@ class UpdateDialog extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => PopScope(
-        // Back never dismisses mid-download or a mandatory prompt.
-        canPop: controller.phase == UpdatePhase.prompt && !_info.mandatory,
+        // Back never dismisses mid-download or a required update.
+        canPop: controller.phase == UpdatePhase.prompt && !blocking,
         child: switch (controller.phase) {
           UpdatePhase.prompt => _prompt(context),
           UpdatePhase.downloading => _downloading(context),
-          UpdatePhase.verifying => _waiting(
-            context,
-            title: 'Checking the update',
-            body: 'Making sure the download is complete and genuine.',
-          ),
+          UpdatePhase.verifying => _waiting(context, title: 'Checking the update', body: 'Making sure the download is complete and genuine.'),
           UpdatePhase.needsPermission => _permission(context),
           UpdatePhase.installing => _waiting(
             context,
             // Android's own screen is on top by now. If it never appears, this
-            // must not trap the person behind a dialog with no way out.
+            // must not leave the person stuck looking at a progress bar.
             closable: true,
             title: 'Installing the update',
             body:
@@ -60,17 +118,14 @@ class UpdateDialog extends StatelessWidget {
   Widget _prompt(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('New update available'),
+      title: Text(blocking ? 'Update required' : 'New update available'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Dikho CRM v${_info.version}',
-              style: theme.textTheme.titleSmall,
-            ),
-            if (_info.mandatory) ...[
+            Text('Dikho CRM v${_info.version}', style: theme.textTheme.titleSmall),
+            if (blocking) ...[
               const SizedBox(height: 8),
               Text(
                 'This version of the app is no longer supported. Please '
@@ -84,26 +139,16 @@ class UpdateDialog extends StatelessWidget {
               const SizedBox(height: 4),
               Text(_info.releaseNotes, style: theme.textTheme.bodyMedium),
             ],
-            const SizedBox(height: 12),
-            Text(
-              '${_formatSize(_info.sizeBytes)} download',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
+            if (controller.openStore == null) ...[
+              const SizedBox(height: 12),
+              Text('${_formatSize(_info.sizeBytes)} download', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ],
           ],
         ),
       ),
       actions: [
-        if (!_info.mandatory)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Later'),
-          ),
-        FilledButton(
-          onPressed: controller.start,
-          child: const Text('Update Now'),
-        ),
+        if (!blocking) TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Later')),
+        FilledButton(onPressed: controller.start, child: const Text('Update Now')),
       ],
     );
   }
@@ -122,38 +167,23 @@ class UpdateDialog extends StatelessWidget {
           Text('${controller.percent}% downloaded'),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: controller.cancelDownload,
-          child: const Text('Cancel'),
-        ),
-      ],
+      actions: [TextButton(onPressed: controller.cancelDownload, child: const Text('Cancel'))],
     );
   }
 
-  Widget _waiting(
-    BuildContext context, {
-    required String title,
-    required String body,
-    bool closable = false,
-  }) {
+  Widget _waiting(BuildContext context, {required String title, required String body, bool closable = false}) {
     return AlertDialog(
       actions: [
-        if (closable)
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Close'),
-          ),
+        if (closable && blocking)
+          FilledButton(onPressed: controller.start, child: const Text('Try again'))
+        else if (closable)
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Close')),
       ],
       title: Text(title),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(body),
-          const SizedBox(height: 16),
-          const LinearProgressIndicator(),
-        ],
+        children: [Text(body), const SizedBox(height: 16), const LinearProgressIndicator()],
       ),
     );
   }
@@ -168,24 +198,15 @@ class UpdateDialog extends StatelessWidget {
         'to this app.',
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Not now'),
-        ),
-        FilledButton(
-          onPressed: controller.openPermissionSettings,
-          child: const Text('Open settings'),
-        ),
+        if (!blocking) TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Not now')),
+        FilledButton(onPressed: controller.openPermissionSettings, child: const Text('Open settings')),
       ],
     );
   }
 
   Widget _failed(BuildContext context) {
     final (title, body) = switch (controller.problem) {
-      UpdateProblem.network => (
-        'Download did not finish',
-        'Check your connection and try again.',
-      ),
+      UpdateProblem.network => ('Download did not finish', 'Check your connection and try again.'),
       UpdateProblem.badFile => (
         'The download was damaged',
         'The file did not match the published release, so it was deleted '
@@ -196,10 +217,7 @@ class UpdateDialog extends StatelessWidget {
         'The file was not signed by Dikho, so it was deleted and nothing '
             'was installed. Please tell your administrator.',
       ),
-      UpdateProblem.storage => (
-        'Not enough storage',
-        'Free up some space on this phone and try again.',
-      ),
+      UpdateProblem.storage => ('Not enough storage', 'Free up some space on this phone and try again.'),
       UpdateProblem.installCancelled => (
         'Update not installed',
         'The installation was cancelled. You can try again when you are '
@@ -215,16 +233,8 @@ class UpdateDialog extends StatelessWidget {
       title: Text(title),
       content: Text(body),
       actions: [
-        // A failed mandatory update must not lock anyone out of their work:
-        // it asks again at the next launch.
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(_info.mandatory ? 'Continue for now' : 'Later'),
-        ),
-        FilledButton(
-          onPressed: controller.start,
-          child: const Text('Try again'),
-        ),
+        if (!blocking) TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Later')),
+        FilledButton(onPressed: controller.start, child: const Text('Try again')),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { nativeScreens, NativeHandoff } from '../lib/androidShell'
 import { useOutletContext } from 'react-router-dom'
 import { landingPath, canOpen, EMAIL_HUB_BUILD } from '../lib/access'
 import { getSettings } from '../lib/settings'
@@ -10,6 +11,7 @@ import {
   LeadsPage,
   VendorsPage,
   SalesOrdersPage,
+  SalesOrderInvoicePage,
   PurchaseOrdersPage,
   SettingsPage,
   UsersPage,
@@ -20,6 +22,7 @@ import {
   WhatsAppDashboard,
   WhatsAppContacts,
   WhatsAppCampaigns,
+  CampaignPerformance,
   WhatsAppTemplates,
   EmailOverview,
   EmailInbox,
@@ -74,40 +77,47 @@ export default function App() {
         <Route element={<AuthenticatedLayout />}>
           <Route index element={<Landing />} />
           <Route path="/dashboard" element={<PlaceholderPage title="Dashboard" />} />
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/leads" element={<LeadsPage />} />
-          <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/sales-orders" element={<SalesOrdersRoute />} />
-          <Route path="/purchase-orders" element={<PurchaseOrdersRoute />} />
+          <Route path="/clients" element={nativeScreens.has('clients') ? <NativeHandoff screen="clients" /> : <ClientsPage />} />
+          <Route path="/leads" element={nativeScreens.has('leads') ? <NativeHandoff screen="leads" /> : <LeadsPage />} />
+          <Route path="/vendors" element={nativeScreens.has('vendors') ? <NativeHandoff screen="vendors" /> : <VendorsPage />} />
+          <Route path="/sales-orders" element={nativeScreens.has('sales-orders') ? <NativeHandoff screen="sales-orders" /> : <SalesOrdersRoute />} />
+          {/* One order's tax invoice PDF; the app's native Sales orders opens this. */}
+          <Route path="/sales-orders/:id/invoice" element={<SalesOrderInvoicePage />} />
+          <Route path="/purchase-orders" element={nativeScreens.has('purchase-orders') ? <NativeHandoff screen="purchase-orders" /> : <PurchaseOrdersRoute />} />
           <Route path="/invoices" element={<PlaceholderPage title="Invoice Notification" />} />
           <Route path="/advance-payments" element={<PlaceholderPage title="Advance Payment Receipt" />} />
           <Route path="/payment-receipts" element={<PlaceholderPage title="Payment Receipt" />} />
           <Route path="/payment-requests" element={<PlaceholderPage title="Payment Request" />} />
           <Route path="/courier" element={<PlaceholderPage title="Document Courier" />} />
-          <Route path="/whatsapp" element={<WhatsAppDashboard />} />
-          <Route path="/whatsapp/inbox" element={<WhatsAppInbox />} />
-          <Route path="/whatsapp/contacts" element={<WhatsAppContacts />} />
-          <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
-          <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
+          <Route path="/whatsapp" element={nativeScreens.has('dashboard') ? <NativeHandoff screen="dashboard" /> : <WhatsAppDashboard />} />
+          <Route path="/whatsapp/inbox" element={nativeScreens.has('inbox') ? <NativeHandoff screen="inbox" /> : <WhatsAppInbox />} />
+          <Route path="/whatsapp/contacts" element={nativeScreens.has('whatsapp-contacts') ? <NativeHandoff screen="whatsapp-contacts" /> : <WhatsAppContacts />} />
+          {/* The app draws Contacts itself and opens this for importing a spreadsheet. */}
+          <Route path="/whatsapp/contacts/import" element={<WhatsAppContacts />} />
+          <Route path="/whatsapp/campaigns" element={nativeScreens.has('whatsapp-campaigns') ? <NativeHandoff screen="whatsapp-campaigns" /> : <WhatsAppCampaigns />} />
+          {/* Straight into the wizard; the app's native Campaigns list opens this. */}
+          <Route path="/whatsapp/campaigns/new" element={<WhatsAppCampaigns startCreating />} />
+          <Route path="/whatsapp/campaigns/:id" element={<CampaignPerformance />} />
+          <Route path="/whatsapp/templates" element={nativeScreens.has('templates') ? <NativeHandoff screen="templates" /> : <WhatsAppTemplates />} />
           {EMAIL_HUB_BUILD && (
             <>
-              <Route path="/email" element={<EmailOverview />} />
-              <Route path="/email/inbox" element={<EmailInbox />} />
-              <Route path="/email/inbox/:threadId" element={<EmailInbox />} />
-              <Route path="/email/settings" element={<EmailSettings />} />
+              <Route path="/email" element={nativeScreens.has('email') ? <NativeHandoff screen="email" /> : <EmailOverview />} />
+              <Route path="/email/inbox" element={nativeScreens.has('email-inbox') ? <NativeHandoff screen="email-inbox" /> : <EmailInbox />} />
+              <Route path="/email/inbox/:threadId" element={nativeScreens.has('email-inbox') ? <NativeHandoff screen="email-inbox" /> : <EmailInbox />} />
+              <Route path="/email/settings" element={nativeScreens.has('email-settings') ? <NativeHandoff screen="email-settings" /> : <EmailSettings />} />
               <Route path="/email/connect" element={<EmailConnect />} />
-              <Route path="/email/campaigns" element={<EmailCampaigns />} />
-              <Route path="/email/campaigns/:campaignId" element={<EmailCampaigns />} />
-              <Route path="/email/templates" element={<EmailTemplates />} />
-              <Route path="/email/templates/:templateId" element={<EmailTemplates />} />
-              <Route path="/email/consent" element={<EmailConsent />} />
-              <Route path="/email/analytics" element={<EmailAnalytics />} />
+              <Route path="/email/campaigns" element={nativeScreens.has('email-campaigns') ? <NativeHandoff screen="email-campaigns" /> : <EmailCampaigns />} />
+              <Route path="/email/campaigns/:campaignId" element={nativeScreens.has('email-campaigns') ? <NativeHandoff screen="email-campaigns" /> : <EmailCampaigns />} />
+              <Route path="/email/templates" element={nativeScreens.has('email-templates') ? <NativeHandoff screen="email-templates" /> : <EmailTemplates />} />
+              <Route path="/email/templates/:templateId" element={nativeScreens.has('email-templates') ? <NativeHandoff screen="email-templates" /> : <EmailTemplates />} />
+              <Route path="/email/consent" element={nativeScreens.has('email-consent') ? <NativeHandoff screen="email-consent" /> : <EmailConsent />} />
+              <Route path="/email/analytics" element={nativeScreens.has('email-analytics') ? <NativeHandoff screen="email-analytics" /> : <EmailAnalytics />} />
             </>
           )}
-          <Route path="/users" element={<UsersPage />} />
+          <Route path="/users" element={nativeScreens.has('users') ? <NativeHandoff screen="users" /> : <UsersPage />} />
           <Route path="/users/:userId" element={<UserProfilePage />} />
-          <Route path="/settings" element={<SettingsRoute />} />
-          <Route path="/settings/:section" element={<SettingsRoute />} />
+          <Route path="/settings" element={nativeScreens.has('settings') ? <NativeHandoff screen="settings" /> : <SettingsRoute />} />
+          <Route path="/settings/:section" element={nativeScreens.has('settings') ? <NativeHandoff screen="settings" /> : <SettingsRoute />} />
           <Route path="*" element={<Landing />} />
         </Route>
       </Routes>

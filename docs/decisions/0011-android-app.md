@@ -1,6 +1,6 @@
 # 0011: Android app as a Flutter shell with a Cloudflare update service
 
-Status: Proposed
+Status: Accepted, partly superseded by [ADR 0012](0012-android-native-screens.md)
 Date: 2026-11-04
 
 ## Context
@@ -115,4 +115,5 @@ Things the repository audit found that shaped the design:
 
 ## Superseded by
 
-Nothing yet.
+[ADR 0012](0012-android-native-screens.md) replaces decision 6 and narrows decisions 1, 3
+and 4: the drawer, top bar, WhatsApp inbox and Phone contacts are now native.

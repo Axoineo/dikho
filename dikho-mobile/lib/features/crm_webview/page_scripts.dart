@@ -8,12 +8,20 @@ library;
 const closeTopLayerScript = r'''
 (function () {
   var layer = document.querySelector('[role="dialog"],[aria-modal="true"],.crm-modal-backdrop,.modal-card,.crm-panel');
-  var shell = document.querySelector('.app-shell');
-  var drawer = window.innerWidth <= 768 && shell && !shell.classList.contains('sidebar-is-closed');
-  if (!layer && !drawer) return 'none';
+  if (!layer) return 'none';
   var target = document.activeElement || document.body;
   target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
   return 'layer';
+})()
+''';
+
+/// One step back in the page's own history. Pages the drawer opened were added by a
+/// script, not a tap, and Chromium's own back skips entries like that, so
+/// WebViewController.goBack would jump past them. Returns 'went' if it moved.
+const pageBackScript = r'''
+(function () {
+  if (window.navigation && window.navigation.canGoBack) { history.back(); return 'went'; }
+  return 'root';
 })()
 ''';
 

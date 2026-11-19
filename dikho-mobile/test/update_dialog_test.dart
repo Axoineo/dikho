@@ -27,8 +27,15 @@ UpdateController _controller({bool mandatory = false}) => UpdateController(
   cacheDir: '/nonexistent',
 );
 
-Future<void> _pump(WidgetTester tester, UpdateController controller) =>
-    tester.pumpWidget(MaterialApp(home: UpdateDialog(controller: controller)));
+Future<void> _pump(
+  WidgetTester tester,
+  UpdateController controller, {
+  bool blocking = false,
+}) => tester.pumpWidget(
+  MaterialApp(
+    home: UpdateDialog(controller: controller, blocking: blocking),
+  ),
+);
 
 void main() {
   testWidgets('the prompt shows version, notes and both choices', (
@@ -45,7 +52,7 @@ void main() {
   testWidgets('a mandatory update offers no Later and says why', (
     tester,
   ) async {
-    await _pump(tester, _controller(mandatory: true));
+    await _pump(tester, _controller(mandatory: true), blocking: true);
     expect(find.text('Later'), findsNothing);
     expect(find.textContaining('no longer supported'), findsOneWidget);
   });
@@ -90,14 +97,42 @@ void main() {
     }
   });
 
-  testWidgets('a failed mandatory update never locks the person out', (
-    tester,
-  ) async {
-    final c = _controller(mandatory: true)
+  testWidgets('a required update has no way past it at any step', (tester) async {
+    for (final phase in [
+      UpdatePhase.prompt,
+      UpdatePhase.needsPermission,
+      UpdatePhase.installing,
+      UpdatePhase.failed,
+    ]) {
+      final c = _controller(mandatory: true)
+        ..phase = phase
+        ..problem = UpdateProblem.network;
+      await _pump(tester, c, blocking: true);
+      for (final escape in ['Later', 'Not now', 'Close', 'Continue for now']) {
+        expect(find.text(escape), findsNothing, reason: '$phase: $escape');
+      }
+    }
+    final failed = _controller(mandatory: true)
       ..phase = UpdatePhase.failed
       ..problem = UpdateProblem.network;
-    await _pump(tester, c);
-    expect(find.text('Continue for now'), findsOneWidget);
+    await _pump(tester, failed, blocking: true);
     expect(find.text('Try again'), findsOneWidget);
+  });
+
+  testWidgets('the required screen offers to check again', (tester) async {
+    var checked = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UpdateRequiredScreen(
+          controller: _controller(mandatory: true),
+          onCheckAgain: () async => checked++,
+        ),
+      ),
+    );
+    expect(find.text('Update required'), findsOneWidget);
+    await tester.tap(find.text('Check again'));
+    await tester.pump();
+    expect(checked, 1);
+    expect(find.text('This update is still required.'), findsOneWidget);
   });
 }

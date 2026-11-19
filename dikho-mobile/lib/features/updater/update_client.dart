@@ -48,28 +48,18 @@ class UpdateClient {
   Future<UpdateCheckResult> check(int installedVersionCode) async {
     final uri = baseUrl
         .resolve('/api/update')
-        .replace(
-          queryParameters: {
-            'appId': appId,
-            'versionCode': '$installedVersionCode',
-            'channel': channel,
-            'platform': 'android',
-          },
-        );
+        .replace(queryParameters: {'appId': appId, 'versionCode': '$installedVersionCode', 'channel': channel, 'platform': 'android'});
     try {
       final body = await _fetch(uri).timeout(timeout);
-      final info = UpdateInfo.parse(
-        jsonDecode(body),
-        installedVersionCode: installedVersionCode,
-        isAllowedApkUrl: isAllowedApkUrl,
-      );
+      final info = UpdateInfo.parse(jsonDecode(body), installedVersionCode: installedVersionCode, isAllowedApkUrl: isAllowedApkUrl);
       return info == null ? const NoUpdate() : UpdateAvailable(info);
     } on TimeoutException {
       return const CheckFailed('timeout');
     } on FormatException catch (error) {
       return CheckFailed('malformed response: ${error.message}');
     } on IOException catch (error) {
-      return CheckFailed('network: ${error.runtimeType}');
+      // Local test builds print this, and class names do not survive obfuscation.
+      return CheckFailed(error is HandshakeException ? 'network: tls' : 'network');
     } on _BadStatus catch (error) {
       return CheckFailed('status ${error.status}');
     }

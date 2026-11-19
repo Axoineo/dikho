@@ -203,8 +203,9 @@ test('a text-header campaign is unaffected by a stray header entry, which is not
 })
 
 test('a later batch sends the header too', async () => {
-  const { templateName, templateLanguage, templateHeader, templateHeaderFormat, templateBody, variableMap } = wizardPayload('5551234')
-  const res = await request('/campaigns/send-batch', { campaignId: 7, contactIds: [1, 2], templateName, templateLanguage, templateHeader, templateHeaderFormat, templateBody, variableMap })
+  first.unshift([/SELECT template_name, template_language FROM campaigns/, { template_name: TEMPLATE.name, template_language: 'en' }])
+  const { templateHeader, templateHeaderFormat, templateBody, variableMap } = wizardPayload('5551234')
+  const res = await request('/campaigns/send-batch', { campaignId: 7, contactIds: [1, 2], templateHeader, templateHeaderFormat, templateBody, variableMap })
   assert.equal(res.status, 200)
   assert.deepEqual(sends[0].template.components[0], { type: 'header', parameters: [{ type: 'video', video: { id: '5551234' } }] })
 })

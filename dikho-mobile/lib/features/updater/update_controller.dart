@@ -8,34 +8,18 @@ import '../../shared/platform_api.dart';
 import 'apk_downloader.dart';
 import 'update_info.dart';
 
-enum UpdatePhase {
-  prompt,
-  downloading,
-  verifying,
-  needsPermission,
-  installing,
-  failed,
-}
+enum UpdatePhase { prompt, downloading, verifying, needsPermission, installing, failed }
 
 /// Why the flow stopped, so the dialog can say something useful.
-enum UpdateProblem {
-  network,
-  badFile,
-  wrongSigner,
-  storage,
-  installCancelled,
-  installFailed,
-}
+enum UpdateProblem { network, badFile, wrongSigner, storage, installCancelled, installFailed }
 
 /// One update attempt, from "Update Now" to handing over to Android's
 /// installer. Knows nothing about the CRM or about widgets.
 class UpdateController extends ChangeNotifier {
-  UpdateController({
-    required this.info,
-    required this.platform,
-    required this.downloader,
-    required this.cacheDir,
-  });
+  UpdateController({required this.info, required this.platform, required this.downloader, required this.cacheDir, this.openStore});
+
+  /// Set in a store build: "Update Now" goes to the store, and nothing is downloaded.
+  final Future<void> Function()? openStore;
 
   final UpdateInfo info;
   final UpdaterPlatform platform;
@@ -51,8 +35,7 @@ class UpdateController extends ChangeNotifier {
   File? _apk;
   bool _disposed = false;
 
-  double get fraction =>
-      info.sizeBytes == 0 ? 0 : (received / info.sizeBytes).clamp(0.0, 1.0);
+  double get fraction => info.sizeBytes == 0 ? 0 : (received / info.sizeBytes).clamp(0.0, 1.0);
 
   int get percent => (fraction * 100).floor();
 
@@ -64,6 +47,8 @@ class UpdateController extends ChangeNotifier {
   }
 
   Future<void> start() async {
+    final store = openStore;
+    if (store != null) return store();
     if (phase == UpdatePhase.downloading || phase == UpdatePhase.verifying) {
       return;
     }
@@ -90,11 +75,8 @@ class UpdateController extends ChangeNotifier {
       _set(
         UpdatePhase.failed,
         why: switch (error.failure) {
-          DownloadFailure.network ||
-          DownloadFailure.badResponse ||
-          DownloadFailure.badRedirect => UpdateProblem.network,
-          DownloadFailure.sizeMismatch ||
-          DownloadFailure.checksumMismatch => UpdateProblem.badFile,
+          DownloadFailure.network || DownloadFailure.badResponse || DownloadFailure.badRedirect => UpdateProblem.network,
+          DownloadFailure.sizeMismatch || DownloadFailure.checksumMismatch => UpdateProblem.badFile,
           DownloadFailure.storage => UpdateProblem.storage,
         },
       );
@@ -134,13 +116,11 @@ class UpdateController extends ChangeNotifier {
     }
   }
 
-  Future<void> openPermissionSettings() =>
-      platform.openInstallPermissionSettings();
+  Future<void> openPermissionSettings() => platform.openInstallPermissionSettings();
 
   /// Called when the app returns to the foreground.
   Future<void> onResumed() async {
-    if (phase == UpdatePhase.needsPermission &&
-        await platform.canInstallPackages()) {
+    if (phase == UpdatePhase.needsPermission && await platform.canInstallPackages()) {
       await continueInstall();
     }
   }

@@ -3,6 +3,7 @@ package `in`.dikho.crm
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -18,6 +19,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugins.webviewflutter.WebViewFlutterAndroidExternalApi
+import java.util.concurrent.Executors
 
 /**
  * The single native entry point for the Dart side. Each method does one narrow
@@ -51,6 +53,10 @@ class CrmPlatformPlugin :
     private var transfers: FileTransfers? = null
     private var installer: ApkInstaller? = null
     private var network: NetworkWatcher? = null
+    private var device: DeviceFeatures? = null
+    private var recorder: VoiceRecorder? = null
+    private var audio: VoicePlayer? = null
+    private val background = Executors.newSingleThreadExecutor()
 
     private var pickResult: MethodChannel.Result? = null
     private var createDocumentCallback: ((Uri?) -> Unit)? = null
@@ -69,12 +75,18 @@ class CrmPlatformPlugin :
         installer = ApkInstaller(context, ::emit) { activity }
         InstallResultReceiver.handler = installer
         network = NetworkWatcher(context) { emit(mapOf("type" to "network")) }.also { it.start() }
+        device = DeviceFeatures(context)
+        recorder = VoiceRecorder(context)
+        audio = VoicePlayer(::emit)
     }
 
     override fun onDetachedFromEngine(flutterBinding: FlutterPlugin.FlutterPluginBinding) {
         methods?.setMethodCallHandler(null)
         eventChannel?.setStreamHandler(null)
         network?.stop()
+        recorder?.cancel()
+        audio?.stop()
+        background.shutdown()
         InstallResultReceiver.handler = null
         binding = null
     }
@@ -100,6 +112,10 @@ class CrmPlatformPlugin :
 
     fun onHostPause() {
         bridge?.onHostPause()
+        // Android stops background apps from recording anyway. Better to say so
+        // than to send a note that goes silent halfway.
+        recorder?.cancel()
+        audio?.pause()
     }
 
     fun onHostResume() {
@@ -163,6 +179,15 @@ class CrmPlatformPlugin :
                 )
                 result.success(null)
             }
+            "keepFile" -> {
+                transfers?.keep(
+                    path = call.argument<String>("path").orEmpty(),
+                    view = call.argument<Boolean>("view") == true,
+                    name = call.argument("name"),
+                    mime = call.argument("mime"),
+                )
+                result.success(null)
+            }
             "openFile" -> result.success(
                 transfers?.open(call.argument<String>("uri").orEmpty(), call.argument<String>("mime").orEmpty()) ?: false,
             )
@@ -183,7 +208,52 @@ class CrmPlatformPlugin :
                 installer?.install(call.argument<String>("path").orEmpty())
                 result.success(null)
             }
+            "answerVault" -> {
+                bridge?.answerVault(call.argument<Number>("id")?.toInt() ?: -1, call.argument<String>("value"))
+                result.success(null)
+            }
+            "readContacts" -> onBackground(result) { device?.readContacts() ?: emptyList<String>() }
+            "placeCall" -> result.success(device?.placeCall(activity, call.argument<String>("number").orEmpty()))
+            "copyPicked" -> onBackground(result) { device?.copyPicked(call.argument<String>("uri").orEmpty()) }
+            "voiceStart" -> result.success(recorder?.start() == true)
+            "voiceStop" -> result.success(recorder?.stop())
+            "voiceCancel" -> {
+                recorder?.cancel()
+                result.success(null)
+            }
+            "audioPlay" -> {
+                audio?.play(call.argument<String>("id").orEmpty(), call.argument<String>("path").orEmpty())
+                result.success(null)
+            }
+            "audioPause" -> {
+                audio?.pause()
+                result.success(null)
+            }
+            "audioSeek" -> {
+                audio?.seek(call.argument<Number>("ms")?.toInt() ?: 0)
+                result.success(null)
+            }
+            "audioStop" -> {
+                audio?.stop()
+                result.success(null)
+            }
+            "setEdgeSwipe" -> {
+                setEdgeSwipe(call.argument<Boolean>("enabled") == true)
+                result.success(null)
+            }
             else -> result.notImplemented()
+        }
+    }
+
+    /** Slow work off the main thread, with the answer back on it. */
+    private fun onBackground(result: MethodChannel.Result, work: () -> Any?) {
+        background.execute {
+            val outcome = try {
+                work()
+            } catch (_: Exception) {
+                null
+            }
+            main.post { result.success(outcome) }
         }
     }
 
@@ -199,6 +269,25 @@ class CrmPlatformPlugin :
             "filesDir" to context.filesDir.path,
             "cacheDir" to context.cacheDir.path,
         )
+    }
+
+    /**
+     * Android 10 and later take a swipe from the screen edge as Back, which would
+     * leave the drawer's own swipe nothing to work with. Android allows an app to
+     * keep back 200dp per edge, so the middle of the left edge opens the drawer
+     * and Back still works everywhere else.
+     */
+    private fun setEdgeSwipe(enabled: Boolean) {
+        val view = activity?.window?.decorView ?: return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        view.systemGestureExclusionRects = if (enabled) {
+            val density = view.resources.displayMetrics.density
+            val span = (200 * density).toInt()
+            val top = (view.height - span) / 2
+            listOf(Rect(0, top, (32 * density).toInt(), top + span))
+        } else {
+            emptyList()
+        }
     }
 
     private fun attachWebView(call: MethodCall, result: MethodChannel.Result) {

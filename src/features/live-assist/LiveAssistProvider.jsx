@@ -219,15 +219,23 @@ export default function LiveAssistProvider({ children }) {
   }), [])
 
   // ── Helper side ─────────────────────────────────────────────────────────
+  // The newest picture of a phone's screen, as an object URL the viewer shows.
+  const frameUrl = useRef(null)
+  const dropFrame = useCallback(() => {
+    if (frameUrl.current) URL.revokeObjectURL(frameUrl.current)
+    frameUrl.current = null
+  }, [])
+
   const closeHelperPeer = useCallback(() => {
     clearTimeout(connectTimer.current)
     helperPeer.current?.close()
     helperPeer.current = null
-  }, [])
+    dropFrame()
+  }, [dropFrame])
 
   const finishHelper = useCallback((reason) => {
     closeHelperPeer()
-    setHelper((h) => (h ? { ...h, phase: 'ended', reason, stream: null } : h))
+    setHelper((h) => (h ? { ...h, phase: 'ended', reason, stream: null, frame: null } : h))
   }, [closeHelperPeer])
 
   const startAssist = useCallback(async (member, helpRequestId = null) => {
@@ -251,10 +259,19 @@ export default function LiveAssistProvider({ children }) {
     nextNote.current = 1
     dispatchHelperChat({ type: 'reset' })
     dispatchHelperChat({ type: 'open' })
-    setHelper({ session, phase: 'waiting', reason: null, stream: null, section: null })
+    setHelper({ session, phase: 'waiting', reason: null, stream: null, frame: null, section: null })
     helperPeer.current = viewTab({
       sessionId: session.id,
       onStream: (stream) => setHelper((h) => (h ? { ...h, stream } : h)),
+      // Someone using the Android app: pictures of Dikho's screen, not video.
+      onFrame: (bytes) => {
+        const previous = frameUrl.current
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }))
+        frameUrl.current = url
+        setHelper((h) => (h ? { ...h, frame: url } : h))
+        // After the viewer has moved on to the new picture.
+        if (previous) setTimeout(() => URL.revokeObjectURL(previous), 1000)
+      },
       onData: (message) => {
         if (message.t === 'section') {
           if (message.section === null || typeof message.section === 'string') setHelper((h) => (h ? { ...h, section: message.section } : h))

@@ -163,7 +163,10 @@
 .la-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; }
 .la-screen { position: relative; width: 100%; height: 100%; cursor: crosshair; }
 .la-screen.is-idle { visibility: hidden; }
-.la-screen video { width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 6px; }
+.la-screen video, .la-screen img { width: 100%; height: 100%; object-fit: contain; background: #000; border-radius: 6px; }
+.la-screen video[hidden] { display: none; }
+/* A phone's picture is out of the flow, so its own size never stretches the stage. */
+.la-screen img { position: absolute; inset: 0; }
 .la-ripple { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid #f9af1b; pointer-events: none; animation: la-ripple .8s ease-out forwards; }
 @keyframes la-ripple { to { transform: scale(3.2); opacity: 0; } }
 .la-stage-message { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; font-size: 14px; color: #c9d1db; }

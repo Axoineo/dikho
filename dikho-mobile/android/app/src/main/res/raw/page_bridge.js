@@ -6,7 +6,9 @@
 // creates most of its files that way (invoices, Excel exports, attachments). It
 // also revokes the URL immediately after clicking, so the Blob has to be
 // captured at creation. This hands those files to native code and does nothing
-// else, apart from a clipboard fallback below. It exposes no API to the page.
+// else, apart from a clipboard fallback below, and the small window.__dikhoNative
+// the CRM's own src/lib/androidShell.jsx and src/lib/shellVault.js use: tell the
+// app something, and keep the session in the Keystore rather than localStorage.
 (function () {
   'use strict'
 
@@ -39,7 +41,80 @@
     bridge.postMessage(JSON.stringify(message))
   }
 
+  // Generous: an answer of "nothing stored" reads as signed out, so this only gives up
+  // when the app is truly not answering, not on a slow phone's first Keystore read.
+  var VAULT_TIMEOUT_MS = 30000
+  var vaultReplies = new Map()
+  var nextVaultId = 1
+
+  function vaultCall(op, key, value) {
+    return new Promise(function (resolve) {
+      var id = nextVaultId++
+      var timer = setTimeout(function () {
+        vaultReplies.delete(id)
+        resolve(null)
+      }, VAULT_TIMEOUT_MS)
+      vaultReplies.set(id, function (result) {
+        clearTimeout(timer)
+        resolve(result)
+      })
+      post({ t: 'vault', op: op, id: id, key: key, value: value })
+    })
+  }
+
+  window.__dikhoNative = Object.freeze({
+    // The screens this app draws itself. The CRM hands their routes over.
+    screens: Object.freeze(['inbox', 'clients', 'leads', 'sales-orders', 'vendors', 'purchase-orders', 'users', 'settings', 'live-assist', 'email-inbox', 'email', 'email-analytics', 'email-campaigns', 'email-templates', 'email-consent', 'email-settings', 'dashboard', 'whatsapp-contacts', 'whatsapp-campaigns', 'templates']),
+    post: post,
+    vault: Object.freeze({
+      get: function (key) { return vaultCall('get', key) },
+      set: function (key, value) { return vaultCall('set', key, value) },
+      remove: function (key) { return vaultCall('remove', key) },
+    }),
+    // The app signs people in and keeps the session fresh. The page asks it for a
+    // fresh session rather than spending the refresh token itself: two refreshers
+    // racing on one token would end the session.
+    auth: Object.freeze({
+      owner: 'app',
+      refresh: function (key) { return vaultCall('refresh', key) },
+    }),
+  })
+
+  // Which page is showing, so the native drawer can mark it. The path only: a
+  // query string can carry search terms.
+  var lastPath = ''
+  function reportRoute() {
+    if (location.pathname === lastPath) return
+    lastPath = location.pathname
+    post({ t: 'route', path: lastPath })
+  }
+  ;['pushState', 'replaceState'].forEach(function (name) {
+    var native = history[name]
+    history[name] = function () {
+      var result = native.apply(this, arguments)
+      reportRoute()
+      return result
+    }
+  })
+  window.addEventListener('popstate', reportRoute)
+
+  var lastTheme = ''
+  function reportTheme() {
+    var theme = document.documentElement.getAttribute('data-theme') || ''
+    if (theme === lastTheme) return
+    lastTheme = theme
+    post({ t: 'theme', value: theme })
+  }
+
   bridge.onmessage = function (event) {
+    if (event.data.charAt(0) === '{') {
+      var reply = JSON.parse(event.data)
+      var answer = vaultReplies.get(reply.vault)
+      if (!answer) return
+      vaultReplies.delete(reply.vault)
+      answer(reply.value === undefined ? null : reply.value)
+      return
+    }
     var settle = waiting.get(event.data)
     if (!settle) return
     waiting.delete(event.data)
@@ -187,6 +262,9 @@
   }
 
   function watchEdges() {
+    reportRoute()
+    reportTheme()
+    new MutationObserver(reportTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     var watcher = new MutationObserver(scheduleEdges)
     watcher.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     watcher.observe(document.body, { childList: true })

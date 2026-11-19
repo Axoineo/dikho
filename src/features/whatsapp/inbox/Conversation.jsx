@@ -215,7 +215,7 @@ export function Conversation({
   const currentPin = pinned.length ? pinned[pinIndex % pinned.length] : null
 
   return (
-    <div className="chat-canvas relative flex h-full flex-1 flex-col">
+    <div className="chat-canvas relative flex h-full min-w-0 flex-1 flex-col">
       {/* Header — 64px to match the list header across the divider. */}
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-inbox-divider bg-surface px-4 max-md:gap-2 max-md:pl-1">
         {/* Phones show one pane at a time, so the thread needs a way back to

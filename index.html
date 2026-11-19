@@ -47,6 +47,10 @@
          lets the page chunk download alongside the bundle instead of after it.
          Keyed by path so CRM visitors never fetch it. In dev the object stays
          empty and this is a no-op. */
+      /* In the Android app the drawer, top bar and first logo are native. The
+         app's bridge script defines this before the page runs. */
+      if (window.__dikhoNative) document.documentElement.setAttribute('data-shell', 'android');
+
       (function () {
         var fonts = document.getElementById('dk-fonts')
         if (!fonts) return
@@ -139,6 +143,9 @@
       .dk-hint button:hover { background: #123f72; }
       .dk-hint button:active { transform: scale(0.98); }
       .dk-stage.dk-out { opacity: 0; pointer-events: none; }
+      /* The Android app animates its own logo from local assets until this page
+         reports ready. page_bridge.js sets the attribute before this paints. */
+      html[data-shell='android'] .dk-stage { display: none; }
       #dk-defs { position: absolute; }
       .dk-mark {
         width: var(--dk-mark-w, min(168px, 42vw));
@@ -359,6 +366,7 @@
         window.__dikhoAppReady = function () {
           if (done) return
           done = true
+          if (window.__dikhoNative) window.__dikhoNative.post({ t: 'ready' })
           clearTimeout(hint)
           var elapsed = ((window.performance && performance.now) ? performance.now() : Date.now()) - startedAt
           setTimeout(function () {

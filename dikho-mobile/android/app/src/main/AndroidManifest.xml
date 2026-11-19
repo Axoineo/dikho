@@ -1,11 +1,27 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Everything this app may ask Android for. No storage, camera, microphone
-         or location permission: file picking and saving go through system
-         screens that need none. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Everything this app may ask Android for. No storage, camera or location
+         permission: file picking and saving go through system screens that need
+         none. The three below the first group are asked for at the moment they are
+         needed, never at startup, and the native screens that use them are out of
+         reach of web content. src/direct/AndroidManifest.xml adds the one permission
+         that only the self-updating build has. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- flutter_webrtc's audio routing asks for these; Live Assist never carries sound
+         (ADR 0014), and that routing only starts for a sound track, so they go. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" tools:node="remove" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Installs this app's own updates. Android still asks the person each time. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Phone contacts: names and numbers, read on the phone only. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- The Call button on a phone contact. Without it, the dialer opens instead. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Voice notes in the WhatsApp inbox. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- A phone without one of these can still install and use everything else. -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:label="Dikho CRM"

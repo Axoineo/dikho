@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
+import { KEYSET_CURSOR, likeTerm } from '../../utils/paging.js'
 import { parseContactFile } from '../../utils/parseSheet.js'
 import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
 import { normalisePhone } from '../../utils/phone.js'
@@ -81,20 +82,44 @@ function detectField(columns, field, phoneColumn) {
 
 /* ── GET /api/contacts ─────────────────────────────────────────────────── */
 
-// Campaign senders pick recipients from this list too.
+// Campaign senders pick recipients from this list too, and ask for no `limit`:
+// they get up to 2,000 rows in one go. The Contacts page asks for `limit` and
+// pages with `cursor`, a keyset on (created_at, id); its first page also says
+// how many match.
+
 contacts.get('/', requirePermission('wa_contacts.view', 'campaigns.send'), async (c) => {
-  const search = (c.req.query('search') || '').trim()
-  const limit = Math.min(Number(c.req.query('limit')) || 2000, 5000)
+  const search = (c.req.query('search') || '').trim().slice(0, 80)
+  const limitParam = c.req.query('limit')
+  // Whole and at least 1: SQLite reads a negative LIMIT as no limit at all.
+  const limit = Math.max(1, Math.min(Math.floor(Number(limitParam)) || 2000, 5000))
+  const paged = limitParam !== undefined
+  const cursorParam = c.req.query('cursor')
+  const cursor = cursorParam === undefined ? null : KEYSET_CURSOR.exec(cursorParam)
+  if (cursorParam !== undefined && !cursor) throw new HTTPException(400, { message: 'Bad cursor' })
 
-  const where = search ? 'WHERE name LIKE ?1 OR phone LIKE ?1 OR company LIKE ?1' : ''
-  const statement = c.env.DB.prepare(
+  const args = []
+  const conditions = []
+  if (search) {
+    args.push(likeTerm(search))
+    conditions.push("(name LIKE ?1 ESCAPE '\\' OR phone LIKE ?1 ESCAPE '\\' OR company LIKE ?1 ESCAPE '\\')")
+  }
+  const matching = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const total = paged && !cursor
+    ? (await c.env.DB.prepare(`SELECT COUNT(*) AS total FROM contacts ${matching}`).bind(...args).first())?.total ?? 0
+    : undefined
+
+  if (cursor) {
+    args.push(cursor[1], Number(cursor[2]))
+    conditions.push(`(created_at < ?${args.length - 1} OR (created_at = ?${args.length - 1} AND id < ?${args.length}))`)
+  }
+  const { results } = await c.env.DB.prepare(
     `SELECT id, name, phone, email, company, attributes, opted_out, created_at
-     FROM contacts ${where}
-     ORDER BY created_at DESC
-     LIMIT ${limit}`,
-  )
-
-  const { results } = await (search ? statement.bind(`%${search}%`) : statement).all()
+     FROM contacts ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+     ORDER BY created_at DESC, id DESC
+     LIMIT ${paged ? limit + 1 : limit}`,
+  ).bind(...args).all()
+  const hasMore = paged && results.length > limit
+  if (hasMore) results.pop()
 
   // attributes is JSON text in D1; hand the client a parsed object so the
   // campaign wizard can read variable keys and sample values directly.
@@ -103,7 +128,9 @@ contacts.get('/', requirePermission('wa_contacts.view', 'campaigns.send'), async
     attributes: row.attributes ? safeParse(row.attributes) : null,
   }))
 
-  return ok(c, { contacts: parsed })
+  if (!paged) return ok(c, { contacts: parsed })
+  const last = results.at(-1)
+  return ok(c, { contacts: parsed, total, nextCursor: hasMore ? `${last.created_at}|${last.id}` : null })
 })
 
 function safeParse(text) {
@@ -326,12 +353,13 @@ contacts.delete('/', requirePermission('wa_contacts.delete'), async (c) => {
   const { contactIds, all } = body
 
   if (all === true) {
-    // Unlink conversations/messages first, then wipe contacts + reset autoincrement.
+    // Unlink conversations/messages first, then wipe contacts. The id sequence is
+    // left alone on purpose: campaigns store contact ids in their audience, so a
+    // reused id would make an old campaign's Retry message someone unrelated.
     await c.env.DB.batch([
       c.env.DB.prepare('UPDATE conversations SET contact_id = NULL WHERE contact_id IS NOT NULL'),
       c.env.DB.prepare('UPDATE messages SET contact_id = NULL WHERE contact_id IS NOT NULL AND conversation_id IS NOT NULL'),
       c.env.DB.prepare('DELETE FROM contacts'),
-      c.env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'contacts'"),
     ])
     return ok(c, { deleted: 'all' })
   }

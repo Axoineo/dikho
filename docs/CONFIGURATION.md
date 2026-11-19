@@ -89,6 +89,8 @@ and [permissions](PERMISSIONS.md) remain separate requirements.
 | `WHATSAPP_CG_LEAD_TEMPLATE_LANG` | Server setting | Lead confirmation template language; defaults to `en` |
 | `WHATSAPP_CG_LEAD_DELAY_MINUTES` | Server setting | Non-negative minutes before confirmation; code defaults to 7 for absent/invalid values and rounds down; an empty string becomes 0 |
 | `WHATSAPP_CG_LEAD_DAILY_CAP` | Cost-control setting | Positive daily send ceiling in UTC; absent/invalid values prevent sends; the explicit string `0` disables the ceiling rather than disabling the feature |
+| `WHATSAPP_DIRECT_TEMPLATE_DAILY_CAP` | Cost-control setting | Positive daily ceiling in UTC, across all staff, on templates sent to a phone number from the Android app; absent, invalid or `0` refuses those sends |
+| `ANALYTICS_UTC_OFFSET_MINUTES` | Optional | Minutes from UTC for the WhatsApp dashboard's days. Default `330`, India. A day starts at local midnight. |
 | `CAMPAIGN_BATCH_LIMIT` | Resource setting | [Campaign sender](../src/api/routes/campaigns/index.js); numeric value with fallback 40; no complete range validation exists |
 | `CAMPAIGN_CONCURRENCY` | Resource setting | Campaign send lanes; numeric value with fallback 5; no complete range validation exists |
 

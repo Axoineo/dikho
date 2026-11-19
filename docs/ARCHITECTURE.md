@@ -60,12 +60,15 @@ session in React does not protect the underlying rows.
 
 ## Android app
 
-`dikho-mobile/` is a Flutter shell that loads the deployed SPA in a WebView, so
-it uses the same sign-in, RLS and API as a browser and adds no server or database.
-Its small native layer handles files and the installer, reached from the page only
-through a message channel pinned to the CRM origin. `cloudflare-updater/` is a
-separate read-only Worker with no bindings that answers update checks and serves
-APKs as static assets. See `docs/ANDROID.md` and ADR 0011.
+`dikho-mobile/` is a Flutter app. The drawer, Clients, Leads, Vendors, the WhatsApp inbox,
+dashboard, campaigns (with the new-campaign wizard), contacts and templates, and phone
+contacts are native (the contacts importer stays a web page the app opens). Every other module is the deployed SPA in a WebView, which stays loaded behind
+the native screens and owns the session. Native screens get a current access token from
+the page and call the same API, so it adds no server, database or second sign-in. The
+page reaches native code only through a message channel pinned to the CRM origin, and
+never contacts, calls or the recorder. `cloudflare-updater/` is a separate read-only
+Worker with no bindings that answers update checks and serves APKs as static assets. See
+`docs/ANDROID.md`, ADR 0011 and ADR 0012.
 
 ## Authentication and sessions
 
@@ -170,6 +173,37 @@ Authenticated browser media elements cannot attach bearer headers, so the API
 issues short-lived HMAC media tickets. A ticket is not a Supabase session, but
 it grants access to the protected media route until expiry and must not be
 logged or shared.
+
+### WhatsApp analytics
+
+The dashboard (`GET /api/whatsapp/analytics`) and the campaign page
+(`GET /api/whatsapp/analytics/campaigns/:id`) need `campaigns.view` or
+`campaigns.send`. Counts come from D1 `messages`, grouped by local day
+(`ANALYTICS_UTC_OFFSET_MINUTES`). D1 reads are budgeted, so each day's counts
+are kept in `analytics_cache`: today and the last three days are recounted at
+most every ten minutes while receipts still arrive, older days once after they
+settle, and a campaign once after its last send settles (a retry or status
+change recounts it). Meta's own figures come from the Graph API with the
+server's token and are cached for 30 minutes: the number's quality rating,
+messaging limit and throughput, each template's status and quality score, and
+`pricing_analytics` for spend by day and pricing category.
+
+Button taps come from two places. Quick-reply taps arrive as inbound `button`
+messages whose `context_wamid` is the template message they answer, so they are
+counted exactly, per template and per campaign, from D1. Link-button taps never
+reach us, so they come from Meta's `template_analytics` (with spend per
+template), asked for at most ten templates at a time and only within Meta's 90
+days. That endpoint answers only after `is_enabled_for_insights` is switched on
+for the WhatsApp Business account. Meta documents that as permanent, and says it
+also turns on link tracking for URL buttons (each template can opt out with
+`cta_url_link_tracking_opted_out`) and lets Meta collect anonymised chat data to
+improve its services. The owner decided on 2026-11-09 not to switch it on. The
+pages show link taps only while Meta answers and hide them otherwise, so nothing
+in the code changes if insights are switched on later.
+`scripts/whatsapp/check-template-insights.mjs` asks Meta, read-only, with a token
+from the environment. Meta's quick-reply count is
+ignored so taps are never counted twice. `conversation_analytics` is deprecated
+by Meta and not used.
 
 ## Email Hub
 

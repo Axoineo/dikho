@@ -68,6 +68,8 @@ export function countryName(code) {
 // purpose: it labels a session for a person, it does not identify a device.
 export function deviceLabel(ua) {
   if (!ua) return 'Unknown device'
+  // The Android app, signed in natively or through its CRM page.
+  if (/DikhoCRM\//.test(ua)) return 'Dikho app on Android'
   const os = /iPhone|iPad/.test(ua) ? 'iOS'
     : /Android/.test(ua) ? 'Android'
     : /Windows/.test(ua) ? 'Windows'
