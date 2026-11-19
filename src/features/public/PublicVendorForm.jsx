@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { City, Country, State } from 'country-state-city'
+import { DIAL_CODES } from './dialCodes'
+import { IN_CITIES_BY_STATE, IN_STATES } from './indiaGeo'
 import { supabase } from '../../lib/supabase'
 import { apiPublicPost } from '../../lib/api'
 import { useGstinLookup } from '../../lib/useGstinLookup'
@@ -20,6 +21,30 @@ const TURNSTILE_SITEKEY = '0x4AAAAAAEnxgBvSPuBu7S85'
 // corporate-gifting form cannot be replayed against vendor registration.
 // Must match ACTION_VENDOR_REGISTER in src/api/routes/public/index.js.
 const TURNSTILE_ACTION = 'vendor-register'
+
+/* ─── World geography, loaded only when it is actually needed ───────────
+   `country-state-city` ships a 148,038-row city dataset — 8.4 MB raw, 2.4 MB
+   gzip. This is a public, unauthenticated page, so a static import made every
+   visitor download it before the form could paint.
+
+   India is frozen into indiaGeo.js and covers the overwhelming majority of
+   submissions (the form defaults to IN/+91 and autofills from a GSTIN), so the
+   package is fetched only when someone picks a different country, and only
+   once per session — the promise itself is the cache.
+──────────────────────────────────────────────────────────────────────── */
+let worldGeoPromise = null
+function loadWorldGeo() {
+  if (!worldGeoPromise) {
+    worldGeoPromise = import('country-state-city').catch(err => {
+      // Don't cache a failure. A chunk can 404 on a page left open across a
+      // deploy, and a retained rejected promise would replay that rejection
+      // for the rest of the session — the selects could never recover.
+      worldGeoPromise = null
+      throw err
+    })
+  }
+  return worldGeoPromise
+}
 
 // `resetRef` is filled with a function that mints a fresh challenge. Tokens are
 // single-use — siteverify answers `timeout-or-duplicate` the second time — so a
@@ -176,17 +201,15 @@ function DialCodePicker({ countries, value, onChange }) {
     if (open && inputRef.current) inputRef.current.focus()
   }, [open])
 
-  // Strip hyphenated area-code suffixes (e.g. "+358-18" → "+358", "+1-684" → "+1")
-  const cleanCode = (raw) => {
-    const code = raw.startsWith('+') ? raw : `+${raw}`
-    return code.includes('-') ? code.split('-')[0] : code
-  }
-
-  const selected = countries.find(c => cleanCode(c.phonecode) === value)
+  // `dial` is already the trunk code — gen-dial-codes.mjs strips the area-code
+  // suffixes ("+1-684" → "+1") that this used to trim on every keystroke.
+  // Several countries share one code, and the list is sorted by name, so `find`
+  // resolves +1 to American Samoa exactly as it did before.
+  const selected = countries.find(c => c.dial === value)
 
   const filtered = countries.filter(c => {
     const q = query.toLowerCase()
-    return c.name.toLowerCase().includes(q) || c.isoCode.toLowerCase().includes(q) || cleanCode(c.phonecode).includes(q)
+    return c.name.toLowerCase().includes(q) || c.iso.toLowerCase().includes(q) || c.dial.includes(q)
   }).slice(0, 80)
 
   return (
@@ -205,18 +228,15 @@ function DialCodePicker({ countries, value, onChange }) {
           <div className="dial-picker-list">
             {filtered.length === 0 ? (
               <div className="dial-picker-empty">No matches</div>
-            ) : filtered.map(c => {
-              const code = cleanCode(c.phonecode)
-              return (
-                <button type="button" key={c.isoCode}
-                  className={`dial-picker-option ${code === value ? 'is-selected' : ''}`}
-                  onClick={() => { onChange(code); setOpen(false) }}>
-                  <span className="dial-picker-option-flag">{c.flag}</span>
-                  <span className="dial-picker-option-name">{c.name}</span>
-                  <span className="dial-picker-option-code">{code}</span>
-                </button>
-              )
-            })}
+            ) : filtered.map(c => (
+              <button type="button" key={c.iso}
+                className={`dial-picker-option ${c.dial === value ? 'is-selected' : ''}`}
+                onClick={() => { onChange(c.dial); setOpen(false) }}>
+                <span className="dial-picker-option-flag">{c.flag}</span>
+                <span className="dial-picker-option-name">{c.name}</span>
+                <span className="dial-picker-option-code">{c.dial}</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -254,8 +274,7 @@ function StepBar({ current }) {
    MAIN FORM
    ═══════════════════════════════════════════════════════════════════ */
 export default function PublicVendorForm() {
-  const allCountries = useMemo(() =>
-    Country.getAllCountries().sort((a, b) => a.name.localeCompare(b.name)), [])
+  const allCountries = DIAL_CODES
 
   const [step, setStep] = useState('basic')
   const [submitted, setSubmitted] = useState(false)
@@ -316,31 +335,64 @@ export default function PublicVendorForm() {
     setForm(f => ({ ...f, [key]: val }))
   }
 
-  // Country / state / city cascades
-  const states = useMemo(() =>
-    form.country_code ? State.getStatesOfCountry(form.country_code).sort((a, b) => a.name.localeCompare(b.name)) : [],
-    [form.country_code])
-  const cities = useMemo(() =>
-    form.country_code && form.state_code
-      ? City.getCitiesOfState(form.country_code, form.state_code).sort((a, b) => a.name.localeCompare(b.name))
-      : [],
-    [form.country_code, form.state_code])
+  // Country / state / city cascades.
+  //
+  // India answers from the frozen tables and needs no network at all. Any other
+  // country pulls country-state-city on demand; `worldGeo` is null until that
+  // lands, which is why `geoLoading` exists — without it the selects would sit
+  // there claiming "No states available" while 2.4 MB is still in flight.
+  const [worldGeo, setWorldGeo] = useState(null)
+  const [geoError, setGeoError] = useState(false)
+  const needsWorldGeo = Boolean(form.country_code) && form.country_code !== 'IN'
+  const geoLoading = needsWorldGeo && !worldGeo && !geoError
+
+  // Keyed on country_code as well, so picking another country after a failed
+  // load is itself the retry — otherwise the deps never change and the user is
+  // stuck with no way to try again short of reloading the page.
+  useEffect(() => {
+    if (!needsWorldGeo || worldGeo) return
+    let cancelled = false
+    setGeoError(false)
+    loadWorldGeo().then(
+      mod => { if (!cancelled) setWorldGeo(mod) },
+      () => { if (!cancelled) setGeoError(true) },
+    )
+    return () => { cancelled = true }
+  }, [form.country_code, needsWorldGeo, worldGeo])
+
+  // Both branches are normalised to the frozen shape — states as { iso, name },
+  // cities as plain strings — so nothing downstream has to know which one it got.
+  const states = useMemo(() => {
+    if (!form.country_code) return []
+    if (form.country_code === 'IN') return IN_STATES
+    if (!worldGeo) return []
+    return worldGeo.State.getStatesOfCountry(form.country_code)
+      .map(s => ({ iso: s.isoCode, name: s.name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [form.country_code, worldGeo])
+
+  const cities = useMemo(() => {
+    if (!form.country_code || !form.state_code) return []
+    if (form.country_code === 'IN') return IN_CITIES_BY_STATE[form.state_code] || []
+    if (!worldGeo) return []
+    return worldGeo.City.getCitiesOfState(form.country_code, form.state_code)
+      .map(c => c.name)
+      .sort((a, b) => a.localeCompare(b))
+  }, [form.country_code, form.state_code, worldGeo])
 
   function handleCountryChange(code) {
-    const c = allCountries.find(x => x.isoCode === code)
-    const raw = c?.phonecode || ''
-    const dial = raw ? ((raw.startsWith('+') ? raw : `+${raw}`).split('-')[0]) : ''
+    const c = allCountries.find(x => x.iso === code)
     setForm(f => ({
       ...f,
       country_code: code,
       country_name: c?.name || code,
-      country_dialcode: dial,
+      country_dialcode: c?.dial || '',
       state: '', state_code: '', city: '', zipcode: '',
     }))
     setZipStatus(null)
   }
   function handleStateChange(code) {
-    const s = states.find(x => x.isoCode === code)
+    const s = states.find(x => x.iso === code)
     setForm(f => ({ ...f, state_code: code, state: s?.name || '', city: '', zipcode: '' }))
     setZipStatus(null)
   }
@@ -370,7 +422,7 @@ export default function PublicVendorForm() {
       // Skipped when the user has the address on a non-Indian country, where
       // an Indian state code would render as raw text.
       if (next.state_code && next.country_code === 'IN') {
-        const match = State.getStatesOfCountry('IN').find(s => s.isoCode === next.state_code)
+        const match = IN_STATES.find(s => s.iso === next.state_code)
         if (match && next.state !== match.name) {
           next.state = match.name
           autofilledRef.current.add('state')
@@ -574,9 +626,9 @@ export default function PublicVendorForm() {
   }
 
   // Options
-  const countryOptions = useMemo(() => allCountries.map(c => ({ value: c.isoCode, label: `${c.name} (${c.isoCode})` })), [allCountries])
-  const stateOptions = useMemo(() => states.map(s => ({ value: s.isoCode, label: s.name })), [states])
-  const cityOptions = useMemo(() => cities.map(c => ({ value: c.name, label: c.name })), [cities])
+  const countryOptions = useMemo(() => allCountries.map(c => ({ value: c.iso, label: `${c.name} (${c.iso})` })), [allCountries])
+  const stateOptions = useMemo(() => states.map(s => ({ value: s.iso, label: s.name })), [states])
+  const cityOptions = useMemo(() => cities.map(name => ({ value: name, label: name })), [cities])
 
   // ─── Rendered pages ────────────────────────────────────────────────────
 
@@ -828,16 +880,16 @@ export default function PublicVendorForm() {
 
                   <SearchableSelect label="State *" value={form.state_code} onChange={handleStateChange}
                     options={stateOptions}
-                    placeholder={!form.country_code ? 'Select country first' : stateOptions.length ? 'Select state' : 'No states available'}
+                    placeholder={!form.country_code ? 'Select country first' : geoError ? 'Could not load — please refresh' : geoLoading ? 'Loading states…' : stateOptions.length ? 'Select state' : 'No states available'}
                     searchPlaceholder="Search states…"
-                    disabled={!form.country_code || !states.length} required />
+                    disabled={!form.country_code || geoLoading || !states.length} required />
 
                   <SearchableSelect label="City *" value={form.city}
                     onChange={val => { update('city', val); setZipStatus(null) }}
                     options={cityOptions}
-                    placeholder={!form.state_code ? 'Select state first' : cityOptions.length ? 'Select city' : 'No cities available'}
+                    placeholder={!form.state_code ? 'Select state first' : geoError ? 'Could not load — please refresh' : geoLoading ? 'Loading cities…' : cityOptions.length ? 'Select city' : 'No cities available'}
                     searchPlaceholder="Search cities…"
-                    disabled={!form.state_code || !cities.length} required />
+                    disabled={!form.state_code || geoLoading || !cities.length} required />
 
                   <FieldGroup label="Zipcode / PIN">
                     <input className="pvf-input" value={form.zipcode}
