@@ -194,6 +194,11 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
   const [items, setItems] = useState(() => (isEdit ? [] : [newOrderItem('item-1')]))
   const [removedItemIds, setRemovedItemIds] = useState([])
   const [itemsLoading, setItemsLoading] = useState(isEdit)
+  // When an existing order's lines fail to load, the form has nothing true to
+  // save: totals worked out from no lines would overwrite the order's real ones.
+  // Save stays off until a retry (bumping `itemsAttempt`) brings them in.
+  const [itemsLoadError, setItemsLoadError] = useState('')
+  const [itemsAttempt, setItemsAttempt] = useState(0)
   const [clients, setClients] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -224,16 +229,20 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
 
     async function loadItems() {
       setItemsLoading(true)
+      setItemsLoadError('')
+      // Purchase order lines share this table and carry the sales order's id
+      // too; they are the PO's cost lines, not this order's, so they stay out.
       const { data, error: fetchError } = await supabase
         .from(SALES_ORDER_ITEM_TABLE)
         .select('*')
         .eq('sales_order_id', order.id)
+        .is('purchase_order_id', null)
         .order('id', { ascending: true })
       if (cancelled) return
 
       if (fetchError) {
-        setError(fetchError.message)
-        setItems([newOrderItem(nextKey())])
+        setItemsLoadError(fetchError.message || 'The order lines could not be loaded.')
+        setItems([])
       } else {
         const rows = (data || []).map((row) => salesOrderItemToForm(row, `existing-${row.id}`))
         setItems(rows.length > 0 ? rows : [newOrderItem(nextKey())])
@@ -244,7 +253,10 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
 
     loadItems()
     return () => { cancelled = true }
-  }, [isEdit, order?.id])
+  }, [isEdit, order?.id, itemsAttempt])
+
+  // True once the lines on screen are the order's real lines (always, for a new order).
+  const itemsReady = !itemsLoading && !itemsLoadError
 
   function update(name, value) {
     setForm((current) => ({ ...current, [name]: value }))
@@ -299,19 +311,26 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
   // The same function that guards the payload also produces the figures on
   // screen, so what the Summary shows is exactly what will be written — and a
   // disagreement between the two surfaces here instead of at submit time.
+  // Until an existing order's lines are in, the figures shown are the ones it
+  // already has on record rather than a ₹0 worked out from no lines.
   const totals = useMemo(() => {
+    if (!itemsReady) {
+      return { sub_total: toAmount(order?.sub_total), tax_total: toAmount(order?.tax_total), total: toAmount(order?.total), error: '' }
+    }
     try {
       return { ...reconcileSalesOrderTotals(items), error: '' }
     } catch (err) {
       return { sub_total: 0, tax_total: 0, total: 0, error: err.message }
     }
-  }, [items])
+  }, [items, itemsReady, order])
 
   const campaignInvalid = Boolean(form.campaign_start_date && form.campaign_end_date && form.campaign_end_date < form.campaign_start_date)
   const duration = campaignInvalid ? null : campaignDays(form.campaign_start_date, form.campaign_end_date)
   const receiptBalance = form.payment_receipt_amount === '' ? null : round2(totals.total - toAmount(form.payment_receipt_amount))
 
   function validate() {
+    // Save is already off in this state; this also stops a submit that gets past it.
+    if (!itemsReady) return 'This order’s lines have not loaded, so it cannot be saved yet. Load them again first.'
     if (!form.company.trim()) return 'Choose the client this order belongs to.'
     if (!form.order_number.trim()) return 'Enter an order number.'
     if (campaignInvalid) return 'The campaign end date must be on or after the campaign start date.'
@@ -445,7 +464,7 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
       onClose={onClose}
       onSubmit={handleSubmit}
       busy={saving}
-      submitDisabled={itemsLoading}
+      submitDisabled={!itemsReady}
       error={error}
       errorTitle="Could not save the sales order"
       submitLabel={isEdit ? 'Save changes' : 'Create order'}
@@ -505,10 +524,21 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
         </div>
       </FormSection>
 
-      <FormSection title={`Items (${items.length})`} description="Each line's GST is worked out from its rate. Open “More details” on a line for courier, audit and attachments.">
+      <FormSection title={itemsReady ? `Items (${items.length})` : 'Items'} description="Each line's GST is worked out from its rate. Open “More details” on a line for courier, audit and attachments.">
         <div className="crm-items">
           {itemsLoading ? (
             <p className="crm-section-note">Loading items…</p>
+          ) : itemsLoadError ? (
+            <div className="crm-note crm-note--danger crm-note--action" role="alert">
+              <Icon name="alert" size={17} />
+              <div>
+                <strong>Could not load this order’s lines.</strong> Saving stays off until they load, so the order’s saved lines and totals are left as they are.
+                <span style={{ display: 'block', marginTop: 4 }}>{itemsLoadError}</span>
+              </div>
+              <button type="button" className="crm-btn crm-btn--secondary crm-btn--sm" onClick={() => { setError(''); setItemsAttempt((n) => n + 1) }}>
+                Try again
+              </button>
+            </div>
           ) : (
             items.map((item, index) => (
               <SalesOrderItemEditor
@@ -524,7 +554,7 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
             ))
           )}
         </div>
-        <button type="button" className="crm-btn crm-btn--secondary" onClick={addItem} disabled={itemsLoading}>
+        <button type="button" className="crm-btn crm-btn--secondary" onClick={addItem} disabled={!itemsReady}>
           <Icon name="plus" size={16} /> Add item
         </button>
       </FormSection>
@@ -555,7 +585,7 @@ function SalesOrderFormModal({ order, initial, session, facets, onClose, onSaved
             <Field label="CRM reference" htmlFor="so-crm">
               <input id="so-crm" className="crm-input crm-mono-input" {...field('crm_reference_id')} />
             </Field>
-            <Field label="Unique ID" htmlFor="so-unique" hint="Made for you if left empty.">
+            <Field label="Unique ID" htmlFor="so-unique">
               <input id="so-unique" className="crm-input crm-mono-input" {...field('unique_id')} />
             </Field>
             <Field label="Client contact" htmlFor="so-client-contact" hint="Filled in from the client; change it for this order if needed.">
@@ -742,10 +772,12 @@ export default function SalesOrdersPage({ session }) {
       setItemsLoading(true)
       setItemsError('')
 
+      // Only the order's own lines: purchase order lines carry its id as well.
       const { data, error: fetchError } = await supabase
         .from(SALES_ORDER_ITEM_TABLE)
         .select('*')
         .eq('sales_order_id', orderId)
+        .is('purchase_order_id', null)
         .order('id', { ascending: true })
       if (cancelled) return
 

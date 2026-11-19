@@ -5,10 +5,13 @@ import { formatMoney } from '../../lib/format'
 import { numberToWords } from '../../lib/money'
 
 export async function generateTaxInvoice(templatePath, orderData) {
+  // Only the order's own lines. Purchase order lines share this table and carry
+  // the sales order's id too, but they are vendor costs, not what the client bought.
   const { data: items, error } = await supabase
     .from('salesorderdocument')
     .select('*')
     .eq('sales_order_id', orderData.id)
+    .is('purchase_order_id', null)
     .order('id', { ascending: true })
 
   if (error) throw new Error(`Could not load order items: ${error.message}`)

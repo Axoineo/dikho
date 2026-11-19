@@ -9,6 +9,9 @@
 //                  that Organization settings stay out of reach
 //   &db=old        answer like a database without the settings migration
 //   &theme=dark    start in the dark theme
+//   &fail=salesorderdocument   every read of that table answers 503, to see
+//                  a failed load (comma-separated for several tables); flip it
+//                  live with window.__failReads.delete('salesorderdocument')
 //
 // Writes (insert, update, delete) change the in-memory tables, so add and edit
 // round trips can be exercised end to end. Reload to reset.
@@ -269,6 +272,8 @@ let nextId = 200000
 
 const PARAMS = new URLSearchParams(window.location.search)
 const DB_OLD = PARAMS.get('db') === 'old'
+const FAIL_READS = new Set((PARAMS.get('fail') || '').split(',').filter(Boolean))
+window.__failReads = FAIL_READS
 if (!DB_OLD) [...MEDIA, ...SUB_MEDIA].forEach((row) => { row.hidden = false })
 
 // The same values the migration seeds.
@@ -637,6 +642,9 @@ window.fetch = async (input, init = {}) => {
   }
   if (!url.pathname.includes('/rest/v1/') || !rows) {
     return reply([])
+  }
+  if (method === 'GET' && FAIL_READS.has(table)) {
+    return fail(503, 'PGRST000', 'Could not reach the database. Check the connection and try again.')
   }
 
   if (method === 'POST') {

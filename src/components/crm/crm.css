@@ -577,6 +577,12 @@ a.crm-link:hover { color: var(--brand-ink); text-decoration: underline; }
 .crm-note--danger { background: var(--crm-danger-bg); color: var(--crm-danger-ink); }
 .crm-note--info { background: var(--brand-blue-soft); color: var(--brand-ink); }
 .crm-note strong { font-weight: 500; }
+/* A note with one way out, such as Try again: the button sits at the end and
+   drops below the text when there is no room beside it. */
+.crm-note--action { flex-wrap: wrap; align-items: flex-start; }
+.crm-note--action > div { flex: 1 1 220px; }
+.crm-note--action > .crm-btn { flex: none; margin-left: auto; }
+.crm-items > .crm-note { margin: 0; }
 
 /* Line items inside a panel. */
 .crm-lines { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
