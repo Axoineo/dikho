@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "in.dikho.crm",
+    "sha256_cert_fingerprints": ["BB:8B:9E:5D:38:AD:6B:7D:96:97:C4:A9:40:95:FB:A0:E0:8D:5C:F5:79:56:0F:70:83:DA:E1:37:40:A4:26:48"]
+  }
+}]
