@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dikho_crm/features/whatsapp/campaign_screen.dart';
+import 'package:dikho_crm/features/whatsapp/campaign_unsent_screen.dart';
 import 'package:dikho_crm/features/whatsapp/campaigns_screen.dart';
 import 'package:dikho_crm/shared/crm_api.dart';
 import 'package:dikho_crm/shared/platform_api.dart';
@@ -18,6 +19,13 @@ class FakeCampaignsApi {
   bool empty = false;
   int failWith = 0;
 
+  /// Not received, for campaign 12: emptied by a finished resend.
+  var unsent = <Map<String, Object?>>[
+    {'id': 5, 'name': 'Asha Rao', 'phone': '919876543210', 'reason': 'failed', 'errorMessage': 'Not a WhatsApp number'},
+    {'id': 6, 'name': '', 'phone': '919123456789', 'reason': 'never_attempted'},
+  ];
+  final retries = <Map<String, dynamic>>[];
+
   Future<void> start() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
@@ -25,30 +33,99 @@ class FakeCampaignsApi {
       final response = request.response..headers.contentType = ContentType.json;
       if (failWith != 0) {
         response.statusCode = failWith;
-        response.write(jsonEncode({'success': false, 'error': {'message': 'Not allowed'}}));
+        response.write(
+          jsonEncode({
+            'success': false,
+            'error': {'message': 'Not allowed'},
+          }),
+        );
+      } else if (request.uri.path == '/api/campaigns/12/unsent') {
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': {
+              'campaignId': 12,
+              'audienceSource': 'recorded',
+              'unaccounted': 0,
+              'counts': {
+                'total': unsent.length,
+                'failed': unsent.where((c) => c['reason'] == 'failed').length,
+                'neverAttempted': unsent.where((c) => c['reason'] == 'never_attempted').length,
+              },
+              'contacts': unsent,
+            },
+          }),
+        );
+      } else if (request.uri.path == '/api/campaigns/12/retry' && request.method == 'POST') {
+        final body = jsonDecode(await utf8.decoder.bind(request).join()) as Map<String, dynamic>;
+        retries.add(body);
+        // The first round sends one batch and hands back who is left; the next finishes.
+        final first = retries.length == 1;
+        if (!first) unsent = [];
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': first
+                ? {
+                    'sent': 1,
+                    'failed': 0,
+                    'remaining': [6],
+                  }
+                : {'sent': 1, 'failed': 0},
+          }),
+        );
       } else if (request.uri.path == '/api/campaigns' && request.method == 'GET') {
-        response.write(jsonEncode({
-          'success': true,
-          'data': {
-            'campaigns': empty
-                ? []
-                : [
-                    {'id': 12, 'name': 'Diwali offers', 'template_name': 'diwali_offer', 'status': sending ? 'sending' : 'completed', 'total_count': 1200, 'sent_count': 1180, 'failed_count': 30, 'created_at': '2026-11-03 04:30:00'},
-                    {'id': 11, 'name': 'Welcome', 'template_name': 'welcome', 'status': 'completed', 'total_count': 90, 'sent_count': 90, 'failed_count': 0, 'created_at': '2026-11-01 04:30:00'},
-                  ],
-          },
-        }));
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': {
+              'campaigns': empty
+                  ? []
+                  : [
+                      {
+                        'id': 12,
+                        'name': 'Diwali offers',
+                        'template_name': 'diwali_offer',
+                        'status': sending ? 'sending' : 'completed',
+                        'total_count': 1200,
+                        'sent_count': 1180,
+                        'failed_count': 30,
+                        'created_at': '2026-11-03 04:30:00',
+                      },
+                      {
+                        'id': 11,
+                        'name': 'Welcome',
+                        'template_name': 'welcome',
+                        'status': 'completed',
+                        'total_count': 90,
+                        'sent_count': 90,
+                        'failed_count': 0,
+                        'created_at': '2026-11-01 04:30:00',
+                      },
+                    ],
+            },
+          }),
+        );
       } else if (request.uri.path == '/api/whatsapp/analytics/campaigns/12') {
-        response.write(jsonEncode({
-          'success': true,
-          'data': {
-            'campaign': {'id': 12, 'name': 'Diwali offers', 'template': 'diwali_offer', 'status': 'completed', 'audience': 1200, 'createdAt': '2026-11-03 04:30:00'},
-            'totals': {'sent': 1180, 'delivered': 1000, 'read': 600, 'failed': 30, 'awaiting': 20, 'notSent': 20, 'replied': 90, 'optedOut': 3},
-            'failures': [],
-            'timeline': [],
-            'replyWindowDays': 7,
-          },
-        }));
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': {
+              'campaign': {
+                'id': 12,
+                'name': 'Diwali offers',
+                'template': 'diwali_offer',
+                'status': 'completed',
+                'audience': 1200,
+                'createdAt': '2026-11-03 04:30:00',
+              },
+              'totals': {'sent': 1180, 'delivered': 1000, 'read': 600, 'failed': 30, 'awaiting': 20, 'notSent': 20, 'replied': 90, 'optedOut': 3},
+              'failures': [],
+              'timeline': [],
+              'replyWindowDays': 7,
+            },
+          }),
+        );
       } else {
         response.statusCode = request.method == 'GET' ? 404 : 405;
         response.write('{}');
@@ -62,7 +139,15 @@ class FakeCampaignsApi {
 
 void main() {
   test('a campaign row reads as the web list shows it', () {
-    final row = CampaignRow.from({'id': 3, 'name': ' ', 'template_name': 'x', 'status': 'stopped', 'total_count': 50, 'sent_count': 20, 'created_at': '2026-11-01 04:30:00'});
+    final row = CampaignRow.from({
+      'id': 3,
+      'name': ' ',
+      'template_name': 'x',
+      'status': 'stopped',
+      'total_count': 50,
+      'sent_count': 20,
+      'created_at': '2026-11-01 04:30:00',
+    });
     expect(row.name, 'Campaign');
     expect(row.outstanding, 30);
     expect(row.createdAt, DateTime.utc(2026, 11, 1, 4, 30));
@@ -109,7 +194,6 @@ void main() {
             canSend: canSend,
             onOpenDrawer: () {},
             onNewCampaign: () => opened.add('new'),
-            onOpenWebPage: opened.add,
             refreshWhileSending: const Duration(seconds: 2),
           ),
         ),
@@ -173,6 +257,45 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await pump(tester);
       expect(find.text("Couldn't load campaigns"), findsOneWidget);
+    });
+
+    screenTest('not received: who and why, then sent again in batches until nobody is left', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.6;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CampaignUnsentScreen(api: backend.api, campaignId: 12, title: 'Diwali offers', canSend: true),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('2 not received · 1 failed · 1 never attempted'), findsOneWidget);
+      expect(find.text('Asha Rao'), findsOneWidget);
+      expect(find.text('919876543210 · Not a WhatsApp number'), findsOneWidget);
+      expect(find.text('919123456789'), findsWidgets, reason: 'no name: the number');
+      await tester.tap(find.text('Send again to 2'));
+      await tester.pumpAndSettle();
+      expect(find.text('Send again to 2?'), findsOneWidget, reason: 'asked first: each message is paid');
+      await tester.tap(find.widgetWithText(FilledButton, 'Send again'));
+      await settle(tester);
+      expect(backend.retries, [
+        {'includeUnrecorded': false},
+        {
+          'contactIds': [6],
+        },
+      ], reason: 'the second round sends exactly who the first handed back');
+      expect(find.text('Everyone has been sent to'), findsOneWidget, reason: 'the list comes fresh from the server');
+    });
+
+    screenTest('not received, without permission to send: the list, and no resend', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CampaignUnsentScreen(api: backend.api, campaignId: 12, title: 'Diwali offers'),
+        ),
+      );
+      await settle(tester);
+      expect(find.text('Asha Rao'), findsOneWidget);
+      expect(find.textContaining('Send again'), findsNothing);
     });
   });
 }

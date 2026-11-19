@@ -21,7 +21,6 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     required this.api,
     required this.onOpenDrawer,
-    required this.onOpenWebPage,
     required this.onOpenInbox,
     this.platform,
     this.onNewCampaign,
@@ -31,10 +30,6 @@ class DashboardScreen extends StatefulWidget {
 
   final CrmApi api;
   final VoidCallback onOpenDrawer;
-
-  /// Opens a CRM page in place of the native screens (New campaign, a campaign's
-  /// recipient list).
-  final ValueChanged<String> onOpenWebPage;
 
   /// For the native new-campaign wizard's header file picker.
   final PlatformApi? platform;
@@ -101,13 +96,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     unawaited(
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => CampaignScreen(
-            api: widget.api,
-            id: campaign.id,
-            title: campaign.name,
-            numberStyle: widget.numberStyle,
-            onOpenWebPage: widget.onOpenWebPage,
-          ),
+          builder: (_) =>
+              CampaignScreen(api: widget.api, id: campaign.id, title: campaign.name, numberStyle: widget.numberStyle, canSend: widget.canSend),
         ),
       ),
     );

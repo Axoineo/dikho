@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'campaign_unsent_screen.dart';
 import '../../shared/crm_api.dart';
 import '../../shared/record_ui.dart';
 import '../../shared/values.dart';
@@ -14,19 +15,14 @@ import 'analytics_parts.dart';
 /// messages failed, how fast deliveries and reads arrived, replies and opt-outs.
 /// Reads GET /api/whatsapp/analytics/campaigns/:id.
 class CampaignScreen extends StatefulWidget {
-  const CampaignScreen({
-    super.key,
-    required this.api,
-    required this.id,
-    required this.title,
-    required this.onOpenWebPage,
-    this.numberStyle = 'en-IN',
-  });
+  const CampaignScreen({super.key, required this.api, required this.id, required this.title, this.canSend = false, this.numberStyle = 'en-IN'});
 
   final CrmApi api;
   final int id;
   final String title;
-  final ValueChanged<String> onOpenWebPage;
+
+  /// campaigns.send: may send again to whoever the campaign did not reach.
+  final bool canSend;
   final String numberStyle;
 
   @override
@@ -211,8 +207,22 @@ class _CampaignScreenState extends State<CampaignScreen> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
-              onPressed: () => widget.onOpenWebPage('/whatsapp/campaigns/${c.id}'),
-              icon: const Icon(Icons.open_in_new, size: 18),
+              onPressed: () => unawaited(
+                Navigator.of(context)
+                    .push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CampaignUnsentScreen(
+                          api: widget.api,
+                          campaignId: c.id,
+                          title: c.name,
+                          canSend: widget.canSend,
+                          sending: c.status == 'sending',
+                        ),
+                      ),
+                    )
+                    .then((_) => _load()),
+              ),
+              icon: const Icon(Icons.people_outline, size: 18),
               label: const Text('See who, and send again'),
             ),
           ),
