@@ -27,14 +27,20 @@ UpdateController _controller({bool mandatory = false}) => UpdateController(
   cacheDir: '/nonexistent',
 );
 
-Future<void> _pump(WidgetTester tester, UpdateController controller, {bool blocking = false}) => tester.pumpWidget(
+Future<void> _pump(
+  WidgetTester tester,
+  UpdateController controller, {
+  bool blocking = false,
+}) => tester.pumpWidget(
   MaterialApp(
     home: UpdateDialog(controller: controller, blocking: blocking),
   ),
 );
 
 void main() {
-  testWidgets('the prompt shows version, notes and both choices', (tester) async {
+  testWidgets('the prompt shows version, notes and both choices', (
+    tester,
+  ) async {
     await _pump(tester, _controller());
     expect(find.text('New update available'), findsOneWidget);
     expect(find.text('Dikho CRM v1.1.0'), findsOneWidget);
@@ -43,7 +49,9 @@ void main() {
     expect(find.text('Update Now'), findsOneWidget);
   });
 
-  testWidgets('a mandatory update offers no Later and says why', (tester) async {
+  testWidgets('a mandatory update offers no Later and says why', (
+    tester,
+  ) async {
     await _pump(tester, _controller(mandatory: true), blocking: true);
     expect(find.text('Later'), findsNothing);
     expect(find.textContaining('no longer supported'), findsOneWidget);
@@ -60,7 +68,9 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
   });
 
-  testWidgets('the permission step explains why before opening settings', (tester) async {
+  testWidgets('the permission step explains why before opening settings', (
+    tester,
+  ) async {
     final c = _controller()..phase = UpdatePhase.needsPermission;
     await _pump(tester, c);
     expect(find.textContaining('only to update itself'), findsOneWidget);
@@ -74,7 +84,9 @@ void main() {
     expect(find.text('Close'), findsOneWidget);
   });
 
-  testWidgets('every failure explains itself and offers a retry', (tester) async {
+  testWidgets('every failure explains itself and offers a retry', (
+    tester,
+  ) async {
     for (final problem in UpdateProblem.values) {
       final c = _controller()
         ..phase = UpdatePhase.failed
@@ -86,7 +98,12 @@ void main() {
   });
 
   testWidgets('a required update has no way past it at any step', (tester) async {
-    for (final phase in [UpdatePhase.prompt, UpdatePhase.needsPermission, UpdatePhase.installing, UpdatePhase.failed]) {
+    for (final phase in [
+      UpdatePhase.prompt,
+      UpdatePhase.needsPermission,
+      UpdatePhase.installing,
+      UpdatePhase.failed,
+    ]) {
       final c = _controller(mandatory: true)
         ..phase = phase
         ..problem = UpdateProblem.network;
@@ -106,7 +123,10 @@ void main() {
     var checked = 0;
     await tester.pumpWidget(
       MaterialApp(
-        home: UpdateRequiredScreen(controller: _controller(mandatory: true), onCheckAgain: () async => checked++),
+        home: UpdateRequiredScreen(
+          controller: _controller(mandatory: true),
+          onCheckAgain: () async => checked++,
+        ),
       ),
     );
     expect(find.text('Update required'), findsOneWidget);

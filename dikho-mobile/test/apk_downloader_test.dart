@@ -30,20 +30,29 @@ void main() {
     dir.deleteSync(recursive: true);
   });
 
-  Uri url([String path = '/app.apk']) => Uri.parse('http://127.0.0.1:${server.port}$path');
+  Uri url([String path = '/app.apk']) =>
+      Uri.parse('http://127.0.0.1:${server.port}$path');
 
   ApkDownloader downloader({Duration idle = const Duration(seconds: 2)}) =>
-      ApkDownloader(idleTimeout: idle, isAllowedRedirect: (uri) => uri.host == '127.0.0.1');
-
-  Future<File> run({ApkDownloader? with_, String? hash, int? size, DownloadCancelToken? cancel, void Function(int, int)? onProgress}) =>
-      (with_ ?? downloader()).download(
-        url: url(),
-        expectedSha256: hash ?? goodHash,
-        expectedSize: size ?? payload.length,
-        target: target,
-        cancel: cancel ?? DownloadCancelToken(),
-        onProgress: onProgress ?? (_, _) {},
+      ApkDownloader(
+        idleTimeout: idle,
+        isAllowedRedirect: (uri) => uri.host == '127.0.0.1',
       );
+
+  Future<File> run({
+    ApkDownloader? with_,
+    String? hash,
+    int? size,
+    DownloadCancelToken? cancel,
+    void Function(int, int)? onProgress,
+  }) => (with_ ?? downloader()).download(
+    url: url(),
+    expectedSha256: hash ?? goodHash,
+    expectedSize: size ?? payload.length,
+    target: target,
+    cancel: cancel ?? DownloadCancelToken(),
+    onProgress: onProgress ?? (_, _) {},
+  );
 
   void servePayload(HttpRequest request) {
     request.response
@@ -52,12 +61,18 @@ void main() {
       ..close();
   }
 
-  Matcher failsWith(DownloadFailure failure) => throwsA(isA<DownloadException>().having((e) => e.failure, 'failure', failure));
+  Matcher failsWith(DownloadFailure failure) => throwsA(
+    isA<DownloadException>().having((e) => e.failure, 'failure', failure),
+  );
 
   /// No partial or final file may survive a failed download.
   void expectNothingLeft() {
     expect(target.existsSync(), isFalse, reason: 'final file left behind');
-    expect(File('${target.path}.part').existsSync(), isFalse, reason: 'part file left behind');
+    expect(
+      File('${target.path}.part').existsSync(),
+      isFalse,
+      reason: 'part file left behind',
+    );
   }
 
   test('a good download reports progress and verifies', () async {
@@ -72,25 +87,40 @@ void main() {
 
   test('a checksum mismatch is rejected and deleted', () async {
     respond = servePayload;
-    await expectLater(run(hash: 'b' * 64), failsWith(DownloadFailure.checksumMismatch));
+    await expectLater(
+      run(hash: 'b' * 64),
+      failsWith(DownloadFailure.checksumMismatch),
+    );
     expectNothingLeft();
   });
 
-  test('a file of the wrong declared size is rejected before reading it', () async {
-    respond = servePayload;
-    await expectLater(run(size: payload.length - 1), failsWith(DownloadFailure.sizeMismatch));
-    expectNothingLeft();
-  });
+  test(
+    'a file of the wrong declared size is rejected before reading it',
+    () async {
+      respond = servePayload;
+      await expectLater(
+        run(size: payload.length - 1),
+        failsWith(DownloadFailure.sizeMismatch),
+      );
+      expectNothingLeft();
+    },
+  );
 
-  test('a body longer than advertised is cut off, with no declared length', () async {
-    respond = (request) {
-      request.response
-        ..add(payload)
-        ..close();
-    };
-    await expectLater(run(size: 1024), failsWith(DownloadFailure.sizeMismatch));
-    expectNothingLeft();
-  });
+  test(
+    'a body longer than advertised is cut off, with no declared length',
+    () async {
+      respond = (request) {
+        request.response
+          ..add(payload)
+          ..close();
+      };
+      await expectLater(
+        run(size: 1024),
+        failsWith(DownloadFailure.sizeMismatch),
+      );
+      expectNothingLeft();
+    },
+  );
 
   test('a body shorter than advertised is rejected', () async {
     respond = (request) {
@@ -106,7 +136,9 @@ void main() {
     respond = (request) async {
       // Claims the whole file, sends a fragment, then drops the connection.
       final socket = await request.response.detachSocket(writeHeaders: false);
-      socket.write('HTTP/1.1 200 OK\r\nContent-Length: ${payload.length}\r\n\r\n');
+      socket.write(
+        'HTTP/1.1 200 OK\r\nContent-Length: ${payload.length}\r\n\r\n',
+      );
       socket.add(payload.sublist(0, 1024));
       await socket.flush();
       socket.destroy();
@@ -122,7 +154,10 @@ void main() {
       request.response.add(payload.sublist(0, 1024));
       await request.response.flush();
     };
-    await expectLater(run(with_: downloader(idle: const Duration(milliseconds: 200))), failsWith(DownloadFailure.network));
+    await expectLater(
+      run(with_: downloader(idle: const Duration(milliseconds: 200))),
+      failsWith(DownloadFailure.network),
+    );
     expectNothingLeft();
   });
 

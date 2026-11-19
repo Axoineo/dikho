@@ -3,16 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Indian numbers as people save them', () {
-    for (final raw in [
-      '9800000001',
-      '98000 00001',
-      '098000-00001',
-      '(98000) 00001',
-      '+91 98000 00001',
-      '+919800000001',
-      '919800000001',
-      '00919800000001',
-    ]) {
+    for (final raw in ['9800000001', '98000 00001', '098000-00001', '(98000) 00001', '+91 98000 00001', '+919800000001', '919800000001', '00919800000001']) {
       expect(normalizePhoneNumber(raw), '+919800000001', reason: raw);
     }
   });
@@ -36,20 +27,19 @@ void main() {
 
   test('entries with no number go, and the same number saved twice appears once', () {
     final contacts = parseDeviceContacts([
-      'Asha',
-      '98000 00001',
-      'Asha',
-      '+91 98000 00001',
-      'Asha',
-      '98000 00002',
-      'No Number',
-      'n/a',
-      'Bilal',
-      '98000 00003',
-      '',
-      '98000 00004',
+      'Asha', '98000 00001',
+      'Asha', '+91 98000 00001',
+      'Asha', '98000 00002',
+      'No Number', 'n/a',
+      'Bilal', '98000 00003',
+      '', '98000 00004',
     ]);
-    expect(contacts.map((c) => '${c.name}:${c.number}'), ['Asha:+919800000001', 'Asha:+919800000002', 'Bilal:+919800000003', ':+919800000004']);
+    expect(contacts.map((c) => '${c.name}:${c.number}'), [
+      'Asha:+919800000001',
+      'Asha:+919800000002',
+      'Bilal:+919800000003',
+      ':+919800000004',
+    ]);
     expect(contacts.last.label, '+91 98000 00004');
     expect(contacts.last.initials, '#');
   });
@@ -70,9 +60,7 @@ void main() {
   });
 
   test('5,000 contacts parse quickly', () {
-    final flat = <String>[
-      for (var i = 0; i < 5000; i++) ...['Person $i', '98${i.toString().padLeft(8, '0')}'],
-    ];
+    final flat = <String>[for (var i = 0; i < 5000; i++) ...['Person $i', '98${i.toString().padLeft(8, '0')}']];
     final watch = Stopwatch()..start();
     final contacts = parseDeviceContacts(flat);
     expect(contacts.length, 5000);

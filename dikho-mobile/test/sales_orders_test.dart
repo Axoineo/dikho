@@ -30,70 +30,19 @@ class FakeSupabase {
   Future<void> start() async {
     for (var i = 1; i <= 30; i++) {
       orders.add({
-        'id': i,
-        'order_number': 'SO-$i',
-        'company': 'Client $i',
-        'order_client_fullname': 'Person $i',
-        'order_date': '2026-11-0${i % 9 + 1}',
-        'order_status': i == 30 ? 'Approved' : 'Draft',
-        'sub_total': 1000 * i,
-        'tax_total': 180 * i,
-        'total': 1180 * i,
-        'payment_receipt_amount': i == 30 ? 10000 : null,
-        'created_by_id': i == 29 ? 'someone-else' : 'me',
-        'vendor_address_id': null,
-        'campaign_start_date': '2026-11-01',
-        'campaign_end_date': '2026-11-30',
-        'order_color': i == 30 ? '#185494' : null,
+        'id': i, 'order_number': 'SO-$i', 'company': 'Client $i', 'order_client_fullname': 'Person $i', 'order_date': '2026-11-0${i % 9 + 1}',
+        'order_status': i == 30 ? 'Approved' : 'Draft', 'sub_total': 1000 * i, 'tax_total': 180 * i, 'total': 1180 * i,
+        'payment_receipt_amount': i == 30 ? 10000 : null, 'created_by_id': i == 29 ? 'someone-else' : 'me', 'vendor_address_id': null,
+        'campaign_start_date': '2026-11-01', 'campaign_end_date': '2026-11-30', 'order_color': i == 30 ? '#185494' : null,
       });
     }
     // A purchase order shares the table; the list must never show it.
     orders.add({'id': 99, 'order_number': 'PO-1', 'company': 'Vendor', 'total': 5, 'vendor_address_id': 7});
     items.addAll([
-      {
-        'id': 301,
-        'sales_order_id': 30,
-        'name': 'Hoarding, Ring Road',
-        'type': 'Media',
-        'is_taxable': true,
-        'gst_type': 'Intra-State',
-        'taxable_amount': 30000,
-        'tax_amount': 5400,
-        'after_tax_amount': 35400,
-        'cgst_amount': 2700,
-        'sgst_amount': 2700,
-        'igst_amount': 0,
-        'utgst_amount': 0,
-        'inv_id': 55,
-        'inv_number': 'INV-55',
-        'file_url': 'https://example.test/a.pdf',
-      },
+      {'id': 301, 'sales_order_id': 30, 'name': 'Hoarding, Ring Road', 'type': 'Media', 'is_taxable': true, 'gst_type': 'Intra-State', 'taxable_amount': 30000, 'tax_amount': 5400, 'after_tax_amount': 35400, 'cgst_amount': 2700, 'sgst_amount': 2700, 'igst_amount': 0, 'utgst_amount': 0, 'inv_id': 55, 'inv_number': 'INV-55', 'file_url': 'https://example.test/a.pdf'},
       // A purchase order's cost line, bought for SO-30: never one of SO-30's own lines.
-      {
-        'id': 303,
-        'sales_order_id': 30,
-        'purchase_order_id': 99,
-        'so_item_id': 301,
-        'name': 'Vendor rent',
-        'taxable_amount': 20000,
-        'tax_amount': 3600,
-        'after_tax_amount': 23600,
-      },
-      {
-        'id': 302,
-        'sales_order_id': 30,
-        'name': 'Printing',
-        'type': 'Printing',
-        'is_taxable': false,
-        'taxable_amount': 5400,
-        'tax_amount': 0,
-        'after_tax_amount': 5400,
-        'cgst_amount': 0,
-        'sgst_amount': 0,
-        'igst_amount': 0,
-        'utgst_amount': 0,
-        'document_note': 'Flex, 20x10',
-      },
+      {'id': 303, 'sales_order_id': 30, 'purchase_order_id': 99, 'so_item_id': 301, 'name': 'Vendor rent', 'taxable_amount': 20000, 'tax_amount': 3600, 'after_tax_amount': 23600},
+      {'id': 302, 'sales_order_id': 30, 'name': 'Printing', 'type': 'Printing', 'is_taxable': false, 'taxable_amount': 5400, 'tax_amount': 0, 'after_tax_amount': 5400, 'cgst_amount': 0, 'sgst_amount': 0, 'igst_amount': 0, 'utgst_amount': 0, 'document_note': 'Flex, 20x10'},
     ]);
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen(_handle);
@@ -151,9 +100,7 @@ class FakeSupabase {
         orders.add(row);
         out = row;
       case 'POST /rest/v1/salesorderdocument':
-        final rows = [
-          for (final r in (body as List).cast<Map<String, dynamic>>()) {...r, 'id': nextId++},
-        ];
+        final rows = [for (final r in (body as List).cast<Map<String, dynamic>>()) {...r, 'id': nextId++}];
         items.addAll(rows);
         out = rows;
       case 'PATCH /rest/v1/salesorder':
@@ -168,15 +115,11 @@ class FakeSupabase {
         final gone = idsIn().where((id) => !undeletable.contains(id)).toList();
         orders.removeWhere((o) => gone.contains(o['id']));
         items.removeWhere((i) => gone.contains(i['sales_order_id']));
-        out = [
-          for (final id in gone) {'id': id},
-        ];
+        out = [for (final id in gone) {'id': id}];
       case 'DELETE /rest/v1/salesorderdocument':
         final gone = idsIn().where((id) => !undeletable.contains(id) && items.any((i) => i['id'] == id)).toList();
         items.removeWhere((i) => gone.contains(i['id']));
-        out = [
-          for (final id in gone) {'id': id},
-        ];
+        out = [for (final id in gone) {'id': id}];
       default:
         response.statusCode = 404;
         out = {};
@@ -191,10 +134,9 @@ ItemDraft line(String key, {String name = 'Hoarding', String amount = '10000', S
   ..setRate(rate)
   ..setTaxableAmount(amount);
 
-OrderDraft order({String company = 'Acme Outdoor', String number = 'SO-NEW'}) =>
-    OrderDraft.blank(today: '2026-11-12', orderType: 'ATL', orderStatus: 'Draft', purchaseStatus: 'Not Started')
-      ..company = company
-      ..orderNumber = number;
+OrderDraft order({String company = 'Acme Outdoor', String number = 'SO-NEW'}) => OrderDraft.blank(today: '2026-11-12', orderType: 'ATL', orderStatus: 'Draft', purchaseStatus: 'Not Started')
+  ..company = company
+  ..orderNumber = number;
 
 void main() {
   group('the web module\'s rules', () {
@@ -249,10 +191,7 @@ void main() {
       expect(rateFromAmounts(10000, 0), '0');
       expect(rateFromAmounts(10000, 1234), 'custom');
       expect(rateFromAmounts(0, 50), '18');
-      final saved = ItemDraft.from(
-        OrderItem({'id': 5, 'name': 'X', 'taxable_amount': 1000, 'tax_amount': 50, 'is_taxable': null, 'gst_type': null}),
-        'saved-5',
-      );
+      final saved = ItemDraft.from(OrderItem({'id': 5, 'name': 'X', 'taxable_amount': 1000, 'tax_amount': 50, 'is_taxable': null, 'gst_type': null}), 'saved-5');
       expect(saved.gstRate, '5');
       expect(saved.isTaxable, isTrue, reason: 'unset means taxable, as on the web');
       expect(saved.gstType, 'Intra-State');
@@ -285,11 +224,10 @@ void main() {
 
     test('the form names each problem where it belongs', () {
       final items = [ItemDraft.blank('a')];
-      final problems =
-          (order(company: ' ', number: '')
-                ..campaignStart = '2026-11-10'
-                ..campaignEnd = '2026-11-09')
-              .problems(items);
+      final problems = (order(company: ' ', number: '')
+            ..campaignStart = '2026-11-10'
+            ..campaignEnd = '2026-11-09')
+          .problems(items);
       expect(problems.keys, containsAll(['company', 'order_number', 'campaign_end_date', 'item.a.name']));
       expect(problems['item.a.name'], 'Item 1 needs a name.');
       expect(order().problems(const []), {'items': 'Add at least one order item.'});
@@ -336,11 +274,7 @@ void main() {
       const own = SalesOrderAbilities(editScope: 'own', userId: 'me');
       expect((all.canEdit(mine), all.canEdit(theirs)), (true, true));
       expect((own.canEdit(mine), own.canEdit(theirs)), (true, false));
-      expect(
-        const SalesOrderAbilities(editScope: 'team', userId: 'me').canEdit(mine),
-        isFalse,
-        reason: 'RLS knows only all and own here',
-      );
+      expect(const SalesOrderAbilities(editScope: 'team', userId: 'me').canEdit(mine), isFalse, reason: 'RLS knows only all and own here');
       expect(const SalesOrderAbilities(editScope: 'own').canEdit(SalesOrder({'id': 3, 'created_by_id': ''})), isFalse);
     });
   });
@@ -374,13 +308,7 @@ void main() {
     });
 
     test('a new order is added, then all its lines in one request', () async {
-      final saved = await controller.save(
-        null,
-        order(),
-        [line('a'), line('b', name: 'Print', amount: '500')],
-        removed: [],
-        createdBy: 'Asha Rao',
-      );
+      final saved = await controller.save(null, order(), [line('a'), line('b', name: 'Print', amount: '500')], removed: [], createdBy: 'Asha Rao');
       expect(saved.total, 12390.0);
       expect(backend.calls('POST /rest/v1/salesorder?').length, 1);
       expect(backend.calls('POST /rest/v1/salesorderdocument?').length, 1, reason: 'all or none');
@@ -401,9 +329,7 @@ void main() {
       backend.undeletable.add(500);
       await expectLater(
         controller.save(null, order(), [line('a')], removed: []),
-        throwsA(
-          isA<ApiException>().having((e) => e.message, 'message', startsWith('The order was added without its items, and could not be removed.')),
-        ),
+        throwsA(isA<ApiException>().having((e) => e.message, 'message', startsWith('The order was added without its items, and could not be removed.'))),
       );
       expect(backend.orders.where((o) => o['order_number'] == 'SO-NEW'), hasLength(1));
     });
@@ -414,10 +340,7 @@ void main() {
       final loaded = await controller.loadItems('30');
       final first = ItemDraft.from(loaded.first, 'saved-301')..name = 'Hoarding, renamed';
       final removed = <Object>[302];
-      final saved = await controller.save(existing, OrderDraft.from(existing), [
-        first,
-        line('n', name: 'New line', amount: '1000'),
-      ], removed: removed);
+      final saved = await controller.save(existing, OrderDraft.from(existing), [first, line('n', name: 'New line', amount: '1000')], removed: removed);
       expect(removed, isEmpty, reason: 'deleted for real, so saving again never asks twice');
       final order = backend.orders.firstWhere((o) => o['id'] == 30);
       expect(order['updated_at'], '2026-11-12T09:00:00.000Z');
@@ -441,13 +364,7 @@ void main() {
       final items = [ItemDraft.from(loaded.first, 'saved-301'), line('n', name: 'New line')];
       await expectLater(
         controller.save(existing, OrderDraft.from(existing), items, removed: removed),
-        throwsA(
-          isA<ApiException>().having(
-            (e) => e.message,
-            'message',
-            allOf(startsWith('The order details were saved, but not all of its items were.'), contains('could not be deleted')),
-          ),
-        ),
+        throwsA(isA<ApiException>().having((e) => e.message, 'message', allOf(startsWith('The order details were saved, but not all of its items were.'), contains('could not be deleted')))),
       );
       expect(removed, [302]);
       expect(backend.items.where((i) => i['name'] == 'New line'), isEmpty);
@@ -489,11 +406,7 @@ void main() {
 
     const everything = SalesOrderAbilities(create: true, editScope: 'all', userId: 'me', createdBy: 'Asha Rao');
 
-    Future<(SalesOrdersController, List<String>)> pump(
-      WidgetTester tester, {
-      SalesOrderAbilities abilities = everything,
-      ClientChoice? newOrderFor,
-    }) async {
+    Future<(SalesOrdersController, List<String>)> pump(WidgetTester tester, {SalesOrderAbilities abilities = everything, ClientChoice? newOrderFor}) async {
       final controller = SalesOrdersController(rest: backend.rest, searchDelay: const Duration(milliseconds: 5));
       addTearDown(controller.dispose);
       final invoices = <String>[];
@@ -548,10 +461,7 @@ void main() {
     });
 
     screenTest('own edit scope: Edit only on orders this person created; no New order without create', (tester) async {
-      await pump(
-        tester,
-        abilities: const SalesOrderAbilities(editScope: 'own', userId: 'me'),
-      );
+      await pump(tester, abilities: const SalesOrderAbilities(editScope: 'own', userId: 'me'));
       expect(find.text('New order'), findsNothing);
       await tester.tap(find.text('SO-29'));
       await settle(tester);
@@ -572,11 +482,8 @@ void main() {
       await tester.pump();
       expect(find.text('Some fields need attention. They are marked below.'), findsOneWidget);
       expect(find.text('Choose the client this order belongs to.'), findsOneWidget);
-      expect(
-        find.bySemanticsLabel(RegExp('Client, required, not chosen. Choose the client this order belongs to.')),
-        findsOneWidget,
-        reason: 'a screen reader hears why, too',
-      );
+      expect(find.bySemanticsLabel(RegExp('Client, required, not chosen. Choose the client this order belongs to.')), findsOneWidget,
+          reason: 'a screen reader hears why, too');
       expect(find.text('Enter an order number.'), findsOneWidget);
       expect(backend.calls('POST /rest/v1/salesorder?'), isEmpty);
 
@@ -598,10 +505,7 @@ void main() {
       await tester.tap(find.text('Create'));
       await settle(tester);
       final saved = backend.orders.last;
-      expect(
-        (saved['order_number'], saved['company'], saved['order_client_fullname'], saved['total'], saved['created_by']),
-        ('SO-777', 'Acme Outdoor', 'Asha Rao', 11800, 'Asha Rao'),
-      );
+      expect((saved['order_number'], saved['company'], saved['order_client_fullname'], saved['total'], saved['created_by']), ('SO-777', 'Acme Outdoor', 'Asha Rao', 11800, 'Asha Rao'));
       expect(backend.items.last['tax_amount'], 1800);
       expect(find.byType(SalesOrderDetailsScreen), findsOneWidget);
       expect(find.text('SO-777'), findsOneWidget);
@@ -644,9 +548,7 @@ void main() {
       expect(find.byTooltip('Remove item 2'), findsNothing);
       // The list's header is scrolled away by now; the last line says why it stays.
       await tester.scrollUntilVisible(find.byTooltip('An order needs at least one item'), -300, scrollable: find.byType(Scrollable).first);
-      final keep = tester.widget<IconButton>(
-        find.ancestor(of: find.byTooltip('An order needs at least one item'), matching: find.byType(IconButton)),
-      );
+      final keep = tester.widget<IconButton>(find.ancestor(of: find.byTooltip('An order needs at least one item'), matching: find.byType(IconButton)));
       expect(keep.onPressed, isNull, reason: 'an order needs at least one item');
       await tester.tap(find.text('Save'));
       await settle(tester);

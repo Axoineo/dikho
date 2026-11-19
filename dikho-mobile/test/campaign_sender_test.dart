@@ -38,12 +38,7 @@ class FakeSendApi {
       final response = request.response..headers.contentType = ContentType.json;
       if (failure == 'refuse') {
         response.statusCode = 400;
-        response.write(
-          jsonEncode({
-            'success': false,
-            'error': {'message': 'Invalid template'},
-          }),
-        );
+        response.write(jsonEncode({'success': false, 'error': {'message': 'Invalid template'}}));
         return response.close();
       }
       int campaignId;
@@ -64,18 +59,7 @@ class FakeSendApi {
       final seen = claimed.putIfAbsent(campaignId, () => <int>{});
       var sent = 0;
       if (failure == 'halt') {
-        response.write(
-          jsonEncode({
-            'success': true,
-            'data': {
-              'campaignId': campaignId,
-              'sent': 0,
-              'failed': 0,
-              'notSent': ids,
-              'halted': {'code': '131048', 'resumable': false, 'reason': 'Spam limit'},
-            },
-          }),
-        );
+        response.write(jsonEncode({'success': true, 'data': {'campaignId': campaignId, 'sent': 0, 'failed': 0, 'notSent': ids, 'halted': {'code': '131048', 'resumable': false, 'reason': 'Spam limit'}}}));
         return response.close();
       }
       for (final id in batch) {
@@ -90,12 +74,7 @@ class FakeSendApi {
         await request.response.detachSocket().then((socket) => socket.destroy());
         return;
       }
-      response.write(
-        jsonEncode({
-          'success': true,
-          'data': {'campaignId': campaignId, 'sent': sent, 'failed': 0, 'remaining': rest},
-        }),
-      );
+      response.write(jsonEncode({'success': true, 'data': {'campaignId': campaignId, 'sent': sent, 'failed': 0, 'remaining': rest}}));
       await response.close();
     });
   }
@@ -161,12 +140,9 @@ void main() {
 
   test('Stop takes effect during a pause; Resume sends only to those left', () async {
     late CampaignSender s;
-    s = sender(
-      pace: SendPace.steady,
-      onSleep: (_) {
-        if (slept.length == 5) s.stop();
-      },
-    );
+    s = sender(pace: SendPace.steady, onSleep: (_) {
+      if (slept.length == 5) s.stop();
+    });
     await s.start();
     expect(s.state, SendState.stopped);
     expect(s.remaining, [4, 5, 6, 7]);

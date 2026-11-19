@@ -25,64 +25,30 @@ class FakeCampaignsApi {
       final response = request.response..headers.contentType = ContentType.json;
       if (failWith != 0) {
         response.statusCode = failWith;
-        response.write(
-          jsonEncode({
-            'success': false,
-            'error': {'message': 'Not allowed'},
-          }),
-        );
+        response.write(jsonEncode({'success': false, 'error': {'message': 'Not allowed'}}));
       } else if (request.uri.path == '/api/campaigns' && request.method == 'GET') {
-        response.write(
-          jsonEncode({
-            'success': true,
-            'data': {
-              'campaigns': empty
-                  ? []
-                  : [
-                      {
-                        'id': 12,
-                        'name': 'Diwali offers',
-                        'template_name': 'diwali_offer',
-                        'status': sending ? 'sending' : 'completed',
-                        'total_count': 1200,
-                        'sent_count': 1180,
-                        'failed_count': 30,
-                        'created_at': '2026-11-03 04:30:00',
-                      },
-                      {
-                        'id': 11,
-                        'name': 'Welcome',
-                        'template_name': 'welcome',
-                        'status': 'completed',
-                        'total_count': 90,
-                        'sent_count': 90,
-                        'failed_count': 0,
-                        'created_at': '2026-11-01 04:30:00',
-                      },
-                    ],
-            },
-          }),
-        );
+        response.write(jsonEncode({
+          'success': true,
+          'data': {
+            'campaigns': empty
+                ? []
+                : [
+                    {'id': 12, 'name': 'Diwali offers', 'template_name': 'diwali_offer', 'status': sending ? 'sending' : 'completed', 'total_count': 1200, 'sent_count': 1180, 'failed_count': 30, 'created_at': '2026-11-03 04:30:00'},
+                    {'id': 11, 'name': 'Welcome', 'template_name': 'welcome', 'status': 'completed', 'total_count': 90, 'sent_count': 90, 'failed_count': 0, 'created_at': '2026-11-01 04:30:00'},
+                  ],
+          },
+        }));
       } else if (request.uri.path == '/api/whatsapp/analytics/campaigns/12') {
-        response.write(
-          jsonEncode({
-            'success': true,
-            'data': {
-              'campaign': {
-                'id': 12,
-                'name': 'Diwali offers',
-                'template': 'diwali_offer',
-                'status': 'completed',
-                'audience': 1200,
-                'createdAt': '2026-11-03 04:30:00',
-              },
-              'totals': {'sent': 1180, 'delivered': 1000, 'read': 600, 'failed': 30, 'awaiting': 20, 'notSent': 20, 'replied': 90, 'optedOut': 3},
-              'failures': [],
-              'timeline': [],
-              'replyWindowDays': 7,
-            },
-          }),
-        );
+        response.write(jsonEncode({
+          'success': true,
+          'data': {
+            'campaign': {'id': 12, 'name': 'Diwali offers', 'template': 'diwali_offer', 'status': 'completed', 'audience': 1200, 'createdAt': '2026-11-03 04:30:00'},
+            'totals': {'sent': 1180, 'delivered': 1000, 'read': 600, 'failed': 30, 'awaiting': 20, 'notSent': 20, 'replied': 90, 'optedOut': 3},
+            'failures': [],
+            'timeline': [],
+            'replyWindowDays': 7,
+          },
+        }));
       } else {
         response.statusCode = request.method == 'GET' ? 404 : 405;
         response.write('{}');
@@ -96,15 +62,7 @@ class FakeCampaignsApi {
 
 void main() {
   test('a campaign row reads as the web list shows it', () {
-    final row = CampaignRow.from({
-      'id': 3,
-      'name': ' ',
-      'template_name': 'x',
-      'status': 'stopped',
-      'total_count': 50,
-      'sent_count': 20,
-      'created_at': '2026-11-01 04:30:00',
-    });
+    final row = CampaignRow.from({'id': 3, 'name': ' ', 'template_name': 'x', 'status': 'stopped', 'total_count': 50, 'sent_count': 20, 'created_at': '2026-11-01 04:30:00'});
     expect(row.name, 'Campaign');
     expect(row.outstanding, 30);
     expect(row.createdAt, DateTime.utc(2026, 11, 1, 4, 30));

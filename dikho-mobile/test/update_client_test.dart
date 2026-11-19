@@ -15,18 +15,21 @@ void main() {
     server.listen((request) {
       lastUri = request.uri;
       lastHeaders = {};
-      request.headers.forEach((name, values) => lastHeaders[name] = values.join(','));
+      request.headers.forEach(
+        (name, values) => lastHeaders[name] = values.join(','),
+      );
       respond(request);
     });
   });
   tearDown(() => server.close(force: true));
 
-  UpdateClient client({Duration timeout = const Duration(seconds: 2)}) => UpdateClient(
-    baseUrl: Uri.parse('http://127.0.0.1:${server.port}'),
-    appId: 'in.dikho.crm',
-    timeout: timeout,
-    isAllowedApkUrl: (uri) => uri.scheme == 'https',
-  );
+  UpdateClient client({Duration timeout = const Duration(seconds: 2)}) =>
+      UpdateClient(
+        baseUrl: Uri.parse('http://127.0.0.1:${server.port}'),
+        appId: 'in.dikho.crm',
+        timeout: timeout,
+        isAllowedApkUrl: (uri) => uri.scheme == 'https',
+      );
 
   void json(HttpRequest request, Object body, {int status = 200}) {
     request.response
@@ -44,7 +47,12 @@ void main() {
     respond = (r) => json(r, {'updateAvailable': false});
     await client().check(7);
     expect(lastUri!.path, '/api/update');
-    expect(lastUri!.queryParameters, {'appId': 'in.dikho.crm', 'versionCode': '7', 'channel': 'stable', 'platform': 'android'});
+    expect(lastUri!.queryParameters, {
+      'appId': 'in.dikho.crm',
+      'versionCode': '7',
+      'channel': 'stable',
+      'platform': 'android',
+    });
     expect(lastHeaders.containsKey('authorization'), isFalse);
     expect(lastHeaders.containsKey('cookie'), isFalse);
   });
@@ -82,13 +90,18 @@ void main() {
     ];
     for (final (index, handler) in cases.indexed) {
       respond = handler;
-      expect(await client().check(1), isA<CheckFailed>(), reason: 'case $index');
+      expect(
+        await client().check(1),
+        isA<CheckFailed>(),
+        reason: 'case $index',
+      );
     }
   });
 
   test('a server that never answers times out', () async {
     respond = (_) {};
-    final result = await client(timeout: const Duration(milliseconds: 200)).check(1);
+    final result = await client(timeout: const Duration(milliseconds: 200))
+        .check(1);
     expect(result, isA<CheckFailed>());
     expect((result as CheckFailed).reason, 'timeout');
   });
@@ -97,7 +110,11 @@ void main() {
     final closed = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final port = closed.port;
     await closed.close(force: true);
-    final result = await UpdateClient(baseUrl: Uri.parse('http://127.0.0.1:$port'), appId: 'in.dikho.crm', isAllowedApkUrl: (_) => true).check(1);
+    final result = await UpdateClient(
+      baseUrl: Uri.parse('http://127.0.0.1:$port'),
+      appId: 'in.dikho.crm',
+      isAllowedApkUrl: (_) => true,
+    ).check(1);
     expect(result, isA<CheckFailed>());
   });
 }

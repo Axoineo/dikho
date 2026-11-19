@@ -39,18 +39,16 @@ class FakeBackend {
         return response.close();
       }
       if (request.uri.path == '/api/cg-leads/whatsapp-status') {
-        response.write(
-          jsonEncode({
-            'success': true,
-            'data': {
-              'statuses': [
-                {'phone': '919800000001', 'status': 'read'},
-                {'phone': '919800000001', 'status': 'sent'},
-                {'phone': '919800000002', 'status': 'failed', 'error_message': 'Not on WhatsApp'},
-              ],
-            },
-          }),
-        );
+        response.write(jsonEncode({
+          'success': true,
+          'data': {
+            'statuses': [
+              {'phone': '919800000001', 'status': 'read'},
+              {'phone': '919800000001', 'status': 'sent'},
+              {'phone': '919800000002', 'status': 'failed', 'error_message': 'Not on WhatsApp'},
+            ],
+          },
+        }));
         return response.close();
       }
       final range = RegExp(r'(\d+)-(\d+)').firstMatch(request.headers.value('range') ?? '0-24')!;
@@ -125,14 +123,10 @@ void main() {
       backend = FakeBackend();
       await backend.start();
       token = 'token-1';
-      rest = SupabaseRest(
-        base: backend.url,
-        apiKey: 'public-key',
-        token: ({bool forceFresh = false}) async {
-          if (forceFresh) token = 'token-2';
-          return token;
-        },
-      );
+      rest = SupabaseRest(base: backend.url, apiKey: 'public-key', token: ({bool forceFresh = false}) async {
+        if (forceFresh) token = 'token-2';
+        return token;
+      });
       api = CrmApi(origin: backend.url, token: ({bool forceFresh = false}) async => token);
     });
 

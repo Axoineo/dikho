@@ -7,8 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 String at(int minute) => DateTime.utc(2026, 10, 1, 9, minute).toIso8601String();
 
-Message row(int id, int minute, {Map<String, dynamic> extra = const {}}) =>
-    Message({'id': id, 'created_at': at(minute), 'direction': 'inbound', 'type': 'text', 'body': 'm$id', ...extra});
+Message row(int id, int minute, {Map<String, dynamic> extra = const {}}) => Message({
+  'id': id,
+  'created_at': at(minute),
+  'direction': 'inbound',
+  'type': 'text',
+  'body': 'm$id',
+  ...extra,
+});
 
 List<int> ids(ThreadData thread) => [for (final m in thread.messages) m.id];
 
@@ -26,10 +32,7 @@ void main() {
 
     test('a late webhook row is placed by time once its page arrives, the server copy winning', () {
       final t0 = threadFromPage(ThreadPage(messages: [row(5, 5), row(6, 6)], hasMore: true));
-      final t1 = t0.withMessages([
-        ...t0.messages,
-        row(9, 4, extra: {'status': 'stale'}),
-      ]);
+      final t1 = t0.withMessages([...t0.messages, row(9, 4, extra: {'status': 'stale'})]);
       final t2 = prependOlderPage(t1, ThreadPage(messages: [row(3, 3), row(9, 4)], hasMore: false), 5);
       expect(ids(t2), [3, 9, 5, 6]);
       expect(t2.messages[1].status, isNot('stale'));

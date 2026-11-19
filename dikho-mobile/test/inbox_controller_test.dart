@@ -1,3 +1,4 @@
+
 import 'package:dikho_crm/features/inbox/inbox_api.dart';
 import 'package:dikho_crm/features/inbox/inbox_controller.dart';
 import 'package:dikho_crm/features/inbox/inbox_models.dart';
@@ -27,10 +28,7 @@ class FakeApi implements InboxApi {
     calls.add('list cursor=$cursor q=$query unread=$unreadOnly');
     final failure = failWith;
     if (failure != null) throw failure as Exception;
-    final matching = rows
-        .where((c) => query.isEmpty || c.displayName.toLowerCase().contains(query.toLowerCase()))
-        .where((c) => !unreadOnly || c.unreadCount > 0)
-        .toList();
+    final matching = rows.where((c) => query.isEmpty || c.displayName.toLowerCase().contains(query.toLowerCase())).where((c) => !unreadOnly || c.unreadCount > 0).toList();
     final start = cursor == null ? 0 : matching.indexWhere((c) => c.id == int.parse(cursor)) + 1;
     final page = matching.skip(start).take(InboxApi.listPageSize).toList();
     final more = start + page.length < matching.length;
@@ -198,9 +196,7 @@ void main() {
       expect(thread.messages.map((m) => m.id), [2]);
       inbox.onRealtimeEvent('conversation:blocked', {'id': 50, 'blocked_at': '2026-11-06T10:00:00Z'});
       expect(thread.conversation.isBlocked, isTrue);
-      inbox.onRealtimeEvent('conversation:cleared', {
-        'conversation': {...chat(50).raw, 'cleared_through_id': 5},
-      });
+      inbox.onRealtimeEvent('conversation:cleared', {'conversation': {...chat(50).raw, 'cleared_through_id': 5}});
       expect(thread.messages, isEmpty);
       inbox.onRealtimeEvent('conversation:deleted', {'id': 50});
       expect(inbox.conversations.any((c) => c.id == 50), isFalse);
@@ -255,6 +251,7 @@ void main() {
       thread.dispose();
     });
   });
+
 }
 
 class _SlowApi implements InboxApi {

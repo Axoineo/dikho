@@ -19,103 +19,29 @@ Map<String, Object?> catalogJson() => {
     'user_id': 'me',
     'system_role': 'admin',
     'rank': 20,
-    'permissions': {
-      'users.view': 'all',
-      'users.create': 'all',
-      'clients.view': 'all',
-      'clients.create': 'all',
-      'clients.edit': 'own',
-      'sales_orders.view': 'all',
-    },
+    'permissions': {'users.view': 'all', 'users.create': 'all', 'clients.view': 'all', 'clients.create': 'all', 'clients.edit': 'own', 'sales_orders.view': 'all'},
   },
   'templates': [
-    {
-      'id': 't1',
-      'key': 'sales_executive',
-      'name': 'Sales executive',
-      'built_in': true,
-      'members': 2,
-      'permissions': {'clients.view': 'all', 'sales_orders.view': 'own'},
-    },
-    {
-      'id': 't2',
-      'key': 'finance',
-      'name': 'Finance',
-      'built_in': false,
-      'members': 0,
-      'permissions': {'invoices.view': 'all'},
-    },
+    {'id': 't1', 'key': 'sales_executive', 'name': 'Sales executive', 'built_in': true, 'members': 2, 'permissions': {'clients.view': 'all', 'sales_orders.view': 'own'}},
+    {'id': 't2', 'key': 'finance', 'name': 'Finance', 'built_in': false, 'members': 0, 'permissions': {'invoices.view': 'all'}},
   ],
   'departments': [
-    {
-      'id': 'd1',
-      'name': 'Sales',
-      'archived': false,
-      'members': 3,
-      'teams': [
-        {'id': 'tm1', 'name': 'North', 'archived': false, 'members': 2},
-      ],
-    },
+    {'id': 'd1', 'name': 'Sales', 'archived': false, 'members': 3, 'teams': [{'id': 'tm1', 'name': 'North', 'archived': false, 'members': 2}]},
   ],
   'permissions': [
-    {
-      'key': 'clients.view',
-      'module': 'Clients',
-      'action': 'view',
-      'label': 'View clients',
-      'allowed_scopes': ['own', 'all'],
-    },
-    {
-      'key': 'clients.create',
-      'module': 'Clients',
-      'action': 'create',
-      'label': 'Add clients',
-      'allowed_scopes': ['all'],
-    },
-    {
-      'key': 'clients.edit',
-      'module': 'Clients',
-      'action': 'edit',
-      'label': 'Edit clients',
-      'allowed_scopes': ['own', 'all'],
-    },
-    {
-      'key': 'sales_orders.view',
-      'module': 'Sales orders',
-      'action': 'view',
-      'label': 'View sales orders',
-      'allowed_scopes': ['own', 'all'],
-    },
-    {
-      'key': 'invoices.view',
-      'module': 'Invoices',
-      'action': 'view',
-      'label': 'View invoices',
-      'allowed_scopes': ['all'],
-    },
-    {
-      'key': 'dev.tools',
-      'module': 'Developer',
-      'action': 'use',
-      'label': 'Developer tools',
-      'developer_only': true,
-      'allowed_scopes': ['all'],
-    },
+    {'key': 'clients.view', 'module': 'Clients', 'action': 'view', 'label': 'View clients', 'allowed_scopes': ['own', 'all']},
+    {'key': 'clients.create', 'module': 'Clients', 'action': 'create', 'label': 'Add clients', 'allowed_scopes': ['all']},
+    {'key': 'clients.edit', 'module': 'Clients', 'action': 'edit', 'label': 'Edit clients', 'allowed_scopes': ['own', 'all']},
+    {'key': 'sales_orders.view', 'module': 'Sales orders', 'action': 'view', 'label': 'View sales orders', 'allowed_scopes': ['own', 'all']},
+    {'key': 'invoices.view', 'module': 'Invoices', 'action': 'view', 'label': 'View invoices', 'allowed_scopes': ['all']},
+    {'key': 'dev.tools', 'module': 'Developer', 'action': 'use', 'label': 'Developer tools', 'developer_only': true, 'allowed_scopes': ['all']},
   ],
   'role_permissions': {
     'manager': {'clients.edit': 'all'},
   },
 };
 
-Map<String, Object?> person(
-  String id,
-  String name, {
-  String role = 'staff',
-  String status = 'active',
-  bool online = false,
-  String template = 't1',
-  Map<String, Object?> extra = const {},
-}) => {
+Map<String, Object?> person(String id, String name, {String role = 'staff', String status = 'active', bool online = false, String template = 't1', Map<String, Object?> extra = const {}}) => {
   'user_id': id,
   'full_name': name,
   'email': '${name.split(' ').first.toLowerCase()}@example.test',
@@ -158,32 +84,13 @@ class FakeApi {
         data = catalogJson();
       } else if (key == 'GET /api/users/audit') {
         data = [
-          {
-            'id': 9,
-            'event_type': 'user.role_changed',
-            'actor': 'Mira Admin',
-            'target': 'Asha Rao',
-            'target_user_id': 'u2',
-            'occurred_at': '2026-11-17T05:30:00Z',
-            'old_value': {'system_role': 'staff'},
-            'new_value': {'system_role': 'manager'},
-          },
-          {
-            'id': 8,
-            'event_type': 'access.denied',
-            'actor': 'Asha Rao',
-            'occurred_at': '2026-11-16T05:30:00Z',
-            'metadata': {'message': 'Not allowed'},
-          },
+          {'id': 9, 'event_type': 'user.role_changed', 'actor': 'Mira Admin', 'target': 'Asha Rao', 'target_user_id': 'u2', 'occurred_at': '2026-11-17T05:30:00Z', 'old_value': {'system_role': 'staff'}, 'new_value': {'system_role': 'manager'}},
+          {'id': 8, 'event_type': 'access.denied', 'actor': 'Asha Rao', 'occurred_at': '2026-11-16T05:30:00Z', 'metadata': {'message': 'Not allowed'}},
         ];
       } else if (key == 'POST /api/users') {
         final added = person('u9', 'New Person', status: 'invited');
         members = [...members, added];
-        data = {
-          'user': added,
-          'welcome': {'sent': true, 'channel': 'email'},
-          'reused_account': false,
-        };
+        data = {'user': added, 'welcome': {'sent': true, 'channel': 'email'}, 'reused_account': false};
       } else if (path.endsWith('/status')) {
         data = {'user': members[1], 'sign_in_updated': true};
       } else if (path.endsWith('/sign-out')) {
@@ -196,21 +103,9 @@ class FakeApi {
         final id = path.split('/').last;
         data = {
           ...members.firstWhere((m) => m['user_id'] == id),
-          'permissions': {
-            'clients.view': {'scope': 'all', 'source': 'template'},
-            'sales_orders.view': {'scope': 'own', 'source': 'template'},
-          },
+          'permissions': {'clients.view': {'scope': 'all', 'source': 'template'}, 'sales_orders.view': {'scope': 'own', 'source': 'template'}},
           'sessions': [
-            {
-              'session_id': 's1',
-              'user_agent': 'DikhoCRM/1.1.0 (Android)',
-              'city': 'Pune',
-              'region': 'Maharashtra',
-              'country': 'IN',
-              'signed_in_at': '2026-11-17T04:00:00Z',
-              'last_seen_at': '2026-11-17T05:00:00Z',
-              'current': false,
-            },
+            {'session_id': 's1', 'user_agent': 'DikhoCRM/1.1.0 (Android)', 'city': 'Pune', 'region': 'Maharashtra', 'country': 'IN', 'signed_in_at': '2026-11-17T04:00:00Z', 'last_seen_at': '2026-11-17T05:00:00Z', 'current': false},
           ],
           'recent_sign_ins': const [],
         };
@@ -254,10 +149,7 @@ void main() {
 
     test('an admin hands out only roles below theirs; a template only within their own access', () {
       expect(catalog.assignableRoles(), ['staff'], reason: 'no users.roles: Staff only');
-      final owner = Catalog({
-        ...catalogJson(),
-        'actor': {'system_role': 'owner', 'rank': 40, 'permissions': {}},
-      });
+      final owner = Catalog({...catalogJson(), 'actor': {'system_role': 'owner', 'rank': 40, 'permissions': {}}});
       expect(owner.assignableRoles(), ['staff', 'manager', 'admin', 'owner']);
       expect(catalog.withinReach(catalog.template('t1')!), isTrue);
       expect(catalog.withinReach(catalog.template('t2')!), isFalse, reason: 'the actor has no invoices.view');
@@ -273,15 +165,11 @@ void main() {
       final view = catalog.permission('clients.view')!;
       final add = catalog.permission('clients.create')!;
       var o = setUserPermission({}, inherited, view, on: false, widest: 'all');
-      expect(o, {
-        'clients.view': {'effect': 'revoke'},
-      });
+      expect(o, {'clients.view': {'effect': 'revoke'}});
       o = setUserPermission(o, inherited, view, on: true, widest: 'all');
       expect(o, isEmpty, reason: 'back to the template leaves nothing behind');
       o = setUserPermission(o, inherited, add, on: true, widest: catalog.widestFor(add));
-      expect(o, {
-        'clients.create': {'effect': 'grant', 'scope': 'all'},
-      });
+      expect(o, {'clients.create': {'effect': 'grant', 'scope': 'all'}});
       expect(userPermissionState(add, inherited, o).source, PermissionSource.added);
       o = setUserPermission(o, inherited, catalog.permission('sales_orders.view')!, on: true, scope: 'all', widest: 'all');
       expect(o['sales_orders.view'], {'effect': 'grant', 'scope': 'all'}, reason: 'wider than the template');
@@ -290,29 +178,12 @@ void main() {
     });
 
     test('audit entries read as sentences, with what changed', () {
-      final e = AuditEvent({
-        'event_type': 'user.role_changed',
-        'actor': 'Mira',
-        'target': 'Asha',
-        'old_value': {'system_role': 'staff'},
-        'new_value': {'system_role': 'manager'},
-      });
+      final e = AuditEvent({'event_type': 'user.role_changed', 'actor': 'Mira', 'target': 'Asha', 'old_value': {'system_role': 'staff'}, 'new_value': {'system_role': 'manager'}});
       expect(e.sentence, 'Mira changed the system role of Asha');
       expect(e.details(catalog), ['Staff → Manager']);
-      final perms = AuditEvent({
-        'event_type': 'user.permissions_changed',
-        'actor': 'Mira',
-        'target': 'Asha',
-        'old_value': {},
-        'new_value': {
-          'clients.view': {'effect': 'revoke'},
-        },
-      });
+      final perms = AuditEvent({'event_type': 'user.permissions_changed', 'actor': 'Mira', 'target': 'Asha', 'old_value': {}, 'new_value': {'clients.view': {'effect': 'revoke'}}});
       expect(perms.details(catalog), ['View clients: as template → removed']);
-      expect(
-        AuditEvent({'event_type': 'user.signed_out_everywhere', 'actor': 'Mira', 'target': 'Asha'}).sentence,
-        'Mira signed out Asha on every device',
-      );
+      expect(AuditEvent({'event_type': 'user.signed_out_everywhere', 'actor': 'Mira', 'target': 'Asha'}).sentence, 'Mira signed out Asha on every device');
     });
   });
 
@@ -337,14 +208,8 @@ void main() {
       expect(backend.bodies['POST /api/users/u2/status'], {'status': 'suspended', 'reason': 'Left the team'});
       expect(await c.signOut('u2', sessionId: 's1'), 2);
       expect(backend.bodies['POST /api/users/u2/sign-out'], {'session_id': 's1'});
-      await c.setOverrides('u2', {
-        'clients.view': {'effect': 'revoke'},
-      });
-      expect(backend.bodies['PUT /api/users/u2/permissions'], {
-        'overrides': {
-          'clients.view': {'effect': 'revoke'},
-        },
-      });
+      await c.setOverrides('u2', {'clients.view': {'effect': 'revoke'}});
+      expect(backend.bodies['PUT /api/users/u2/permissions'], {'overrides': {'clients.view': {'effect': 'revoke'}}});
       await c.saveOrgUnit(kind: 'team', departmentId: 'd1', name: ' South ');
       expect(backend.bodies['POST /api/users/org-units'], {'kind': 'team', 'department_id': 'd1', 'name': 'South'});
       final events = await c.audit(user: 'u2', before: '9');
@@ -362,17 +227,7 @@ void main() {
       }
     }
 
-    const everything = UsersAbilities(
-      userId: 'me',
-      create: true,
-      edit: true,
-      permissions: true,
-      suspend: true,
-      sessions: true,
-      audit: true,
-      templates: true,
-      departments: true,
-    );
+    const everything = UsersAbilities(userId: 'me', create: true, edit: true, permissions: true, suspend: true, sessions: true, audit: true, templates: true, departments: true);
 
     Future<UsersController> pump(WidgetTester tester, {UsersAbilities abilities = everything}) async {
       HttpOverrides.global = null;
@@ -380,11 +235,7 @@ void main() {
       tester.view.devicePixelRatio = 2.6;
       addTearDown(tester.view.reset);
       final c = UsersController(api: backend.api);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: UsersScreen(controller: c, abilities: abilities, onOpenDrawer: () {}),
-        ),
-      );
+      await tester.pumpWidget(MaterialApp(home: UsersScreen(controller: c, abilities: abilities, onOpenDrawer: () {})));
       await settle(tester);
       return c;
     }
@@ -465,11 +316,7 @@ void main() {
       expect(find.text('Unsaved changes to their access.'), findsOneWidget);
       await tester.tap(find.text('Save'));
       await settle(tester);
-      expect(backend.bodies['PUT /api/users/u2/permissions'], {
-        'overrides': {
-          'clients.view': {'effect': 'revoke'},
-        },
-      });
+      expect(backend.bodies['PUT /api/users/u2/permissions'], {'overrides': {'clients.view': {'effect': 'revoke'}}});
       await done(tester, c);
     });
 
@@ -485,7 +332,12 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, 'Email'), 'new@example.test');
       await tester.tap(find.text('Add'));
       await settle(tester);
-      expect(backend.bodies['POST /api/users'], {'send_welcome': true, 'full_name': 'New Person', 'email': 'new@example.test', 'template_id': 't1'});
+      expect(backend.bodies['POST /api/users'], {
+        'send_welcome': true,
+        'full_name': 'New Person',
+        'email': 'new@example.test',
+        'template_id': 't1',
+      });
       expect(find.byType(UserProfileScreen), findsOneWidget, reason: 'opens the person just added');
       await done(tester, c);
     });

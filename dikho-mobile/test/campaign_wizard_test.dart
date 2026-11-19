@@ -29,13 +29,7 @@ class FakeWizardApi {
       if (path == '/api/contacts') {
         data = {
           'contacts': [
-            {
-              'id': 1,
-              'name': 'Asha Rao',
-              'phone': '919800000001',
-              'opted_out': 0,
-              'attributes': {'city': 'Pune'},
-            },
+            {'id': 1, 'name': 'Asha Rao', 'phone': '919800000001', 'opted_out': 0, 'attributes': {'city': 'Pune'}},
             {'id': 2, 'name': 'Bilal Khan', 'phone': '919800000002', 'opted_out': 0},
             {'id': 3, 'name': 'Opted Person', 'phone': '919800000003', 'opted_out': 1},
           ],
@@ -43,25 +37,8 @@ class FakeWizardApi {
       } else if (path == '/api/templates') {
         data = {
           'templates': [
-            {
-              'name': 'offer',
-              'language': 'en',
-              'category': 'MARKETING',
-              'status': 'APPROVED',
-              'headerText': '',
-              'bodyText': 'Hi {{name}}, see you in {{1}}',
-              'footerText': '',
-            },
-            {
-              'name': 'video_offer',
-              'language': 'en',
-              'category': 'MARKETING',
-              'status': 'APPROVED',
-              'headerFormat': 'VIDEO',
-              'headerText': '',
-              'bodyText': 'Watch this',
-              'footerText': '',
-            },
+            {'name': 'offer', 'language': 'en', 'category': 'MARKETING', 'status': 'APPROVED', 'headerText': '', 'bodyText': 'Hi {{name}}, see you in {{1}}', 'footerText': ''},
+            {'name': 'video_offer', 'language': 'en', 'category': 'MARKETING', 'status': 'APPROVED', 'headerFormat': 'VIDEO', 'headerText': '', 'bodyText': 'Watch this', 'footerText': ''},
           ],
         };
       } else if (path == '/api/campaigns/send') {
