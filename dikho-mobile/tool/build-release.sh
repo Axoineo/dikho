@@ -63,7 +63,7 @@ if $play; then
   flutter build appbundle --release --flavor play "${hardening[@]}" "${update_args[@]}" "${supabase_args[@]}"
   output=build/app/outputs/bundle/playRelease/app-play-release.aab
 else
-  flutter build apk --release --flavor direct --target-platform android-arm,android-arm64 "${hardening[@]}" "${update_args[@]}" "${supabase_args[@]}"
+  flutter build apk --release --flavor direct --target-platform android-arm64 "${hardening[@]}" "${update_args[@]}" "${supabase_args[@]}"
   output=build/app/outputs/flutter-apk/app-direct-release.apk
 fi
 

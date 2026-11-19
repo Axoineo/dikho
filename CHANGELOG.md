@@ -89,6 +89,20 @@ incident details or unreleased vulnerability exploitation instructions here.
   request changes with a note, pause, resume, cancel, send the next batch, delivery
   figures and history. Templates: list, edit, older versions restored as the newest,
   archive. A started campaign is never edited.
+- The Android app draws a sales order's tax invoice itself, on the CRM's own template
+  with the same fonts and positions as the web, and saves it to Downloads with Open;
+  it no longer opens the web page for it. New app dependency: PdfBox-Android 2.0.27
+  (Apache 2.0). Its line list leaves out purchase-order lines that only record which
+  sale they were bought for.
+- Tax invoices show the tax total in full. In the HSN tax table the amount ended
+  under the template's printed ₹ sign, so a tax of 180.00 read as ₹80.00; it now ends
+  inside the column. The Rate column no longer loses its last digit under the
+  column's line. Web and app alike.
+- Tax invoices print the real GST % on each line and in the HSN table. The rate used to
+  be read from `gst_type`, which only says how tax is split, so the column was blank.
+  The rate now comes from each line's amounts: a standard slab prints that slab, a
+  line with no tax prints 0, a custom tax prints the rate it works out to, and tax on
+  a zero taxable amount prints '-'.
 - Email settings is native in the Android app, so the whole Email Hub now is: your
   mailbox and shared mailboxes with their status, whether outside mail reaches them
   and storage, Sync now, connect (Google in the phone's browser, Hostinger at once),

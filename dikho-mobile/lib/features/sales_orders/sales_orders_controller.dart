@@ -124,6 +124,13 @@ class SalesOrdersController extends PagedRows<SalesOrder> {
   /// An order's own lines, oldest first. A purchase order's lines carry the sales
   /// order's id too (to say what they were bought for), with purchase_order_id set:
   /// they are never this order's lines.
+  /// One sales order as it is now, for its tax invoice; null when it is gone or this
+  /// person's access does not include it (RLS decides, as on the web).
+  Future<SalesOrder?> loadOrder(String orderId) async {
+    final page = await rest.select('salesorder', query: {'select': '*', 'id': 'eq.$orderId', 'vendor_address_id': 'is.null'}, from: 0, to: 0);
+    return page.rows.isEmpty ? null : SalesOrder(page.rows.first);
+  }
+
   Future<List<OrderItem>> loadItems(String orderId) async {
     final page = await rest.select(
       itemsTable,

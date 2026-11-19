@@ -11,3 +11,9 @@
     public static int e(...);
     public static int wtf(...);
 }
+
+# PdfBox (tax invoices): its optional JPEG 2000 decoder is not included.
+-dontwarn com.gemalto.jp2.JP2Decoder
+-dontwarn com.gemalto.jp2.JP2Encoder
+# Bouncy Castle is left out on purpose (only for encrypted PDFs).
+-dontwarn org.bouncycastle.**

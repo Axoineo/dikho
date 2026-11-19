@@ -117,6 +117,10 @@ class PlatformApi implements UpdaterPlatform {
   Future<void> fetchFile({required String url, required bool view, String? name, String? mime, String? contentDisposition}) =>
       _methods.invokeMethod('fetchFile', {'url': url, 'view': view, 'name': name, 'mime': mime, 'contentDisposition': contentDisposition});
 
+  /// Draws a tax invoice onto the CRM's template (TaxInvoice.kt) from texts laid out
+  /// by taxInvoiceLayout, into the transfer folder. Its path, or null when it failed.
+  Future<String?> makeTaxInvoice(List<Map<String, Object>> texts) => _methods.invokeMethod<String>('makeTaxInvoice', {'texts': texts});
+
   /// Saves (or, with [view], opens) a file this app downloaded into its own transfer
   /// folder (`<cacheDir>/transfers`). Progress and the outcome arrive as file events.
   Future<void> keepFile({required String path, required bool view, required String name, String? mime}) =>

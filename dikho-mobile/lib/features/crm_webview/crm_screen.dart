@@ -39,6 +39,7 @@ import '../settings/settings_controller.dart';
 import '../settings/settings_screen.dart';
 import '../sales_orders/sales_orders_models.dart';
 import '../sales_orders/sales_orders_screen.dart';
+import '../sales_orders/tax_invoice.dart';
 import '../vendors/vendors_controller.dart';
 import '../vendors/vendors_models.dart';
 import '../vendors/vendors_screen.dart';
@@ -681,9 +682,42 @@ class _CrmScreenState extends State<CrmScreen> with WidgetsBindingObserver {
     _openNative(NativeScreen.salesOrders, newOrderFor: ClientChoice(client.companyName, client.contactPerson));
   }
 
-  /// The tax invoice PDF is drawn by the CRM page from its template; Back returns here.
-  void _taxInvoiceFor(SalesOrder order) {
-    _openWebPageFromNative('/sales-orders/${order.id}/invoice', backTo: NativeScreen.salesOrders);
+  /// The tax invoice PDF, drawn on the phone onto the CRM's own template (TaxInvoice.kt)
+  /// from the order as it is now, then saved to Downloads with Open, like any file.
+  bool _makingInvoice = false;
+
+  Future<void> _taxInvoiceFor(SalesOrder order) async {
+    final orders = _salesOrders;
+    if (orders == null || _makingInvoice) return;
+    _makingInvoice = true;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(const SnackBar(content: Text('Making the tax invoice…')));
+    String? failure;
+    try {
+      final fresh = await orders.loadOrder(order.id);
+      if (fresh == null) {
+        failure = 'This order was not found, or your access does not include it.';
+      } else {
+        final items = await orders.loadItems(order.id);
+        final texts = [
+          for (final t in taxInvoiceLayout(fresh.raw, [for (final i in items) i.raw])) t.toJson(),
+        ];
+        final path = await widget.platform.makeTaxInvoice(texts);
+        if (path == null) {
+          failure = 'The PDF could not be drawn on this phone.';
+        } else {
+          await widget.platform.keepFile(path: path, view: false, name: taxInvoiceFileName(fresh.raw), mime: 'application/pdf');
+        }
+      }
+    } on ApiException catch (error) {
+      failure = error.message;
+    } finally {
+      _makingInvoice = false;
+    }
+    if (failure != null && mounted) {
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(SnackBar(content: Text('Could not make the tax invoice. $failure')));
+    }
   }
 
   void _askForHelp() {
