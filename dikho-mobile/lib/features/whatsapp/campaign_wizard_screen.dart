@@ -341,7 +341,7 @@ class _CampaignWizardScreenState extends State<CampaignWizardScreen> {
     if (id == null) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CampaignScreen(api: widget.api, id: id, title: _name.text.trim(), numberStyle: widget.numberStyle, onOpenWebPage: (_) {}),
+        builder: (_) => CampaignScreen(api: widget.api, id: id, title: _name.text.trim(), numberStyle: widget.numberStyle, canSend: true),
       ),
     );
   }

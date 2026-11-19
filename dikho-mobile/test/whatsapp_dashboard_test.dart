@@ -13,11 +13,31 @@ import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> analyticsBody({int days = 30, bool metaDown = false}) => {
   'range': {'days': days, 'from': '2026-10-11', 'to': '2026-11-09', 'previousFrom': '2026-09-11', 'utcOffsetMinutes': 330},
-  'totals': {'sent': 1000, 'delivered': 900, 'read': 450, 'failed': 40, 'awaiting': 10, 'inbound': 300, 'campaign': 800, 'replies': 150, 'automatic': 50},
+  'totals': {
+    'sent': 1000,
+    'delivered': 900,
+    'read': 450,
+    'failed': 40,
+    'awaiting': 10,
+    'inbound': 300,
+    'campaign': 800,
+    'replies': 150,
+    'automatic': 50,
+  },
   'previous': {'sent': 800, 'delivered': 760, 'read': 400, 'failed': 20, 'inbound': 300},
   'daily': [
     for (var i = 0; i < days; i++)
-      {'day': '2026-11-${(i % 9 + 1).toString().padLeft(2, '0')}', 'sent': i * 3, 'delivered': i * 2, 'read': i, 'failed': 0, 'inbound': i, 'campaign': 0, 'replies': 0, 'automatic': 0},
+      {
+        'day': '2026-11-${(i % 9 + 1).toString().padLeft(2, '0')}',
+        'sent': i * 3,
+        'delivered': i * 2,
+        'read': i,
+        'failed': 0,
+        'inbound': i,
+        'campaign': 0,
+        'replies': 0,
+        'automatic': 0,
+      },
   ],
   'failures': [
     {'code': '131049', 'count': 30, 'reason': 'Held back by Meta to protect engagement (marketing limit per person)'},
@@ -25,7 +45,13 @@ Map<String, dynamic> analyticsBody({int days = 30, bool metaDown = false}) => {
   ],
   'templates': [
     {
-      'name': 'diwali_offer', 'sent': 800, 'delivered': 720, 'read': 360, 'failed': 30, 'quality': 'YELLOW', 'status': 'APPROVED',
+      'name': 'diwali_offer',
+      'sent': 800,
+      'delivered': 720,
+      'read': 360,
+      'failed': 30,
+      'quality': 'YELLOW',
+      'status': 'APPROVED',
       'replyTaps': [
         {'label': 'Interested', 'count': 40},
       ],
@@ -42,11 +68,31 @@ Map<String, dynamic> analyticsBody({int days = 30, bool metaDown = false}) => {
   'templateInsights': metaDown ? {'available': false, 'reason': 'Meta answered 400.'} : {'available': true},
   'templateHealth': metaDown ? null : {'GREEN': 2, 'YELLOW': 1, 'RED': 0, 'UNKNOWN': 0, 'paused': 1},
   'campaigns': [
-    {'id': 12, 'name': 'Diwali offers', 'template': 'diwali_offer', 'status': 'completed', 'audience': 900, 'createdAt': '2026-11-03 04:30:00', 'sent': 880, 'delivered': 800, 'read': 400, 'failed': 30},
+    {
+      'id': 12,
+      'name': 'Diwali offers',
+      'template': 'diwali_offer',
+      'status': 'completed',
+      'audience': 900,
+      'createdAt': '2026-11-03 04:30:00',
+      'sent': 880,
+      'delivered': 800,
+      'read': 400,
+      'failed': 30,
+    },
   ],
   'audience': {'contacts': 5000, 'optedOut': 50, 'added': 120},
   'inbox': {'open': 40, 'unread': 6},
-  'account': metaDown ? null : {'phone': '+91 00000 00000', 'verifiedName': 'Example', 'nameStatus': 'APPROVED', 'quality': 'GREEN', 'throughput': 'STANDARD', 'messagingLimit': 'TIER_2K'},
+  'account': metaDown
+      ? null
+      : {
+          'phone': '+91 00000 00000',
+          'verifiedName': 'Example',
+          'nameStatus': 'APPROVED',
+          'quality': 'GREEN',
+          'throughput': 'STANDARD',
+          'messagingLimit': 'TIER_2K',
+        },
   'spend': metaDown
       ? null
       : {
@@ -65,7 +111,15 @@ Map<String, dynamic> analyticsBody({int days = 30, bool metaDown = false}) => {
 };
 
 final campaignBody = {
-  'campaign': {'id': 12, 'name': 'Diwali offers', 'template': 'diwali_offer', 'language': 'en', 'status': 'completed', 'audience': 900, 'createdAt': '2026-11-03 04:30:00'},
+  'campaign': {
+    'id': 12,
+    'name': 'Diwali offers',
+    'template': 'diwali_offer',
+    'language': 'en',
+    'status': 'completed',
+    'audience': 900,
+    'createdAt': '2026-11-03 04:30:00',
+  },
   'totals': {'sent': 880, 'delivered': 800, 'read': 400, 'failed': 30, 'awaiting': 50, 'notSent': 20, 'replied': 96, 'optedOut': 4},
   'failures': [
     {'code': '131026', 'count': 30, 'reason': 'Not on WhatsApp, or cannot receive this message'},
@@ -100,9 +154,16 @@ class FakeApi {
       final response = request.response..headers.contentType = ContentType.json;
       if (failWith != 0) {
         response.statusCode = failWith;
-        response.write(jsonEncode({'success': false, 'error': {'message': 'Not allowed'}}));
+        response.write(
+          jsonEncode({
+            'success': false,
+            'error': {'message': 'Not allowed'},
+          }),
+        );
       } else if (request.uri.path == '/api/whatsapp/analytics') {
-        response.write(jsonEncode({'success': true, 'data': analyticsBody(days: int.parse(request.uri.queryParameters['days'] ?? '30'), metaDown: metaDown)}));
+        response.write(
+          jsonEncode({'success': true, 'data': analyticsBody(days: int.parse(request.uri.queryParameters['days'] ?? '30'), metaDown: metaDown)}),
+        );
       } else if (request.uri.path == '/api/whatsapp/analytics/campaigns/12') {
         response.write(jsonEncode({'success': true, 'data': campaignBody}));
       } else {
@@ -170,11 +231,26 @@ void main() {
     });
 
     test('taps parse, and a template without insights has no link count', () {
-      final t = TemplateFigures.from({'name': 'a', 'replyTaps': [{'label': 'Yes', 'count': 3}], 'replyTapTotal': 3, 'linkTaps': null});
+      final t = TemplateFigures.from({
+        'name': 'a',
+        'replyTaps': [
+          {'label': 'Yes', 'count': 3},
+        ],
+        'replyTapTotal': 3,
+        'linkTaps': null,
+      });
       expect(t.taps, 3);
       expect(t.linkTaps, isNull);
       expect(t.replyTaps.single.template, 'a');
-      final c = CampaignPerformance.from({'taps': {'replies': [{'label': 'Yes', 'count': 2, 'people': 2}], 'links': [], 'insights': {'available': true}}});
+      final c = CampaignPerformance.from({
+        'taps': {
+          'replies': [
+            {'label': 'Yes', 'count': 2, 'people': 2},
+          ],
+          'links': [],
+          'insights': {'available': true},
+        },
+      });
       expect(c.replyTaps.single.people, 2);
       expect(c.linkTaps, isEmpty);
       expect(c.insights.available, isTrue);
@@ -182,7 +258,11 @@ void main() {
     });
 
     test('a malformed answer reads as zeros, not a crash', () {
-      final a = Analytics.from({'totals': 'nope', 'daily': [1, 'x', null], 'spend': 3});
+      final a = Analytics.from({
+        'totals': 'nope',
+        'daily': [1, 'x', null],
+        'spend': 3,
+      });
       expect(a.totals.sent, 0);
       expect(a.daily, isEmpty);
       expect(a.spend, isNull);
@@ -233,7 +313,6 @@ void main() {
           home: DashboardScreen(
             api: backend.api,
             onOpenDrawer: () {},
-            onOpenWebPage: opened.add,
             onNewCampaign: () => opened.add('new campaign'),
             onOpenInbox: () => opened.add('inbox'),
             canSend: canSend,

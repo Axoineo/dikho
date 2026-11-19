@@ -71,7 +71,6 @@ class CampaignsScreen extends StatefulWidget {
     required this.api,
     required this.platform,
     required this.onOpenDrawer,
-    required this.onOpenWebPage,
     this.onNewCampaign,
     this.canSend = false,
     this.numberStyle = 'en-IN',
@@ -84,7 +83,6 @@ class CampaignsScreen extends StatefulWidget {
 
   /// Instead of the native wizard, for tests.
   final VoidCallback? onNewCampaign;
-  final ValueChanged<String> onOpenWebPage;
   final bool canSend;
   final String numberStyle;
 
@@ -162,8 +160,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
   Future<void> _open(CampaignRow row) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            CampaignScreen(api: widget.api, id: row.id, title: row.name, numberStyle: widget.numberStyle, onOpenWebPage: widget.onOpenWebPage),
+        builder: (_) => CampaignScreen(api: widget.api, id: row.id, title: row.name, numberStyle: widget.numberStyle, canSend: widget.canSend),
       ),
     );
     if (mounted) unawaited(_load());

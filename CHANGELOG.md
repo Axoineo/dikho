@@ -89,6 +89,10 @@ incident details or unreleased vulnerability exploitation instructions here.
   request changes with a note, pause, resume, cancel, send the next batch, delivery
   figures and history. Templates: list, edit, older versions restored as the newest,
   archive. A started campaign is never edited.
+- A WhatsApp campaign's "Not received" list is native in the Android app: who failed
+  or was never attempted and why, and Send again (asked first, each message is paid)
+  in batches until nobody is left, stopping by itself when Meta reports a problem. No
+  screen in the app opens a web page any more.
 - WhatsApp contact imports are native in the Android app: choose a CSV, Excel or
   JSON file, check (and change) which columns are the WhatsApp number, name, email and
   company, see how many are ready and why the rest are skipped, then import. The file

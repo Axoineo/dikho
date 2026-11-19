@@ -564,14 +564,6 @@ class _CrmScreenState extends State<CrmScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// "New order" on a client: the CRM's sales order form, with that client chosen.
-  /// A CRM page asked for from a native screen (New campaign, a campaign's recipients,
-  /// the contacts importer). With [backTo], Back from the page returns to that screen.
-  void _openWebPageFromNative(String path, {NativeScreen? backTo}) {
-    _closeNative();
-    _shell.openWebPage(path, via: backTo == null ? null : handoffPathFor(backTo));
-  }
-
   static UsersAbilities _usersAbilities(ShellAccess access) => UsersAbilities(
     userId: access.userId,
     create: access.can('users.create'),
@@ -1515,7 +1507,6 @@ class _CrmScreenState extends State<CrmScreen> with WidgetsBindingObserver {
                     api: _api!,
                     canSend: access.can('campaigns.send') && access.mayOpen('/whatsapp/campaigns'),
                     onOpenDrawer: _openDrawer,
-                    onOpenWebPage: _openWebPageFromNative,
                     platform: widget.platform,
                     onOpenInbox: access.mayOpen('/whatsapp/inbox') ? () => _openNative(NativeScreen.inbox) : null,
                   ),
@@ -1677,8 +1668,6 @@ class _CrmScreenState extends State<CrmScreen> with WidgetsBindingObserver {
                     platform: widget.platform,
                     canSend: access.can('campaigns.send'),
                     onOpenDrawer: _openDrawer,
-                    // A campaign's recipient list is a CRM page; Back returns to this list.
-                    onOpenWebPage: (path) => _openWebPageFromNative(path, backTo: NativeScreen.waCampaigns),
                   ),
                   NativeScreen.waContacts => ContactsScreen(
                     key: const ValueKey('wa-contacts'),
