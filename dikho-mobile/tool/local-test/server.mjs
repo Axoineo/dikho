@@ -1193,6 +1193,19 @@ createServer(async (req, res) => {
         recent_sign_ins: [],
       })
     }
+    // Contacts read and checked on the phone; only clean rows arrive. Logged, then kept.
+    if (path === '/api/contacts/import-rows' && req.method === 'POST') {
+      const body = await readBody(req)
+      const list = Array.isArray(body?.contacts) ? body.contacts : []
+      log('contacts_import', { count: list.length, phones: list.map((c) => c.phone), names: list.map((c) => c.name), attributes: list.map((c) => c.attributes) })
+      let imported = 0
+      for (const c of list) {
+        if (CONTACTS.some((x) => x.phone === c.phone)) continue
+        CONTACTS.unshift({ id: Math.max(0, ...CONTACTS.map((x) => x.id)) + 1, name: c.name, phone: c.phone, email: c.email, company: c.company, attributes: c.attributes, opted_out: 0, created_at: new Date().toISOString().replace('T', ' ').slice(0, 19) })
+        imported += 1
+      }
+      return json(res, 200, { success: true, data: { received: list.length, imported, updated: 0, unchanged: list.length - imported, duplicates: 0, invalid: 0, optedOut: 0, contacts: [] } })
+    }
     if (path === '/api/contacts' && req.method === 'DELETE') {
       const body = await readBody(req)
       const ids = body?.all === true ? CONTACTS.map((c) => c.id) : (Array.isArray(body?.contactIds) ? body.contactIds.map(Number) : [])

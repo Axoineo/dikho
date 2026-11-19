@@ -89,6 +89,11 @@ incident details or unreleased vulnerability exploitation instructions here.
   request changes with a note, pause, resume, cancel, send the next batch, delivery
   figures and history. Templates: list, edit, older versions restored as the newest,
   archive. A started campaign is never edited.
+- WhatsApp contact imports are native in the Android app: choose a CSV, Excel or
+  JSON file, check (and change) which columns are the WhatsApp number, name, email and
+  company, see how many are ready and why the rest are skipped, then import. The file
+  is read on the phone with the web importer's rules and limits. New app dependency:
+  phone_numbers_parser (MIT). The app no longer opens the web importer.
 - The Android app draws a sales order's tax invoice itself, on the CRM's own template
   with the same fonts and positions as the web, and saves it to Downloads with Open;
   it no longer opens the web page for it. New app dependency: PdfBox-Android 2.0.27

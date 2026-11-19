@@ -11,6 +11,7 @@ import '../inbox/chat_theme.dart';
 import '../inbox/inbox_api.dart';
 import '../inbox/template_sheet.dart';
 import 'analytics_models.dart' show parseStamp;
+import 'contact_import_screen.dart';
 import 'contacts_controller.dart';
 import 'contacts_models.dart';
 
@@ -35,7 +36,6 @@ class ContactsScreen extends StatefulWidget {
     required this.inboxApi,
     required this.abilities,
     required this.onOpenDrawer,
-    required this.onImport,
   });
 
   final ContactsController controller;
@@ -43,9 +43,6 @@ class ContactsScreen extends StatefulWidget {
   final InboxApi inboxApi;
   final ContactAbilities abilities;
   final VoidCallback onOpenDrawer;
-
-  /// Opens the web importer: reading Excel, CSV and JSON files stays in one place.
-  final VoidCallback onImport;
 
   @override
   State<ContactsScreen> createState() => _ContactsScreenState();
@@ -117,6 +114,22 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
   }
 
+  /// A spreadsheet of contacts, read and checked on the phone, then this list again.
+  Future<void> _import() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ContactImportScreen(
+          api: _contacts.api,
+          platform: widget.platform,
+          onImported: (summary) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(summary)));
+          },
+        ),
+      ),
+    );
+    if (mounted) unawaited(_contacts.reload());
+  }
+
   Future<void> _deleteAll() async {
     final total = _contacts.total ?? 0;
     final label = total == 1 ? 'the only contact' : 'all ${formatCount(total)} contacts';
@@ -157,7 +170,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         if (menu.isNotEmpty)
           PopupMenuButton<String>(
             tooltip: 'More',
-            onSelected: (value) => value == 'import' ? widget.onImport() : unawaited(_deleteAll()),
+            onSelected: (value) => value == 'import' ? unawaited(_import()) : unawaited(_deleteAll()),
             itemBuilder: (_) => menu,
           ),
       ],
@@ -248,7 +261,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ? 'Contacts are added by importing a spreadsheet, and when someone writes to you on WhatsApp.'
             : 'Try a different name, number or company.',
         action: _contacts.query.isEmpty && widget.abilities.import ? 'Import a spreadsheet' : null,
-        onAction: _contacts.query.isEmpty && widget.abilities.import ? widget.onImport : null,
+        onAction: _contacts.query.isEmpty && widget.abilities.import ? () => unawaited(_import()) : null,
       );
     }
     final footer = _contacts.hasMore ? 1 : 0;
