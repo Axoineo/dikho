@@ -113,3 +113,16 @@ test('header words that only contain "name" do not make a column the contact nam
   const table = await read('File Name,Agent Name,Party Name,Phone\na.pdf,Staff One,Kiran Rao,9876543210\nb.pdf,Staff Two,Meera Das,9123456789')
   assert.equal(detectColumns(table.columns, table.rows).nameColumn, 'Party Name')
 })
+
+test('a First Name column beats a loose name match such as "Original Contact Name"', async () => {
+  // The owner's real layout: first name, number with country code, phone-book name.
+  const table = await read('First Name,Phone (with country code),Original Contact Name\nAsha,919876543210,Asha Gym Pune\nRavi,919123456789,Ravi K Office')
+  const found = detectColumns(table.columns, table.rows)
+  assert.deepEqual(found.phoneColumns, ['Phone (with country code)'])
+  assert.equal(found.nameColumn, null)
+  assert.equal(found.firstNameColumn, 'First Name')
+  assert.deepEqual(readContactRow(table.rows[1], table.columns, found), { phone: '919123456789', name: 'Ravi', email: null, company: null })
+
+  const plain = await read('Name,First Name,Phone\nAsha Verma,Asha,9876543210')
+  assert.equal(detectColumns(plain.columns, plain.rows).nameColumn, 'Name', 'a plain Name column still wins')
+})

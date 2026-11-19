@@ -6,7 +6,7 @@ import { importSummary } from './labels'
 import { useAccess } from '../../lib/access'
 import { ResultCount, SearchField } from '../../components/crm/CrmUi'
 import {
-  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Spinner, Table, Td, Th,
+  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Table, Td, Th,
 } from './ui'
 
 // A page at a time: lists run to thousands, and all of them in the document at

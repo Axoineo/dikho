@@ -15,7 +15,7 @@ import { supabase } from '../../../lib/supabase'
 // single multiplexed WS connection, so there is no server to run by hand.
 export function useInboxRealtime({
   onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
-  onConversationCleared, onConversationDeleted, onConversationBlocked, onMessageHidden, onResync,
+  onConversationCleared, onConversationDeleted, onConversationBlocked, onConversationOpted, onMessageHidden, onResync,
 }) {
   useEffect(() => {
     const channel = supabase
@@ -27,6 +27,8 @@ export function useInboxRealtime({
       .on('broadcast', { event: 'conversation:cleared' }, ({ payload }) => onConversationCleared?.(payload))
       .on('broadcast', { event: 'conversation:deleted' }, ({ payload }) => onConversationDeleted?.(payload))
       .on('broadcast', { event: 'conversation:blocked' }, ({ payload }) => onConversationBlocked?.(payload))
+      // The customer replied STOP or START (services/whatsapp/optKeywords.js).
+      .on('broadcast', { event: 'conversation:opted' }, ({ payload }) => onConversationOpted?.(payload))
       .on('broadcast', { event: 'message:hidden' }, ({ payload }) => onMessageHidden?.(payload))
       // Broadcasts are fire-and-forget: anything sent while the socket was
       // down is simply gone, never replayed. SUBSCRIBED fires on the initial
@@ -36,5 +38,5 @@ export function useInboxRealtime({
 
     return () => { supabase.removeChannel(channel) }
   }, [onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
-    onConversationCleared, onConversationDeleted, onConversationBlocked, onMessageHidden, onResync])
+    onConversationCleared, onConversationDeleted, onConversationBlocked, onConversationOpted, onMessageHidden, onResync])
 }

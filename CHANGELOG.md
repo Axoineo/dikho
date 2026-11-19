@@ -200,6 +200,16 @@ incident details or unreleased vulnerability exploitation instructions here.
   themselves if insights are ever switched on.
   `scripts/whatsapp/check-template-insights.mjs` checks, read-only, whether Meta
   answers for the account's templates with website buttons.
+- WhatsApp STOP and START replies. A customer whose message is just STOP (any
+  capitals) is opted out and gets one confirmation reply: "Your request to STOP
+  receiving updates has been successfully registered. Please reply START if you
+  would like to start receiving important updates on WhatsApp again. Thank you."
+  The reply is kept in the chat. Campaigns skip opted-out people, and the inbox
+  shows an "Opted out" tag in the chat list and Contact info plus a warning above
+  the message box. A reply of START opts them back in and confirms it: "Your
+  request to START receiving updates has been successfully registered. Please
+  reply STOP if you would like to stop receiving important updates on
+  WhatsApp. Thank you." Someone who was not opted out gets no reply to START.
 - Android app (`dikho-mobile/`), a Flutter shell around the deployed CRM with
   native downloads, uploads, external-link handling and self-updates, plus its
   update Worker (`cloudflare-updater/`). Built and tested on emulators with a test
@@ -367,6 +377,36 @@ incident details or unreleased vulnerability exploitation instructions here.
   which hid the mic, the message times and the chat menu, and no longer pushes
   the conversation list out of view on a phone held sideways or a small tablet.
 - The Android launcher icon no longer has its corners cut by round icon masks.
+- The campaign wizard after an import: only that file's contacts are listed,
+  all selected, 25 to a page with a pager (All contacts shows everyone), and
+  the import message has a Continue button, so nobody scrolls thousands of
+  rows. The chosen template is clearly marked (outline, tick, Selected) with
+  its phone preview beside the list. The Preview step lists every column of
+  the file for each variable, including the phone column, and a table shows
+  what each number will get, 10 to a page. A First Name column now beats a
+  loose name match such as "Original Contact Name".
+- Contact imports are read in the browser and shown for checking before
+  anything is saved: the WhatsApp number, spare phone columns, name (or first
+  plus last name), email and company are detected and can be changed. Numbers
+  are checked with `libphonenumber-js` (new dependency, MIT, no dependencies of
+  its own, loaded only when a file is chosen), so order IDs, landlines,
+  placeholders and numbers Excel rounded to 9.19877E+11 are skipped with a
+  reason. Title rows above the headers and sheets with no header row are
+  handled, blank or repeated headers keep their columns, and names in one case
+  are tidied. A re-import writes only contacts that changed. In the campaign
+  wizard the imported file's contacts are selected, even ones older than the
+  newest 2,000 the list shows.
+- WhatsApp campaigns are sent at a chosen pace (a batch of 40 every 30 seconds
+  by default, or every minute, or without pauses), with live progress and a
+  Stop button. Sending stops by itself when Meta reports a spam limit, a paused
+  or mismatched template, an account block, a payment problem, a bad token or a
+  rate limit, or when most of a batch fails; people not yet messaged stay on
+  the campaign to send later. Campaigns stopped this way show as Stopped.
+- A template's header video, photo or PDF can be uploaded from the wizard; it
+  goes to Meta once and every message reuses the media ID.
+- People who choose "Stop promotions" in WhatsApp (Meta error 131050) are
+  opted out of campaigns automatically.
+
 - The screens that still differed from the agreed mockups now match them:
   - Sign-in is one plain card; the blue welcome half is gone.
   - Sidebar in the mockup's order (Clients, Leads, Sales orders, Vendors,
@@ -476,30 +516,6 @@ incident details or unreleased vulnerability exploitation instructions here.
   build and the high-signal secret scan.
 - Documentation now distinguishes the production Cloudflare Pages SPA from the
   unused standalone SPA Worker deployment command.
-
-### Changed
-
-- Contact imports are read in the browser and shown for checking before
-  anything is saved: the WhatsApp number, spare phone columns, name (or first
-  plus last name), email and company are detected and can be changed. Numbers
-  are checked with `libphonenumber-js` (new dependency, MIT, no dependencies of
-  its own, loaded only when a file is chosen), so order IDs, landlines,
-  placeholders and numbers Excel rounded to 9.19877E+11 are skipped with a
-  reason. Title rows above the headers and sheets with no header row are
-  handled, blank or repeated headers keep their columns, and names in one case
-  are tidied. A re-import writes only contacts that changed. In the campaign
-  wizard the imported file's contacts are selected, even ones older than the
-  newest 2,000 the list shows.
-- WhatsApp campaigns are sent at a chosen pace (a batch of 40 every 30 seconds
-  by default, or every minute, or without pauses), with live progress and a
-  Stop button. Sending stops by itself when Meta reports a spam limit, a paused
-  or mismatched template, an account block, a payment problem, a bad token or a
-  rate limit, or when most of a batch fails; people not yet messaged stay on
-  the campaign to send later. Campaigns stopped this way show as Stopped.
-- A template's header video, photo or PDF can be uploaded from the wizard; it
-  goes to Meta once and every message reuses the media ID.
-- People who choose "Stop promotions" in WhatsApp (Meta error 131050) are
-  opted out of campaigns automatically.
 
 ### Fixed
 

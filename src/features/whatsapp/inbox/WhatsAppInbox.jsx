@@ -166,6 +166,10 @@ export default function WhatsAppInbox() {
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, blocked_at: blocked_at ?? null } : c)))
   }, [])
 
+  const onConversationOpted = useCallback(({ id, opted_out }) => {
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, opted_out: opted_out ? 1 : 0 } : c)))
+  }, [])
+
   const onMessageHidden = useCallback(({ id }) => {
     setThread(withRows((prev) => prev.filter((m) => m.id !== id)))
   }, [])
@@ -199,7 +203,7 @@ export default function WhatsAppInbox() {
 
   useInboxRealtime({
     onNewMessage, onMessageUpdated, onStatus, onConversationUpdated,
-    onConversationCleared, onConversationDeleted, onConversationBlocked, onMessageHidden,
+    onConversationCleared, onConversationDeleted, onConversationBlocked, onConversationOpted, onMessageHidden,
     onResync: refresh,
   })
 

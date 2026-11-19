@@ -7,6 +7,7 @@ import { broadcast } from './realtime.js'
 import { ingestMedia, markMediaFailed } from './media.js'
 import { logError } from '../../utils/logger.js'
 import { parseInbound, serializePayload } from './richContent.js'
+import { applyOptKeyword, optKeyword } from './optKeywords.js'
 
 // Each message kind becomes { type, body, media, payload } in
 // richContent.parseInbound: `body` is the plain-text summary, `payload` the
@@ -93,7 +94,11 @@ export async function processInboundMessage(c, event) {
   //    the message:updated broadcast once the re-host completes.
   await broadcast(c.env, 'message:new', { conversation: conv, message: row })
 
-  // 5. Re-host media in the background so the webhook can return its 200 fast.
+  // 5. "STOP" opts the person out (with a confirmation reply), "START" back in.
+  const keyword = optKeyword(m)
+  if (keyword) await applyOptKeyword(c, { keyword, conv })
+
+  // 6. Re-host media in the background so the webhook can return its 200 fast.
   if (media?.id) {
     c.executionCtx.waitUntil(
       ingestMedia(c.env, { messageId: row.id, mediaId: media.id }).catch((err) => {

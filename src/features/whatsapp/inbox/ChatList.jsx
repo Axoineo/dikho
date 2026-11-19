@@ -217,8 +217,16 @@ export function ChatList({ conversations, activeId, onSelect, loading, error, on
               <Avatar name={conv.wa_name || conv.contact_name} phone={conv.phone} avatarUrl={conv.avatar_url} size={36} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2.5">
-                  <span className={`truncate text-[13px] ${unread || active ? 'font-medium text-ink' : 'font-normal text-ink'}`}>
-                    {displayName(conv)}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className={`truncate text-[13px] ${unread || active ? 'font-medium text-ink' : 'font-normal text-ink'}`}>
+                      {displayName(conv)}
+                    </span>
+                    {Boolean(conv.opted_out) && (
+                      <span className="shrink-0 rounded-full bg-tint-danger px-1.5 py-px text-[10.5px] font-medium text-danger"
+                        title="Replied STOP: do not send updates">
+                        Opted out
+                      </span>
+                    )}
                   </span>
                   <span className={`shrink-0 text-[12px] tabular-nums ${unread ? 'font-medium text-brand-ink' : 'text-muted'}`}>
                     {formatListTime(conv.last_message_at)}

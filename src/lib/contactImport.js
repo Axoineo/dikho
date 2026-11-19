@@ -212,12 +212,18 @@ export function detectColumns(columns, rows, { headerless = false } = {}) {
     return score && share(sample(rows, column), looksLikeName) >= 0.6 ? score : 0
   })
 
+  // A "First Name" column beats a loose match such as "Original Contact Name"
+  // or "Display Name" (a phone-book label like "Asha Gym"): someone who made a
+  // first-name column wants it in the greeting. A plain "Name" or "Customer
+  // Name" column still wins.
+  const firstName = textColumns.find((column) => /^(first|given)(name)?$|^fname$/.test(normalizeKey(column))) ?? null
+  const lastName = textColumns.find((column) => /^(last|sur|family)(name)?$|^lname$/.test(normalizeKey(column))) ?? null
   let firstNameColumn = null
   let lastNameColumn = null
-  if (!nameColumn) {
-    firstNameColumn = textColumns.find((column) => /^(first|given)(name)?$|^fname$/.test(normalizeKey(column))) ?? null
-    lastNameColumn = textColumns.find((column) => /^(last|sur|family)(name)?$|^lname$/.test(normalizeKey(column))) ?? null
-    if (!firstNameColumn) lastNameColumn = null
+  if (firstName && (!nameColumn || nameScore(normalizeKey(nameColumn)) < 85)) {
+    nameColumn = null
+    firstNameColumn = firstName
+    lastNameColumn = lastName
   }
 
   if (!nameColumn && !firstNameColumn && headerless) {

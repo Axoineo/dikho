@@ -34,7 +34,9 @@ async function readFile(file) {
 function initialMapping(detected) {
   return {
     phone: detected.phoneColumns[0] ?? '',
-    name: detected.nameColumn ?? (detected.firstNameColumn ? FIRST_LAST : ''),
+    // First plus last name when both exist, else the first-name column alone.
+    name: detected.nameColumn
+      ?? (detected.firstNameColumn && detected.lastNameColumn ? FIRST_LAST : detected.firstNameColumn ?? ''),
     email: detected.emailColumn ?? '',
     company: detected.companyColumn ?? '',
   }
@@ -68,9 +70,10 @@ function buildContacts({ table, detected, importer }, mapping) {
     const contact = importer.readContactRow(row, columns, plan)
     if (!contact.phone) { note(contact.reason, row); continue }
     if (byPhone.has(contact.phone)) note('duplicate', row)
+    // Every column is kept, the phone column too, so each one can fill a
+    // template variable for exactly this person.
     const attributes = {}
     for (const column of columns) {
-      if (column === mapping.phone) continue
       const value = String(row[column] ?? '').trim()
       if (value) attributes[column] = value.slice(0, 2000)
     }
@@ -147,7 +150,7 @@ export function ContactImportReview({ file, onCancel, onImported }) {
     setError(null)
     try {
       const result = await apiPost('/contacts/import-rows', { contacts: preview.contacts })
-      onImported({ ...result, skipped: preview.skipped })
+      onImported({ ...result, skipped: preview.skipped, fileName: file.name })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -180,8 +183,8 @@ export function ContactImportReview({ file, onCancel, onImported }) {
         </p>
       )}
       <p className="m-0 px-3.5 pb-3 text-[12px] text-muted">
-        Every other column is kept for template variables. Names in all capitals or all small letters are tidied
-        (RAHUL SHARMA becomes Rahul Sharma).
+        Every column is kept for template variables, each filled from that person's own row. Names in all
+        capitals or all small letters are tidied (RAHUL SHARMA becomes Rahul Sharma).
       </p>
 
       <div className="border-t border-line px-3.5 py-3 text-[13px]">
