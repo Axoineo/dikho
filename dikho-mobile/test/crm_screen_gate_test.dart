@@ -14,29 +14,16 @@ void main() {
 
   setUp(() {
     calls.clear();
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(
-      const MethodChannel('in.dikho.crm/platform'),
-      (call) async {
-        calls.add(call);
-        return call.method == 'openExternal' ? true : null;
-      },
-    );
-    messenger.setMockMethodCallHandler(
-      const MethodChannel('in.dikho.crm/events'),
-      (call) async => null,
-    );
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(const MethodChannel('in.dikho.crm/platform'), (call) async {
+      calls.add(call);
+      return call.method == 'openExternal' ? true : null;
+    });
+    messenger.setMockMethodCallHandler(const MethodChannel('in.dikho.crm/events'), (call) async => null);
   });
 
-  AppInfo info(int webViewMajor) => AppInfo(
-    versionName: '1.0.0',
-    versionCode: 1,
-    sdkInt: 31,
-    webViewMajor: webViewMajor,
-    filesDir: '/nonexistent',
-    cacheDir: '/nonexistent',
-  );
+  AppInfo info(int webViewMajor) =>
+      AppInfo(versionName: '1.0.0', versionCode: 1, sdkInt: 31, webViewMajor: webViewMajor, filesDir: '/nonexistent', cacheDir: '/nonexistent');
 
   Future<void> pump(WidgetTester tester, int webViewMajor) => tester.pumpWidget(
     MaterialApp(
@@ -46,17 +33,17 @@ void main() {
         navigatorKey: GlobalKey<NavigatorState>(),
         shell: ShellController(),
         // Signed out: the explanation still comes first.
-        auth: AuthController(api: AuthApi(base: Uri.parse('http://localhost:1'), apiKey: 'k'), storageKey: 'sb-x-auth-token')
-          ..state = AuthState.signedOut,
+        auth: AuthController(
+          api: AuthApi(base: Uri.parse('http://localhost:1'), apiKey: 'k'),
+          storageKey: 'sb-x-auth-token',
+        )..state = AuthState.signedOut,
         assistHost: ValueNotifier(null),
         captureKey: GlobalKey(),
       ),
     ),
   );
 
-  testWidgets('an old WebView gets an explanation instead of a blank page', (
-    tester,
-  ) async {
+  testWidgets('an old WebView gets an explanation instead of a blank page', (tester) async {
     await pump(tester, minimumWebViewMajor - 1);
     await tester.pump();
     expect(find.text('Update Android System WebView'), findsOneWidget);
@@ -66,17 +53,12 @@ void main() {
     expect(calls.where((call) => call.method == 'attachWebView'), isEmpty);
   });
 
-  testWidgets('the button opens the WebView listing and nothing else', (
-    tester,
-  ) async {
+  testWidgets('the button opens the WebView listing and nothing else', (tester) async {
     await pump(tester, minimumWebViewMajor - 1);
     await tester.pump();
     await tester.tap(find.text('Open Play Store'));
     await tester.pump();
     final opened = calls.singleWhere((call) => call.method == 'openExternal');
-    expect(
-      (opened.arguments as Map)['url'],
-      'https://play.google.com/store/apps/details?id=com.google.android.webview',
-    );
+    expect((opened.arguments as Map)['url'], 'https://play.google.com/store/apps/details?id=com.google.android.webview');
   });
 }

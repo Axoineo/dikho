@@ -13,11 +13,8 @@ Map<String, Object?> _valid() => {
   'publishedAt': '2026-11-04T00:00:00Z',
 };
 
-UpdateInfo? _parse(Object? json, {int installed = 1}) => UpdateInfo.parse(
-  json,
-  installedVersionCode: installed,
-  isAllowedApkUrl: (uri) => uri.host == 'updates.example.test',
-);
+UpdateInfo? _parse(Object? json, {int installed = 1}) =>
+    UpdateInfo.parse(json, installedVersionCode: installed, isAllowedApkUrl: (uri) => uri.host == 'updates.example.test');
 
 void main() {
   test('no update is null', () {
@@ -48,11 +45,7 @@ void main() {
     for (final MapEntry(key: field, value: values) in broken.entries) {
       for (final value in values) {
         final json = _valid()..[field] = value;
-        expect(
-          () => _parse(json),
-          throwsFormatException,
-          reason: '$field=$value',
-        );
+        expect(() => _parse(json), throwsFormatException, reason: '$field=$value');
       }
     }
   });

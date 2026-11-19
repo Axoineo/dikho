@@ -80,11 +80,7 @@ void main() {
     expect(saved?.mandatory, isTrue);
     expect(saved?.releaseNotes, 'Notes');
 
-    expect(
-      restarted.requiredUpdate(installedVersionCode: 5, isAllowedApkUrl: _allowed),
-      isNull,
-      reason: 'installed: the block lifts by itself',
-    );
+    expect(restarted.requiredUpdate(installedVersionCode: 5, isAllowedApkUrl: _allowed), isNull, reason: 'installed: the block lifts by itself');
   });
 
   test('a required update the server dropped is forgotten', () async {

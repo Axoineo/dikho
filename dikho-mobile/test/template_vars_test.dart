@@ -13,19 +13,17 @@ void main() {
   });
 
   test('auto-mapping: named by name, positional from the unclaimed sheet columns, in order', () {
-    expect(
-      autoMap(['customer_name', 'city', 'company_name', 'unknown'], fields: contactFields, attributeKeys: ['City', 'Customer Name']),
-      {
-        'customer_name': const VarSource.attribute('Customer Name'),
-        'city': const VarSource.attribute('City'),
-        // As the JS does: "name" is checked before "company" for a partial match.
-        'company_name': const VarSource.field('name'),
-      },
-    );
-    expect(
-      autoMap(['2', '1', 'city'], fields: ['name'], attributeKeys: ['city', 'amount', 'date']),
-      {'1': const VarSource.attribute('amount'), '2': const VarSource.attribute('date'), 'city': const VarSource.attribute('city')},
-    );
+    expect(autoMap(['customer_name', 'city', 'company_name', 'unknown'], fields: contactFields, attributeKeys: ['City', 'Customer Name']), {
+      'customer_name': const VarSource.attribute('Customer Name'),
+      'city': const VarSource.attribute('City'),
+      // As the JS does: "name" is checked before "company" for a partial match.
+      'company_name': const VarSource.field('name'),
+    });
+    expect(autoMap(['2', '1', 'city'], fields: ['name'], attributeKeys: ['city', 'amount', 'date']), {
+      '1': const VarSource.attribute('amount'),
+      '2': const VarSource.attribute('date'),
+      'city': const VarSource.attribute('city'),
+    });
   });
 
   test('rendering fills values, flattens whitespace, and leaves gaps visible', () {
@@ -51,7 +49,16 @@ void main() {
 
   test('a header file is a media id or a clean https link, nothing else', () {
     expect(
-      ['1234567', 'https://example.com/v.mp4', 'http://example.com/v.mp4', 'https://user:pw@example.com/a', 'ftp://x', '', 'javascript:alert(1)', '12ab'].map(parseHeaderMedia).toList(),
+      [
+        '1234567',
+        'https://example.com/v.mp4',
+        'http://example.com/v.mp4',
+        'https://user:pw@example.com/a',
+        'ftp://x',
+        '',
+        'javascript:alert(1)',
+        '12ab',
+      ].map(parseHeaderMedia).toList(),
       ['1234567', 'https://example.com/v.mp4', null, null, null, null, null, null],
     );
     expect(mediaHeaderFormat('video'), 'VIDEO');

@@ -2,10 +2,7 @@ import 'package:dikho_crm/features/crm_webview/navigation_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  final policy = NavigationPolicy(
-    crmOrigin: Uri.parse('https://manage.dikho.in'),
-    apiOrigin: Uri.parse('https://api.example.test'),
-  );
+  final policy = NavigationPolicy(crmOrigin: Uri.parse('https://manage.dikho.in'), apiOrigin: Uri.parse('https://api.example.test'));
 
   void expectAll(NavigationTarget target, List<String> urls) {
     for (final url in urls) {
@@ -35,10 +32,7 @@ void main() {
   });
 
   test('credentials in a URL are refused', () {
-    expectAll(NavigationTarget.blocked, [
-      'https://user:pw@manage.dikho.in/',
-      'https://manage.dikho.in@evil.example/',
-    ]);
+    expectAll(NavigationTarget.blocked, ['https://user:pw@manage.dikho.in/', 'https://manage.dikho.in@evil.example/']);
   });
 
   test('apps may handle only the allowed schemes', () {
@@ -81,19 +75,11 @@ void main() {
       'https://api.example.test/api/email/oauth/google/callback',
       'https://supabase.co.evil.example/storage/v1/object/sign/a.pdf',
     ]);
-    expect(
-      policy.classify('http://abcdefgh.supabase.co/storage/v1/object/a'),
-      NavigationTarget.external,
-    );
+    expect(policy.classify('http://abcdefgh.supabase.co/storage/v1/object/a'), NavigationTarget.external);
   });
 
   test('deep links are limited to the Gmail return path on the CRM origin', () {
-    expect(
-      policy.isAllowedDeepLink(
-        'https://manage.dikho.in/email/connect?state=abc&code=def',
-      ),
-      isTrue,
-    );
+    expect(policy.isAllowedDeepLink('https://manage.dikho.in/email/connect?state=abc&code=def'), isTrue);
     for (final url in [
       'https://manage.dikho.in/',
       'https://manage.dikho.in/clients',

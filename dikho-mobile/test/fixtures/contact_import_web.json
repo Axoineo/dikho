@@ -1,0 +1,960 @@
+{
+ "phones": [
+  [
+   "9876543210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "+91 98765 43210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "91-98765-43210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "919876543210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "09876543210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "0091 9876543210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "(+91) 98765-43210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "'9876543210",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "9876543210.0",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "9.87654321E+09",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   " 98765 43210 ",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "98765 43210 / 91234 56789",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "12345, 9123456789",
+   {
+    "phone": "919123456789"
+   }
+  ],
+  [
+   "+1 415 555 2671",
+   {
+    "phone": "14155552671"
+   }
+  ],
+  [
+   "+971 50 123 4567",
+   {
+    "phone": "971501234567"
+   }
+  ],
+  [
+   "",
+   {
+    "reason": "empty"
+   }
+  ],
+  [
+   "   ",
+   {
+    "reason": "empty"
+   }
+  ],
+  [
+   "12345",
+   {
+    "reason": "invalid"
+   }
+  ],
+  [
+   "5551234567",
+   {
+    "reason": "invalid"
+   }
+  ],
+  [
+   "9999999999",
+   {
+    "reason": "invalid"
+   }
+  ],
+  [
+   "022 2345 6789",
+   {
+    "reason": "landline"
+   }
+  ],
+  [
+   "9.19877E+11",
+   {
+    "reason": "scientific"
+   }
+  ],
+  [
+   "Rahul",
+   {
+    "reason": "invalid"
+   }
+  ],
+  [
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   {
+    "reason": "invalid"
+   }
+  ],
+  [
+   "1800 123 4567",
+   {
+    "reason": "landline"
+   }
+  ],
+  [
+   "+44 7911 123456",
+   {
+    "phone": "447911123456"
+   }
+  ],
+  [
+   "+44 20 7946 0958",
+   {
+    "reason": "landline"
+   }
+  ],
+  [
+   "14155552671",
+   {
+    "phone": "14155552671"
+   }
+  ],
+  [
+   "447911123456",
+   {
+    "phone": "447911123456"
+   }
+  ],
+  [
+   "9876543210 or 9123456789",
+   {
+    "phone": "919876543210"
+   }
+  ],
+  [
+   "+91 80 4567 8901",
+   {
+    "reason": "landline"
+   }
+  ],
+  [
+   "8888888888",
+   {
+    "reason": "invalid"
+   }
+  ],
+  [
+   "6000012345",
+   {
+    "phone": "916000012345"
+   }
+  ],
+  [
+   "7000000001",
+   {
+    "phone": "917000000001"
+   }
+  ]
+ ],
+ "names": [
+  [
+   "RAHUL SHARMA",
+   "Rahul Sharma"
+  ],
+  [
+   "  priya   nair ",
+   "Priya Nair"
+  ],
+  [
+   "JOHN D'SOUZA-KHAN",
+   "John D'Souza-Khan"
+  ],
+  [
+   "McDonald",
+   "McDonald"
+  ],
+  [
+   "iPhone Ravi",
+   "iPhone Ravi"
+  ],
+  [
+   "priya Khan",
+   "Priya Khan"
+  ],
+  [
+   "R.K. SHARMA",
+   "R.K. Sharma"
+  ],
+  [
+   "",
+   null
+  ],
+  [
+   "éLODIE durand",
+   "éLODIE Durand"
+  ],
+  [
+   "ÉLODIE DURAND",
+   "Élodie Durand"
+  ]
+ ],
+ "sheets": {
+  "messy.csv": {
+   "columns": [
+    "Name",
+    "Mobile",
+    "Alt Mobile",
+    "Email",
+    "Company"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "Name": "RAHUL SHARMA",
+     "Mobile": "9876543210",
+     "Alt Mobile": "",
+     "Email": "rahul@example.test",
+     "Company": "Acme"
+    },
+    {
+     "Name": "priya nair",
+     "Mobile": "9.12345678E+09",
+     "Alt Mobile": "9123456780",
+     "Email": "PRIYA@EXAMPLE.TEST",
+     "Company": ""
+    },
+    {
+     "Name": "No Phone",
+     "Mobile": "",
+     "Alt Mobile": "",
+     "Email": "",
+     "Company": ""
+    },
+    {
+     "Name": "Amit",
+     "Mobile": "022 2345 6789",
+     "Alt Mobile": "",
+     "Email": "",
+     "Company": ""
+    },
+    {
+     "Name": "Dup",
+     "Mobile": "9876543210",
+     "Alt Mobile": "",
+     "Email": "",
+     "Company": ""
+    },
+    {
+     "Name": "Excel",
+     "Mobile": "9.19877E+11",
+     "Alt Mobile": "",
+     "Email": "",
+     "Company": ""
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Mobile",
+     "Alt Mobile"
+    ],
+    "nameColumn": "Name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": "Email",
+    "companyColumn": "Company"
+   },
+   "mapping": {
+    "phone": "Mobile",
+    "name": "Name",
+    "email": "Email",
+    "company": "Company"
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Dup",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Name": "Dup",
+       "Mobile": "9876543210"
+      }
+     },
+     {
+      "phone": "919123456780",
+      "name": "Priya Nair",
+      "email": "priya@example.test",
+      "company": null,
+      "attributes": {
+       "Name": "priya nair",
+       "Mobile": "9.12345678E+09",
+       "Alt Mobile": "9123456780",
+       "Email": "PRIYA@EXAMPLE.TEST"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 1,
+     "scientific": 1,
+     "empty": 1,
+     "duplicate": 1
+    },
+    "examples": [
+     {
+      "reason": "landline",
+      "value": "022 2345 6789",
+      "label": "Amit"
+     },
+     {
+      "reason": "duplicate",
+      "value": "9876543210",
+      "label": "Dup"
+     },
+     {
+      "reason": "scientific",
+      "value": "9.19877E+11",
+      "label": "Excel"
+     }
+    ]
+   },
+   "text": "Customer list\n\nName,Mobile,Alt Mobile,Email,Company\nRAHUL SHARMA,9876543210,,rahul@example.test,Acme\npriya nair,9.12345678E+09,9123456780,PRIYA@EXAMPLE.TEST,\nNo Phone,,,,\nAmit,022 2345 6789,,,\nDup,9876543210,,,\nExcel,9.19877E+11,,,\n"
+  },
+  "firstlast.csv": {
+   "columns": [
+    "First Name",
+    "Last Name",
+    "Mobile",
+    "WhatsApp Number"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "First Name": "asha",
+     "Last Name": "verma",
+     "Mobile": "9876543210",
+     "WhatsApp Number": "9123456780"
+    },
+    {
+     "First Name": "Ravi",
+     "Last Name": "Kumar",
+     "Mobile": "9988776655",
+     "WhatsApp Number": "9988776650"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "WhatsApp Number",
+     "Mobile"
+    ],
+    "nameColumn": null,
+    "firstNameColumn": "First Name",
+    "lastNameColumn": "Last Name",
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "WhatsApp Number",
+    "name": "\u0000first+last",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919123456780",
+      "name": "Asha Verma",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "First Name": "asha",
+       "Last Name": "verma",
+       "Mobile": "9876543210",
+       "WhatsApp Number": "9123456780"
+      }
+     },
+     {
+      "phone": "919988776650",
+      "name": "Ravi Kumar",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "First Name": "Ravi",
+       "Last Name": "Kumar",
+       "Mobile": "9988776655",
+       "WhatsApp Number": "9988776650"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 0,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "First Name,Last Name,Mobile,WhatsApp Number\nasha,verma,9876543210,9123456780\nRavi,Kumar,9988776655,9988776650"
+  },
+  "headerless.csv": {
+   "columns": [
+    "Column A",
+    "Column B",
+    "Column C"
+   ],
+   "headerless": true,
+   "rows": [
+    {
+     "Column A": "Rahul Sharma",
+     "Column B": "9876543210",
+     "Column C": "Pune"
+    },
+    {
+     "Column A": "Priya Nair",
+     "Column B": "9123456789",
+     "Column C": "Delhi"
+    },
+    {
+     "Column A": "Amit Patel",
+     "Column B": "9988776655",
+     "Column C": "Goa"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Column B"
+    ],
+    "nameColumn": "Column A",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "Column B",
+    "name": "Column A",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Rahul Sharma",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Column A": "Rahul Sharma",
+       "Column B": "9876543210",
+       "Column C": "Pune"
+      }
+     },
+     {
+      "phone": "919123456789",
+      "name": "Priya Nair",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Column A": "Priya Nair",
+       "Column B": "9123456789",
+       "Column C": "Delhi"
+      }
+     },
+     {
+      "phone": "919988776655",
+      "name": "Amit Patel",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Column A": "Amit Patel",
+       "Column B": "9988776655",
+       "Column C": "Goa"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 0,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "Rahul Sharma,9876543210,Pune\nPriya Nair,9123456789,Delhi\nAmit Patel,9988776655,Goa"
+  },
+  "blankphone.csv": {
+   "columns": [
+    "Name",
+    "Phone",
+    "City"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "Name": "No Number Person",
+     "Phone": "",
+     "City": "Pune"
+    },
+    {
+     "Name": "Rahul Sharma",
+     "Phone": "9876543210",
+     "City": "Pune"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Phone"
+    ],
+    "nameColumn": "Name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "Phone",
+    "name": "Name",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Rahul Sharma",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Name": "Rahul Sharma",
+       "Phone": "9876543210",
+       "City": "Pune"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 1,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "Name,Phone,City\nNo Number Person,,Pune\nRahul Sharma,9876543210,Pune"
+  },
+  "dupheaders.csv": {
+   "columns": [
+    "Name",
+    "Phone",
+    "Column C",
+    "Name 2"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "Name": "Rahul",
+     "Phone": "9876543210",
+     "Column C": "VIP",
+     "Name 2": "R. Sharma"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Phone"
+    ],
+    "nameColumn": "Name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "Phone",
+    "name": "Name",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Rahul",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Name": "Rahul",
+       "Phone": "9876543210",
+       "Column C": "VIP",
+       "Name 2": "R. Sharma"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 0,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "Name,Phone,,Name\nRahul,9876543210,VIP,R. Sharma"
+  },
+  "agents.csv": {
+   "columns": [
+    "File Name",
+    "Agent Name",
+    "Party Name",
+    "Phone"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "File Name": "a.pdf",
+     "Agent Name": "Staff One",
+     "Party Name": "Kiran Rao",
+     "Phone": "9876543210"
+    },
+    {
+     "File Name": "b.pdf",
+     "Agent Name": "Staff Two",
+     "Party Name": "Meera Das",
+     "Phone": "9123456789"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Phone"
+    ],
+    "nameColumn": "Party Name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "Phone",
+    "name": "Party Name",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Kiran Rao",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "File Name": "a.pdf",
+       "Agent Name": "Staff One",
+       "Party Name": "Kiran Rao",
+       "Phone": "9876543210"
+      }
+     },
+     {
+      "phone": "919123456789",
+      "name": "Meera Das",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "File Name": "b.pdf",
+       "Agent Name": "Staff Two",
+       "Party Name": "Meera Das",
+       "Phone": "9123456789"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 0,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "File Name,Agent Name,Party Name,Phone\na.pdf,Staff One,Kiran Rao,9876543210\nb.pdf,Staff Two,Meera Das,9123456789"
+  },
+  "quoted.csv": {
+   "columns": [
+    "Name",
+    "Phone",
+    "Note"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "Name": "Sharma, Rahul",
+     "Phone": "9876543210",
+     "Note": "said \"hi\"\nthen left"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Phone"
+    ],
+    "nameColumn": "Name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "Phone",
+    "name": "Name",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Sharma, Rahul",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Name": "Sharma, Rahul",
+       "Phone": "9876543210",
+       "Note": "said \"hi\"\nthen left"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 0,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "Name,Phone,Note\r\n\"Sharma, Rahul\",9876543210,\"said \"\"hi\"\"\nthen left\"\r\n"
+  },
+  "list.json": {
+   "columns": [
+    "name",
+    "phone",
+    "city",
+    "vip"
+   ],
+   "rows": [
+    {
+     "name": "Asha",
+     "phone": "919876543210",
+     "city": "Pune"
+    },
+    {
+     "name": "Ravi",
+     "phone": "9123456789",
+     "vip": "true"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "phone"
+    ],
+    "nameColumn": "name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": null,
+    "companyColumn": null
+   },
+   "mapping": {
+    "phone": "phone",
+    "name": "name",
+    "email": "",
+    "company": ""
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Asha",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "name": "Asha",
+       "phone": "919876543210",
+       "city": "Pune"
+      }
+     },
+     {
+      "phone": "919123456789",
+      "name": "Ravi",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "name": "Ravi",
+       "phone": "9123456789",
+       "vip": "true"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 0,
+     "empty": 0,
+     "duplicate": 0
+    },
+    "examples": []
+   },
+   "text": "{\"contacts\":[{\"name\":\"Asha\",\"phone\":919876543210,\"city\":\"Pune\"},{\"name\":\"Ravi\",\"phone\":\"9123456789\",\"vip\":true}]}"
+  },
+  "contacts.xlsx": {
+   "columns": [
+    "Name",
+    "Mobile",
+    "Email",
+    "Company",
+    "Column F"
+   ],
+   "headerless": false,
+   "rows": [
+    {
+     "Name": "Rahul Sharma",
+     "Mobile": "9876543210",
+     "Email": "rahul@example.test",
+     "Company": "Acme & Co",
+     "Column F": ""
+    },
+    {
+     "Name": "PRIYA NAIR",
+     "Mobile": "9.12345678E+09",
+     "Email": "",
+     "Company": "Rich Text",
+     "Column F": ""
+    },
+    {
+     "Name": "Amit Patel",
+     "Mobile": "9.19877E+11",
+     "Email": "",
+     "Company": "",
+     "Column F": ""
+    },
+    {
+     "Name": "Dup Person",
+     "Mobile": "9876543210",
+     "Email": "",
+     "Company": "",
+     "Column F": "far cell"
+    }
+   ],
+   "detected": {
+    "phoneColumns": [
+     "Mobile"
+    ],
+    "nameColumn": "Name",
+    "firstNameColumn": null,
+    "lastNameColumn": null,
+    "emailColumn": "Email",
+    "companyColumn": "Company"
+   },
+   "mapping": {
+    "phone": "Mobile",
+    "name": "Name",
+    "email": "Email",
+    "company": "Company"
+   },
+   "preview": {
+    "contacts": [
+     {
+      "phone": "919876543210",
+      "name": "Dup Person",
+      "email": null,
+      "company": null,
+      "attributes": {
+       "Name": "Dup Person",
+       "Mobile": "9876543210",
+       "Column F": "far cell"
+      }
+     },
+     {
+      "phone": "919123456780",
+      "name": "Priya Nair",
+      "email": null,
+      "company": "Rich Text",
+      "attributes": {
+       "Name": "PRIYA NAIR",
+       "Mobile": "9.12345678E+09",
+       "Company": "Rich Text"
+      }
+     }
+    ],
+    "skipped": {
+     "invalid": 0,
+     "landline": 0,
+     "scientific": 1,
+     "empty": 0,
+     "duplicate": 1
+    },
+    "examples": [
+     {
+      "reason": "scientific",
+      "value": "9.19877E+11",
+      "label": "Amit Patel"
+     },
+     {
+      "reason": "duplicate",
+      "value": "9876543210",
+      "label": "Dup Person"
+     }
+    ]
+   },
+   "binary": true
+  }
+ }
+}

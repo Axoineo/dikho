@@ -1378,6 +1378,53 @@ async function ordersScenario() {
   page.close()
 }
 
+/** WhatsApp Contacts' import, read on the phone from a file chosen in Android's picker. */
+async function contactsScenario() {
+  forceStop()
+  adbTry('shell', `pm clear ${PACKAGE}`)
+  connectBackends()
+  launch()
+  const page = await connectPage()
+  await check('signs in through the app', () => signIn(page))
+
+  await check('a spreadsheet is read on the phone: title line skipped, columns found, landline and blank explained', async () => {
+    const csv = 'Customer list\\n\\nName,Mobile,Email,City\\nRAHUL SHARMA,9876543210,rahul@example.test,Pune\\npriya nair,+44 7911 123456,,London\\nNo Phone,,,\\nOffice,022 2345 6789,,\\n'
+    shell(`mkdir -p /sdcard/Download/import-test && printf '${csv}' > /sdcard/Download/import-test/new-contacts.csv && am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Download/import-test/new-contacts.csv >/dev/null`)
+    await openDrawer()
+    for (let i = 0; i < 4 && !uiHas(/^Contacts/); i += 1) { swipeUp(); await sleep(500) }
+    await uiTap(/^Contacts/)
+    await uiWait(/^More$/, { timeout: 15000 })
+    await uiTap('More')
+    await uiTap(/^Import a spreadsheet/)
+    await uiTap(/^Choose a file/, { timeout: 10000 })
+    await uiWait(/new-contacts|Download|Recent|Browse/i, { timeout: 15000 })
+    if (!uiHas('new-contacts.csv')) {
+      await uiTap(/Show roots|More options|Navigate up/i, { timeout: 4000 }).catch(() => {})
+      await sleep(800)
+      await uiTap(/^Downloads$/, { timeout: 5000 }).catch(() => {})
+      await sleep(800)
+      await uiTap('import-test', { timeout: 5000 }).catch(() => {})
+      await sleep(800)
+    }
+    await uiTap('new-contacts.csv', { timeout: 10000 })
+    await uiWait(/2 contacts ready to import/, { timeout: 20000 })
+    await uiWait(/Check the columns in new-contacts\.csv/)
+    await uiWait(/1 skipped: a landline/)
+    shot('c1-import-check')
+  })
+
+  await check('Import sends only the good rows, a +44 number stays British, and the list shows them', async () => {
+    await uiTap(/^Import 2 contacts/)
+    const sent = await waitFor('the import', async () => (await eventsOf('contacts_import')).at(-1), { timeout: 15000 })
+    assert(sent.count === 2 && sent.phones.join() === '919876543210,447911123456', JSON.stringify(sent))
+    assert(sent.names[0] === 'Rahul Sharma' && sent.attributes[0].City === 'Pune', JSON.stringify(sent))
+    await uiWait(/Imported 2 new contacts/, { timeout: 15000 })
+    await uiWait(/Rahul Sharma/, { timeout: 15000 })
+    shot('c2-imported')
+  })
+  page.close()
+}
+
 /** The app's own sign-in, the session it owns, and the ways a session ends. */
 async function signinScenario() {
   let page
@@ -2698,6 +2745,7 @@ async function run() {
   else if (scenario === 'layout') await layoutScenario()
   else if (scenario === 'native') await nativeScenario()
   else if (scenario === 'orders') await ordersScenario()
+  else if (scenario === 'contacts') await contactsScenario()
   else if (scenario === 'users') await usersScenario()
   else if (scenario === 'settings') await settingsScenario()
   else if (scenario === 'assist') await assistScenario()

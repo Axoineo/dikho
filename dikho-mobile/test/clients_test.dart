@@ -37,11 +37,15 @@ class FakeTable {
         return;
       }
       if (request.uri.path == '/rest/v1/rpc/get_settings') {
-        response.write(jsonEncode({'lists': [
-          {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
-          {'list_key': 'registration', 'value': 'Hidden one', 'hidden': true},
-          {'list_key': 'other', 'value': 'Nope'},
-        ]}));
+        response.write(
+          jsonEncode({
+            'lists': [
+              {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
+              {'list_key': 'registration', 'value': 'Hidden one', 'hidden': true},
+              {'list_key': 'other', 'value': 'Nope'},
+            ],
+          }),
+        );
         return response.close();
       }
       if (request.method == 'POST') {
@@ -149,10 +153,12 @@ void main() {
 
     test('registration lists follow the organization\'s settings, keeping a hidden current value', () {
       expect(registrationOptions(null, ''), defaultRegistrations);
-      final settings = {'lists': [
-        {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
-        {'list_key': 'registration', 'value': 'Gone', 'hidden': true},
-      ]};
+      final settings = {
+        'lists': [
+          {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
+          {'list_key': 'registration', 'value': 'Gone', 'hidden': true},
+        ],
+      };
       expect(registrationOptions(settings, ''), ['Registered']);
       expect(registrationOptions(settings, 'Gone'), ['Registered', 'Gone']);
     });

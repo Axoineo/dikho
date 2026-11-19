@@ -47,7 +47,9 @@ class FakeAuth {
   Future<void> _handle(HttpRequest request) async {
     final raw = await utf8.decoder.bind(request).join();
     final body = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
-    log.add('${request.method} ${request.uri.path}${request.uri.hasQuery ? '?${request.uri.query}' : ''} key=${request.headers.value('apikey')} auth=${request.headers.value('authorization')}');
+    log.add(
+      '${request.method} ${request.uri.path}${request.uri.hasQuery ? '?${request.uri.query}' : ''} key=${request.headers.value('apikey')} auth=${request.headers.value('authorization')}',
+    );
     bodies.add(body);
     final response = request.response..headers.contentType = ContentType.json;
     var status = 200;
@@ -57,7 +59,11 @@ class FakeAuth {
         final who = (body['email'] ?? body['phone']) as String;
         if (limitedFor != null) {
           status = 429;
-          out = {'code': 429, 'error_code': 'over_email_send_rate_limit', 'msg': 'For security purposes, you can only request this after $limitedFor seconds.'};
+          out = {
+            'code': 429,
+            'error_code': 'over_email_send_rate_limit',
+            'msg': 'For security purposes, you can only request this after $limitedFor seconds.',
+          };
         } else if (!known.contains(who)) {
           status = 422;
           out = {'code': 422, 'error_code': 'otp_disabled', 'msg': 'Signups not allowed for otp'};
@@ -126,7 +132,12 @@ void main() {
 
     test('a session is stored in supabase-js\'s own shape, with expires_at worked out', () {
       final now = DateTime.utc(2026, 11, 14, 10);
-      final session = AuthSession.fromJson({'access_token': 'a', 'refresh_token': 'r', 'expires_in': 3600, 'user': {'id': 'u', 'email': 'e@example.test'}}, now: now)!;
+      final session = AuthSession.fromJson({
+        'access_token': 'a',
+        'refresh_token': 'r',
+        'expires_in': 3600,
+        'user': {'id': 'u', 'email': 'e@example.test'},
+      }, now: now)!;
       expect(session.expiresAt, now.millisecondsSinceEpoch ~/ 1000 + 3600);
       expect(session.toJson().keys, ['access_token', 'token_type', 'expires_in', 'expires_at', 'refresh_token', 'user']);
       expect(AuthSession.fromJson(session.toJson())!.refreshToken, 'r');
@@ -145,17 +156,31 @@ void main() {
     });
 
     test('someone not added, and too many tries, are said plainly', () async {
-      await expectLater(auth.api.sendCode(email: 'stranger@example.test'),
-          throwsA(isA<AuthFailure>().having((f) => (f.kind, f.message), 'failure', (AuthProblem.notAllowed, "This email isn't registered for Dikho CRM. Contact an admin to get access."))));
-      await expectLater(auth.api.sendCode(phone: '+910000000000'),
-          throwsA(isA<AuthFailure>().having((f) => f.message, 'message', "This number isn't authorized. Contact an admin to get access.")));
+      await expectLater(
+        auth.api.sendCode(email: 'stranger@example.test'),
+        throwsA(
+          isA<AuthFailure>().having((f) => (f.kind, f.message), 'failure', (
+            AuthProblem.notAllowed,
+            "This email isn't registered for Dikho CRM. Contact an admin to get access.",
+          )),
+        ),
+      );
+      await expectLater(
+        auth.api.sendCode(phone: '+910000000000'),
+        throwsA(isA<AuthFailure>().having((f) => f.message, 'message', "This number isn't authorized. Contact an admin to get access.")),
+      );
       auth.limitedFor = 37;
-      await expectLater(auth.api.sendCode(email: 'staff@example.test'),
-          throwsA(isA<AuthFailure>().having((f) => f.message, 'message', 'For your security, wait 37 seconds before asking for another code.')));
+      await expectLater(
+        auth.api.sendCode(email: 'staff@example.test'),
+        throwsA(isA<AuthFailure>().having((f) => f.message, 'message', 'For your security, wait 37 seconds before asking for another code.')),
+      );
     });
 
     test('a wrong code is refused; the right one is a session; email and WhatsApp verify differently', () async {
-      await expectLater(auth.api.verify(email: 'staff@example.test', code: '000000'), throwsA(isA<AuthFailure>().having((f) => f.kind, 'kind', AuthProblem.invalidCode)));
+      await expectLater(
+        auth.api.verify(email: 'staff@example.test', code: '000000'),
+        throwsA(isA<AuthFailure>().having((f) => f.kind, 'kind', AuthProblem.invalidCode)),
+      );
       final session = await auth.api.verify(phone: '+919800000001', code: '123456');
       expect(auth.bodies.last['type'], 'sms');
       expect(session.refreshToken, 'refresh-1');
@@ -238,8 +263,19 @@ void main() {
       expect(controller.notice, 'Your session was ended. Please sign in again.');
       expect(store.values.containsKey(key), isFalse);
 
-      final offline = AuthController(api: AuthApi(base: Uri.parse('http://localhost:1'), apiKey: 'k'), storageKey: key, store: store, now: () => now, scheduleRefresh: false);
-      final session = AuthSession(accessToken: 'held', refreshToken: 'r', expiresAt: now.add(const Duration(minutes: 3)).millisecondsSinceEpoch ~/ 1000, user: const {'id': 'u'});
+      final offline = AuthController(
+        api: AuthApi(base: Uri.parse('http://localhost:1'), apiKey: 'k'),
+        storageKey: key,
+        store: store,
+        now: () => now,
+        scheduleRefresh: false,
+      );
+      final session = AuthSession(
+        accessToken: 'held',
+        refreshToken: 'r',
+        expiresAt: now.add(const Duration(minutes: 3)).millisecondsSinceEpoch ~/ 1000,
+        user: const {'id': 'u'},
+      );
       await offline.signedInWith(session);
       expect(await offline.accessToken(), 'held');
       expect(offline.signedIn, isTrue, reason: 'no connection is not a sign-out');
@@ -251,7 +287,10 @@ void main() {
       expect(controller.state, AuthState.signedOut);
       expect(store.values.containsKey(key), isFalse);
       await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(auth.log.where((l) => l.contains('/auth/v1/logout')).single, allOf(contains('/auth/v1/logout?scope=local'), contains('auth=Bearer access-1')));
+      expect(
+        auth.log.where((l) => l.contains('/auth/v1/logout')).single,
+        allOf(contains('/auth/v1/logout?scope=local'), contains('auth=Bearer access-1')),
+      );
       expect(controller.notice, isNull);
       await expectLater(controller.accessToken(), throwsA(isA<SessionUnavailable>()));
     });
@@ -299,7 +338,11 @@ void main() {
     Future<GlobalKey<SignInScreenState>> pump(WidgetTester tester) async {
       HttpOverrides.global = null;
       final screen = GlobalKey<SignInScreenState>();
-      await tester.pumpWidget(MaterialApp(home: SignInScreen(key: screen, auth: controller)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SignInScreen(key: screen, auth: controller),
+        ),
+      );
       return screen;
     }
 

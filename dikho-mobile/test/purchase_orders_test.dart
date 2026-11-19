@@ -27,7 +27,16 @@ class FakeSupabase {
     {'id': 8, 'company_name': 'Two Address Media', 'alias': null},
   ];
   final addresses = <Map<String, dynamic>>[
-    {'id': 70, 'vendor_id': 7, 'address': '1 Ring Road', 'city': 'Pune', 'state': 'Maharashtra', 'country': 'India', 'zipcode': '411001', 'is_default': true},
+    {
+      'id': 70,
+      'vendor_id': 7,
+      'address': '1 Ring Road',
+      'city': 'Pune',
+      'state': 'Maharashtra',
+      'country': 'India',
+      'zipcode': '411001',
+      'is_default': true,
+    },
     {'id': 80, 'vendor_id': 8, 'address': 'North office', 'city': 'Delhi', 'state': 'Delhi', 'is_default': false},
     {'id': 81, 'vendor_id': 8, 'address': 'South office', 'city': 'Chennai', 'state': 'Tamil Nadu', 'is_default': false},
   ];
@@ -36,15 +45,55 @@ class FakeSupabase {
 
   Future<void> start() async {
     orders.addAll([
-      {'id': 1, 'order_number': 'SO-1', 'company': 'Acme Outdoor', 'brand_name': 'Acme Cola', 'crm_reference_id': 'CRM-1', 'campaign_start_date': '2026-12-01', 'campaign_end_date': '2026-12-31', 'vendor_address_id': null, 'total': 59000},
+      {
+        'id': 1,
+        'order_number': 'SO-1',
+        'company': 'Acme Outdoor',
+        'brand_name': 'Acme Cola',
+        'crm_reference_id': 'CRM-1',
+        'campaign_start_date': '2026-12-01',
+        'campaign_end_date': '2026-12-31',
+        'vendor_address_id': null,
+        'total': 59000,
+      },
       {'id': 2, 'order_number': 'SO-2', 'company': 'Bright Brands', 'vendor_address_id': null, 'total': 1000},
-      {'id': 10, 'order_number': 'PO-10', 'company': 'Northern Hoardings', 'vendor_address_id': 70, 'order_status': 'Approved', 'sub_total': 30000, 'tax_total': 5400, 'total': 35400, 'payment_receipt_amount': 10000, 'order_date': '2026-11-20', 'campaign_start_date': '2026-12-01', 'campaign_end_date': '2026-12-31'},
+      {
+        'id': 10,
+        'order_number': 'PO-10',
+        'company': 'Northern Hoardings',
+        'vendor_address_id': 70,
+        'order_status': 'Approved',
+        'sub_total': 30000,
+        'tax_total': 5400,
+        'total': 35400,
+        'payment_receipt_amount': 10000,
+        'order_date': '2026-11-20',
+        'campaign_start_date': '2026-12-01',
+        'campaign_end_date': '2026-12-31',
+      },
       {'id': 11, 'order_number': 'PO-11', 'company': 'Gone Vendor', 'vendor_address_id': 999, 'total': 100},
     ]);
     items.addAll([
       {'id': 100, 'sales_order_id': 1, 'name': 'Hoarding, Ring Road', 'taxable_amount': 50000, 'tax_amount': 9000, 'after_tax_amount': 59000},
       {'id': 101, 'sales_order_id': 1, 'name': 'Printing', 'taxable_amount': 0, 'tax_amount': 0, 'after_tax_amount': 0},
-      {'id': 200, 'sales_order_id': 1, 'purchase_order_id': 10, 'so_item_id': 100, 'name': 'Hoarding rent', 'type': 'Media', 'is_taxable': true, 'gst_type': 'Intra-State', 'taxable_amount': 30000, 'tax_amount': 5400, 'after_tax_amount': 35400, 'cgst_amount': 2700, 'sgst_amount': 2700, 'igst_amount': 0, 'utgst_amount': 0, 'inv_id': 5},
+      {
+        'id': 200,
+        'sales_order_id': 1,
+        'purchase_order_id': 10,
+        'so_item_id': 100,
+        'name': 'Hoarding rent',
+        'type': 'Media',
+        'is_taxable': true,
+        'gst_type': 'Intra-State',
+        'taxable_amount': 30000,
+        'tax_amount': 5400,
+        'after_tax_amount': 35400,
+        'cgst_amount': 2700,
+        'sgst_amount': 2700,
+        'igst_amount': 0,
+        'utgst_amount': 0,
+        'inv_id': 5,
+      },
     ]);
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen(_handle);
@@ -91,7 +140,9 @@ class FakeSupabase {
     } else if (table == null) {
       response.statusCode = 404;
     } else if (request.method == 'GET') {
-      var rows = table.where((r) => q.entries.where((e) => !const {'select', 'order', 'or'}.contains(e.key)).every((e) => _matches(r[e.key], e.value))).toList();
+      var rows = table
+          .where((r) => q.entries.where((e) => !const {'select', 'order', 'or'}.contains(e.key)).every((e) => _matches(r[e.key], e.value)))
+          .toList();
       if (q['order'] == 'id.desc') rows.sort((a, b) => (b['id'] as int).compareTo(a['id'] as int));
       if ((q['select'] ?? '').startsWith('*,vendor_addresses(')) {
         rows = [
@@ -111,7 +162,9 @@ class FakeSupabase {
       response.headers.set('content-range', '$from-${from + page.length - 1}/${rows.length}');
       out = page;
     } else if (request.method == 'POST') {
-      final added = [for (final r in (body is List ? body : [body]).cast<Map<String, dynamic>>()) {...r, 'id': nextId++}];
+      final added = [
+        for (final r in (body is List ? body : [body]).cast<Map<String, dynamic>>()) {...r, 'id': nextId++},
+      ];
       table.addAll(added);
       out = body is List ? added : added.single;
     } else if (request.method == 'PATCH') {
@@ -122,7 +175,9 @@ class FakeSupabase {
       final gone = table.where((r) => _matches(r['id'], q['id'])).toList();
       table.removeWhere(gone.contains);
       if (table == orders) items.removeWhere((i) => gone.any((o) => o['id'] == i['purchase_order_id']));
-      out = [for (final r in gone) {'id': r['id']}];
+      out = [
+        for (final r in gone) {'id': r['id']},
+      ];
     }
     response.write(jsonEncode(out));
     await response.close();
@@ -143,8 +198,20 @@ void main() {
   group('the web module\'s rules', () {
     test('a purchase order reads its vendor from the address, or the name it stored', () {
       final po = PurchaseOrder({
-        'id': 10, 'company': 'Old name', 'total': 1000, 'payment_receipt_amount': 400, 'vendor_address_id': 70,
-        'vendor_addresses': {'vendor_id': 7, 'address': '1 Ring Road', 'city': 'Pune', 'state': 'Maharashtra', 'zipcode': '411001', 'country': 'India', 'vendors': {'company_name': 'Northern Hoardings', 'email': 'nh@example.test'}},
+        'id': 10,
+        'company': 'Old name',
+        'total': 1000,
+        'payment_receipt_amount': 400,
+        'vendor_address_id': 70,
+        'vendor_addresses': {
+          'vendor_id': 7,
+          'address': '1 Ring Road',
+          'city': 'Pune',
+          'state': 'Maharashtra',
+          'zipcode': '411001',
+          'country': 'India',
+          'vendors': {'company_name': 'Northern Hoardings', 'email': 'nh@example.test'},
+        },
       });
       expect((po.vendorName, po.vendorId, po.vendorAddressId, po.email), ('Northern Hoardings', '7', '70', 'nh@example.test'));
       expect(po.addressLine, '1 Ring Road, Pune, Maharashtra, 411001, India');
@@ -159,7 +226,16 @@ void main() {
         ..brand = 'Kept'
         ..vendorId = '7'
         ..vendorAddressId = '70';
-      d.chooseSalesOrder(const SalesOrderChoice(id: '1', number: 'SO-1', company: 'Acme', crmReference: 'CRM-1', campaignStart: '2026-12-01', campaignEnd: '2026-12-31'));
+      d.chooseSalesOrder(
+        const SalesOrderChoice(
+          id: '1',
+          number: 'SO-1',
+          company: 'Acme',
+          crmReference: 'CRM-1',
+          campaignStart: '2026-12-01',
+          campaignEnd: '2026-12-31',
+        ),
+      );
       expect((d.salesOrderId, d.soCompany, d.crmReference, d.campaignStart, d.brand), ('1', 'Acme', 'CRM-1', '2026-12-01', 'Kept'));
       d.chooseVendor(const VendorChoice('8', 'Two Address Media'));
       expect((d.vendorId, d.vendorName, d.vendorAddressId), ('8', 'Two Address Media', ''));
@@ -176,8 +252,10 @@ void main() {
       final items = [line('a', soItemId: '100')];
       final totals = reconcileTotals(items);
       final order = draft().payload(totals, createdBy: 'Asha Rao');
-      expect((order['company'], order['order_client_fullname'], order['vendor_address_id'], order['multi_purpose_so'], order['created_by']),
-          ('Northern Hoardings', 'Northern Hoardings', 70, false, 'Asha Rao'));
+      expect(
+        (order['company'], order['order_client_fullname'], order['vendor_address_id'], order['multi_purpose_so'], order['created_by']),
+        ('Northern Hoardings', 'Northern Hoardings', 70, false, 'Asha Rao'),
+      );
       expect(order['total'], 23600.0);
       expect(draft().payload(totals).containsKey('created_by'), isFalse, reason: 'editing never rewrites the creator');
       final item = poItemPayload(items.single, salesOrderId: '1', purchaseOrderId: 500);
@@ -201,7 +279,11 @@ void main() {
       HttpOverrides.global = null;
       backend = FakeSupabase();
       await backend.start();
-      controller = PurchaseOrdersController(rest: backend.rest, searchDelay: const Duration(milliseconds: 5), now: () => DateTime.utc(2026, 11, 13, 9));
+      controller = PurchaseOrdersController(
+        rest: backend.rest,
+        searchDelay: const Duration(milliseconds: 5),
+        now: () => DateTime.utc(2026, 11, 13, 9),
+      );
     });
 
     tearDown(() async {
@@ -233,7 +315,13 @@ void main() {
     });
 
     test('a new purchase order is added, then its lines in one request, then read back with its vendor', () async {
-      final saved = await controller.save(null, draft(), [line('a', soItemId: '100'), line('b', name: 'Mounting', amount: '1000')], removed: [], createdBy: 'Asha Rao');
+      final saved = await controller.save(
+        null,
+        draft(),
+        [line('a', soItemId: '100'), line('b', name: 'Mounting', amount: '1000')],
+        removed: [],
+        createdBy: 'Asha Rao',
+      );
       final row = backend.orders.firstWhere((o) => o['id'].toString() == saved.id);
       expect((row['vendor_address_id'], row['total']), (70, 24780.0));
       expect(backend.calls('POST /rest/v1/salesorderdocument?'), hasLength(1));
@@ -303,7 +391,13 @@ void main() {
       addTearDown(controller.dispose);
       await tester.pumpWidget(
         MaterialApp(
-          home: PurchaseOrdersScreen(controller: controller, platform: PlatformApi(), abilities: abilities, onOpenDrawer: () {}, newOrderFor: newOrderFor),
+          home: PurchaseOrdersScreen(
+            controller: controller,
+            platform: PlatformApi(),
+            abilities: abilities,
+            onOpenDrawer: () {},
+            newOrderFor: newOrderFor,
+          ),
         ),
       );
       await settle(tester);

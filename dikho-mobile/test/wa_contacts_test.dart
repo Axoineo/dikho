@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dikho_crm/features/inbox/inbox_api.dart';
 import 'package:dikho_crm/features/whatsapp/contacts_controller.dart';
 import 'package:dikho_crm/features/whatsapp/contacts_models.dart';
+import 'package:dikho_crm/features/whatsapp/contact_import_screen.dart';
 import 'package:dikho_crm/features/whatsapp/contacts_screen.dart';
 import 'package:dikho_crm/shared/crm_api.dart';
 import 'package:dikho_crm/shared/platform_api.dart';
@@ -17,6 +18,7 @@ class FakeContactsApi {
   late HttpServer server;
   final asked = <Uri>[];
   final deletes = <Map<String, dynamic>>[];
+  final imported = <Map<String, dynamic>>[];
   int count = 70;
   int failWith = 0;
 
@@ -27,7 +29,21 @@ class FakeContactsApi {
       final response = request.response..headers.contentType = ContentType.json;
       if (failWith != 0) {
         response.statusCode = failWith;
-        response.write(jsonEncode({'success': false, 'error': {'message': 'Not allowed'}}));
+        response.write(
+          jsonEncode({
+            'success': false,
+            'error': {'message': 'Not allowed'},
+          }),
+        );
+      } else if (request.uri.path == '/api/contacts/import-rows' && request.method == 'POST') {
+        final body = jsonDecode(await utf8.decoder.bind(request).join()) as Map<String, dynamic>;
+        imported.add(body);
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': {'imported': 2, 'updated': 0, 'unchanged': 0, 'invalid': 0, 'contacts': []},
+          }),
+        );
       } else if (request.uri.path == '/api/contacts' && request.method == 'DELETE') {
         final body = jsonDecode(await utf8.decoder.bind(request).join()) as Map<String, dynamic>;
         deletes.add(body);
@@ -36,7 +52,12 @@ class FakeContactsApi {
         } else {
           count -= (body['contactIds'] as List).length;
         }
-        response.write(jsonEncode({'success': true, 'data': {'deleted': body['all'] == true ? 'all' : (body['contactIds'] as List).length}}));
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': {'deleted': body['all'] == true ? 'all' : (body['contactIds'] as List).length},
+          }),
+        );
       } else if (request.uri.path == '/api/contacts') {
         final q = request.uri.queryParameters;
         final limit = int.parse(q['limit'] ?? '30');
@@ -57,10 +78,12 @@ class FakeContactsApi {
         final start = q['cursor'] == null ? 0 : int.parse(q['cursor']!.split('|').last);
         final page = all.skip(start).take(limit).toList();
         final next = start + limit < all.length ? '2026-11-01 10:00:00|${start + limit}' : null;
-        response.write(jsonEncode({
-          'success': true,
-          'data': {'contacts': page, 'nextCursor': next, if (q['cursor'] == null) 'total': all.length},
-        }));
+        response.write(
+          jsonEncode({
+            'success': true,
+            'data': {'contacts': page, 'nextCursor': next, if (q['cursor'] == null) 'total': all.length},
+          }),
+        );
       } else {
         response.statusCode = 404;
         response.write('{}');
@@ -73,6 +96,17 @@ class FakeContactsApi {
 }
 
 class _Platform implements PlatformApi {
+  _Platform([this.file]);
+
+  /// What "choosing a file" hands over, as copyPicked copies it into the app.
+  final File? file;
+
+  @override
+  Future<List<String>> pickFiles(List<String> acceptTypes, bool multiple) async => file == null ? const [] : ['content://picked/contacts.csv'];
+
+  @override
+  Future<PickedFile?> copyPicked(String uri) async => PickedFile(path: file!.path, name: 'contacts.csv', mime: 'text/csv', size: file!.lengthSync());
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -80,8 +114,13 @@ class _Platform implements PlatformApi {
 void main() {
   test('a contact reads as the web shows it', () {
     final c = WaContact.from({
-      'id': 4, 'name': '  Asha Rao ', 'phone': '+91 98765-43210', 'company': 'Example', 'opted_out': 1,
-      'attributes': {'city': 'Pune', 'empty': ' ', 'n': null}, 'created_at': '2026-11-01 10:00:00',
+      'id': 4,
+      'name': '  Asha Rao ',
+      'phone': '+91 98765-43210',
+      'company': 'Example',
+      'opted_out': 1,
+      'attributes': {'city': 'Pune', 'empty': ' ', 'n': null},
+      'created_at': '2026-11-01 10:00:00',
     });
     expect(c.title, 'Asha Rao');
     expect(c.phone, '919876543210');
@@ -93,7 +132,12 @@ void main() {
     final unnamed = WaContact.from({'id': 5, 'phone': '919800000012'});
     expect(unnamed.title, 'Unnamed');
     expect(unnamed.initials, '12');
-    expect(ContactPage.from({'contacts': [1, 'x', null]}).contacts, isEmpty);
+    expect(
+      ContactPage.from({
+        'contacts': [1, 'x', null],
+      }).contacts,
+      isEmpty,
+    );
   });
 
   group('controller', () {
@@ -149,7 +193,9 @@ void main() {
     test('deleting sends exactly the ids chosen, or all, then reloads', () async {
       await contacts.start();
       await contacts.delete([70, 69, 70, 0]);
-      expect(backend.deletes.single, {'contactIds': [70, 69]});
+      expect(backend.deletes.single, {
+        'contactIds': [70, 69],
+      });
       expect(contacts.total, 68);
       await contacts.deleteAll();
       expect(backend.deletes.last, {'all': true});
@@ -183,7 +229,11 @@ void main() {
       });
     }
 
-    Future<ContactsController> pump(WidgetTester tester, {ContactAbilities abilities = const ContactAbilities(delete: true, import: true, sendTemplates: true), List<String>? imports}) async {
+    Future<ContactsController> pump(
+      WidgetTester tester, {
+      ContactAbilities abilities = const ContactAbilities(delete: true, import: true, sendTemplates: true),
+      File? pickedFile,
+    }) async {
       final api = backend.api;
       final controller = ContactsController(api, searchDelay: const Duration(milliseconds: 10));
       addTearDown(controller.dispose);
@@ -191,11 +241,10 @@ void main() {
         MaterialApp(
           home: ContactsScreen(
             controller: controller,
-            platform: _Platform(),
+            platform: _Platform(pickedFile),
             inboxApi: InboxApi(api),
             abilities: abilities,
             onOpenDrawer: () {},
-            onImport: () => imports?.add('import'),
           ),
         ),
       );
@@ -224,7 +273,9 @@ void main() {
       expect(find.textContaining('cannot be undone'), findsOneWidget);
       await tester.tap(find.text('Delete'));
       await settle(tester);
-      expect(backend.deletes.single, {'contactIds': [70, 69]});
+      expect(backend.deletes.single, {
+        'contactIds': [70, 69],
+      });
       expect(find.text('2 selected'), findsNothing);
     });
 
@@ -252,14 +303,38 @@ void main() {
       expect(find.byTooltip('More'), findsNothing);
     });
 
-    screenTest('Import opens the web importer', (tester) async {
-      final imports = <String>[];
-      await pump(tester, imports: imports);
+    screenTest('Import reads the sheet on the phone, shows the columns and skips, and sends only the good rows', (tester) async {
+      final dir = await tester.runAsync(() => Directory.systemTemp.createTemp('import'));
+      addTearDown(() => dir!.deleteSync(recursive: true));
+      final file = File('${dir!.path}/contacts.csv')
+        ..writeAsStringSync(
+          'Customer list\n\nName,Mobile,Email,City\nRAHUL SHARMA,9876543210,rahul@example.test,Pune\npriya nair,+44 7911 123456,,London\nNo Phone,,,\nOffice,022 2345 6789,,\n',
+        );
+      await pump(tester, pickedFile: file);
       await tester.tap(find.byTooltip('More'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Import a spreadsheet'));
       await tester.pumpAndSettle();
-      expect(imports, ['import']);
+      await tester.tap(find.text('Choose a file'));
+      for (var i = 0; i < 20 && find.text('2 contacts ready to import').evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await tester.pump();
+      }
+      expect(find.text('Check the columns in contacts.csv'), findsOneWidget);
+      expect(find.text('4 rows. Change any column that was picked wrongly.'), findsOneWidget, reason: 'the title line is not a row');
+      expect(find.text('2 contacts ready to import'), findsOneWidget);
+      expect(find.text('1 skipped: no phone number'), findsOneWidget);
+      expect(find.text('1 skipped: a landline, which cannot get WhatsApp'), findsOneWidget);
+      await tester.tap(find.text('Import 2 contacts'));
+      await settle(tester);
+      final sent = backend.imported.single['contacts'] as List;
+      expect(sent.map((c) => c['phone']), ['919876543210', '447911123456'], reason: '+44 stays a UK number');
+      expect(sent.first['name'], 'Rahul Sharma');
+      expect(sent.first['email'], 'rahul@example.test');
+      expect(sent.first['attributes'], {'Name': 'RAHUL SHARMA', 'Mobile': '9876543210', 'Email': 'rahul@example.test', 'City': 'Pune'});
+      await tester.pumpAndSettle();
+      expect(find.byType(ContactImportScreen), findsNothing, reason: 'back to the list');
+      expect(find.text('Imported 2 new contacts. 2 rows were skipped.'), findsOneWidget);
     });
 
     screenTest('details: the import columns show, and an opted-out contact cannot be sent a template', (tester) async {

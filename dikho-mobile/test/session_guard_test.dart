@@ -40,7 +40,12 @@ class FakeBackend {
         case '/rest/v1/rpc/touch_session':
           response.write(jsonEncode(touch));
         case '/api/me/session':
-          response.write(jsonEncode({'success': true, 'data': {'recorded': true}}));
+          response.write(
+            jsonEncode({
+              'success': true,
+              'data': {'recorded': true},
+            }),
+          );
         case '/auth/v1/logout':
           response.statusCode = 204;
         default:
@@ -88,13 +93,21 @@ void main() {
     await backend.start();
     store = MemoryStore();
     clock = DateTime.utc(2026, 11, 17, 9);
-    auth = AuthController(api: AuthApi(base: backend.base, apiKey: 'k'), storageKey: 'sb-x-auth-token', store: store, now: () => clock, scheduleRefresh: false);
-    await auth.signedInWith(AuthSession(
-      accessToken: 'access',
-      refreshToken: 'refresh',
-      expiresAt: clock.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
-      user: const {'id': 'user-1', 'email': 'asha@example.test'},
-    ));
+    auth = AuthController(
+      api: AuthApi(base: backend.base, apiKey: 'k'),
+      storageKey: 'sb-x-auth-token',
+      store: store,
+      now: () => clock,
+      scheduleRefresh: false,
+    );
+    await auth.signedInWith(
+      AuthSession(
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: clock.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+        user: const {'id': 'user-1', 'email': 'asha@example.test'},
+      ),
+    );
     channel = null;
   });
 

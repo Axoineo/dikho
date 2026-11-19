@@ -1691,8 +1691,6 @@ class _CrmScreenState extends State<CrmScreen> with WidgetsBindingObserver {
                       sendTemplates: access.can('campaigns.send'),
                     ),
                     onOpenDrawer: _openDrawer,
-                    // The web importer, on a route the page keeps for itself.
-                    onImport: () => _openWebPageFromNative('/whatsapp/contacts/import', backTo: NativeScreen.waContacts),
                   ),
                   NativeScreen.deviceContacts => DeviceContactsScreen(
                     key: const ValueKey('contacts'),

@@ -18,8 +18,7 @@ class FakePlatform implements UpdaterPlatform {
   final installed = <String>[];
   final _events = StreamController<Map<Object?, Object?>>.broadcast();
 
-  void sendInstallStatus(String status) =>
-      _events.add({'type': 'installStatus', 'status': status});
+  void sendInstallStatus(String status) => _events.add({'type': 'installStatus', 'status': status});
 
   @override
   Future<String?> verifyApk(String path, int versionCode) async {
@@ -151,49 +150,43 @@ void main() {
     expect(platform.installed, isEmpty);
   });
 
-  test(
-    'without install permission it explains first, then continues on return',
-    () async {
-      platform.canInstall = false;
-      final c = controller();
-      await c.start();
-      expect(c.phase, UpdatePhase.needsPermission);
-      expect(platform.installed, isEmpty);
+  test('without install permission it explains first, then continues on return', () async {
+    platform.canInstall = false;
+    final c = controller();
+    await c.start();
+    expect(c.phase, UpdatePhase.needsPermission);
+    expect(platform.installed, isEmpty);
 
-      await c.openPermissionSettings();
-      expect(platform.settingsOpened, 1);
+    await c.openPermissionSettings();
+    expect(platform.settingsOpened, 1);
 
-      // Back from settings with the permission still off: nothing changes.
-      await c.onResumed();
-      expect(c.phase, UpdatePhase.needsPermission);
+    // Back from settings with the permission still off: nothing changes.
+    await c.onResumed();
+    expect(c.phase, UpdatePhase.needsPermission);
 
-      platform.canInstall = true;
-      await c.onResumed();
-      expect(c.phase, UpdatePhase.installing);
-      expect(platform.installed, hasLength(1));
-    },
-  );
+    platform.canInstall = true;
+    await c.onResumed();
+    expect(c.phase, UpdatePhase.installing);
+    expect(platform.installed, hasLength(1));
+  });
 
-  test(
-    'cancelling Android installer screen can be retried without a new download',
-    () async {
-      final c = controller();
-      await c.start();
-      platform.sendInstallStatus('pendingUser');
-      await Future<void>.delayed(Duration.zero);
-      expect(c.phase, UpdatePhase.installing);
+  test('cancelling Android installer screen can be retried without a new download', () async {
+    final c = controller();
+    await c.start();
+    platform.sendInstallStatus('pendingUser');
+    await Future<void>.delayed(Duration.zero);
+    expect(c.phase, UpdatePhase.installing);
 
-      platform.sendInstallStatus('cancelled');
-      await Future<void>.delayed(Duration.zero);
-      expect(c.phase, UpdatePhase.failed);
-      expect(c.problem, UpdateProblem.installCancelled);
-      expect(apkFile().existsSync(), isTrue);
+    platform.sendInstallStatus('cancelled');
+    await Future<void>.delayed(Duration.zero);
+    expect(c.phase, UpdatePhase.failed);
+    expect(c.problem, UpdateProblem.installCancelled);
+    expect(apkFile().existsSync(), isTrue);
 
-      await c.start();
-      expect(c.phase, UpdatePhase.installing);
-      expect(platform.installed, hasLength(2));
-    },
-  );
+    await c.start();
+    expect(c.phase, UpdatePhase.installing);
+    expect(platform.installed, hasLength(2));
+  });
 
   test('an installer failure is reported', () async {
     final c = controller();
@@ -203,28 +196,22 @@ void main() {
     expect(c.problem, UpdateProblem.installFailed);
   });
 
-  test(
-    'a native failure while verifying rejects the file, never hangs',
-    () async {
-      platform.channelBroken = true;
-      final c = controller();
-      await c.start();
-      expect(c.phase, UpdatePhase.failed);
-      expect(platform.installed, isEmpty);
-      expect(apkFile().existsSync(), isFalse);
-    },
-  );
+  test('a native failure while verifying rejects the file, never hangs', () async {
+    platform.channelBroken = true;
+    final c = controller();
+    await c.start();
+    expect(c.phase, UpdatePhase.failed);
+    expect(platform.installed, isEmpty);
+    expect(apkFile().existsSync(), isFalse);
+  });
 
-  test(
-    'a native failure while installing offers a retry, never hangs',
-    () async {
-      platform.installBroken = true;
-      final c = controller();
-      await c.start();
-      expect(c.phase, UpdatePhase.failed);
-      expect(c.problem, UpdateProblem.installFailed);
-    },
-  );
+  test('a native failure while installing offers a retry, never hangs', () async {
+    platform.installBroken = true;
+    final c = controller();
+    await c.start();
+    expect(c.phase, UpdatePhase.failed);
+    expect(c.problem, UpdateProblem.installFailed);
+  });
 
   test('progress is never above 100 percent', () {
     final c = controller();

@@ -12,46 +12,23 @@ void main() {
   });
 
   test('plain http is refused unless this is a local test build', () {
-    expect(
-      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://manage.dikho.in', localTest: false),
-      isNotEmpty,
-    );
-    expect(
-      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://localhost:5199', localTest: false),
-      isNotEmpty,
-    );
-    expect(
-      AppConfig.problems(supabase: supabase, supabaseKey: 'k', update: 'http://localhost:8799', localTest: false),
-      isNotEmpty,
-    );
-    expect(
-      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://example.com', localTest: true),
-      isNotEmpty,
-    );
-    expect(
-      AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://localhost:5199', localTest: true),
-      isEmpty,
-    );
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://manage.dikho.in', localTest: false), isNotEmpty);
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://localhost:5199', localTest: false), isNotEmpty);
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', update: 'http://localhost:8799', localTest: false), isNotEmpty);
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://example.com', localTest: true), isNotEmpty);
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', crm: 'http://localhost:5199', localTest: true), isEmpty);
   });
 
   test('malformed or credentialed addresses are refused', () {
     expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', api: 'not a url', localTest: false), isNotEmpty);
-    expect(
-      AppConfig.problems(supabase: supabase, supabaseKey: 'k', api: 'https://u:p@example.com', localTest: false),
-      isNotEmpty,
-    );
+    expect(AppConfig.problems(supabase: supabase, supabaseKey: 'k', api: 'https://u:p@example.com', localTest: false), isNotEmpty);
   });
 
   group('APK source', () {
     const update = 'https://updates.example.test';
 
     bool allowed(String url, {String extra = '', bool local = false}) =>
-        AppConfig.isAllowedApkUrl(
-          Uri.parse(url),
-          update: update,
-          extraHosts: extra,
-          localTest: local,
-        );
+        AppConfig.isAllowedApkUrl(Uri.parse(url), update: update, extraHosts: extra, localTest: local);
 
     test('accepts the update host', () {
       expect(allowed('$update/releases/dikho-crm-v1.1.0.apk'), isTrue);
@@ -72,53 +49,17 @@ void main() {
     });
 
     test('accepts a configured extra host only', () {
-      expect(
-        allowed('https://cdn.example.test/a.apk', extra: 'cdn.example.test'),
-        isTrue,
-      );
-      expect(
-        allowed('https://other.example.test/a.apk', extra: 'cdn.example.test'),
-        isFalse,
-      );
+      expect(allowed('https://cdn.example.test/a.apk', extra: 'cdn.example.test'), isTrue);
+      expect(allowed('https://other.example.test/a.apk', extra: 'cdn.example.test'), isFalse);
     });
   });
 
   test('every download hop must stay on https', () {
-    expect(
-      AppConfig.isAllowedDownloadHop(
-        Uri.parse('https://a.test/x'),
-        localTest: false,
-      ),
-      isTrue,
-    );
-    expect(
-      AppConfig.isAllowedDownloadHop(
-        Uri.parse('http://a.test/x'),
-        localTest: false,
-      ),
-      isFalse,
-    );
-    expect(
-      AppConfig.isAllowedDownloadHop(
-        Uri.parse('http://localhost/x'),
-        localTest: false,
-      ),
-      isFalse,
-    );
-    expect(
-      AppConfig.isAllowedDownloadHop(
-        Uri.parse('http://localhost/x'),
-        localTest: true,
-      ),
-      isTrue,
-    );
-    expect(
-      AppConfig.isAllowedDownloadHop(
-        Uri.parse('ftp://a.test/x'),
-        localTest: true,
-      ),
-      isFalse,
-    );
+    expect(AppConfig.isAllowedDownloadHop(Uri.parse('https://a.test/x'), localTest: false), isTrue);
+    expect(AppConfig.isAllowedDownloadHop(Uri.parse('http://a.test/x'), localTest: false), isFalse);
+    expect(AppConfig.isAllowedDownloadHop(Uri.parse('http://localhost/x'), localTest: false), isFalse);
+    expect(AppConfig.isAllowedDownloadHop(Uri.parse('http://localhost/x'), localTest: true), isTrue);
+    expect(AppConfig.isAllowedDownloadHop(Uri.parse('ftp://a.test/x'), localTest: true), isFalse);
   });
 
   test('a build without the Supabase address or key cannot sign anyone in, so it says so', () {

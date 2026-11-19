@@ -33,9 +33,23 @@ class FakeRealtime {
         final message = jsonDecode(data as String) as Map<String, dynamic>;
         received.add(message);
         if (message['event'] == 'phx_join') {
-          socket.add(jsonEncode({'event': 'phx_reply', 'topic': message['topic'], 'ref': message['ref'], 'payload': {'status': joinStatus}}));
+          socket.add(
+            jsonEncode({
+              'event': 'phx_reply',
+              'topic': message['topic'],
+              'ref': message['ref'],
+              'payload': {'status': joinStatus},
+            }),
+          );
         } else if (message['event'] == 'heartbeat' && answerHeartbeats) {
-          socket.add(jsonEncode({'event': 'phx_reply', 'topic': 'phoenix', 'ref': message['ref'], 'payload': {'status': 'ok'}}));
+          socket.add(
+            jsonEncode({
+              'event': 'phx_reply',
+              'topic': 'phoenix',
+              'ref': message['ref'],
+              'payload': {'status': 'ok'},
+            }),
+          );
         }
       });
     });
@@ -44,11 +58,13 @@ class FakeRealtime {
   Map<String, String> lastQuery = const {};
 
   void broadcast(String event, Map<String, dynamic> payload) {
-    sockets.last.add(jsonEncode({
-      'topic': 'realtime:wa-inbox',
-      'event': 'broadcast',
-      'payload': {'type': 'broadcast', 'event': event, 'payload': payload},
-    }));
+    sockets.last.add(
+      jsonEncode({
+        'topic': 'realtime:wa-inbox',
+        'event': 'broadcast',
+        'payload': {'type': 'broadcast', 'event': event, 'payload': payload},
+      }),
+    );
   }
 
   Future<void> stop() => _server.close(force: true);
@@ -108,7 +124,9 @@ void main() {
   test('hands broadcast events to the inbox', () async {
     client.start();
     await until(() => joins == 1);
-    server.broadcast('message:new', {'message': {'id': 1}});
+    server.broadcast('message:new', {
+      'message': {'id': 1},
+    });
     await until(() => events.isNotEmpty);
     expect(events.single.$1, 'message:new');
     expect((events.single.$2['message'] as Map)['id'], 1);
@@ -165,7 +183,12 @@ void main() {
       ..add('not json')
       ..add('[1,2]')
       ..add(jsonEncode({'event': 'broadcast', 'payload': 'text'}))
-      ..add(jsonEncode({'event': 'broadcast', 'payload': {'event': 5}}));
+      ..add(
+        jsonEncode({
+          'event': 'broadcast',
+          'payload': {'event': 5},
+        }),
+      );
     server.broadcast('message:new', {'ok': true});
     await until(() => events.isNotEmpty);
     expect(events.single.$1, 'message:new');
