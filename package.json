@@ -28,18 +28,17 @@
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-pdf": "^10.5.0",
     "react-router-dom": "^7.18.4",
     "react-virtualized-auto-sizer": "^2.0.3",
     "react-window": "^2.3.1"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.56.0",
+    "@cloudflare/vite-plugin": "^1.70.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.75.0",
-    "supabase": "^2.118.0-beta.55",
+    "@vitejs/plugin-react": "^6.3.0",
+    "oxlint": "^1.94.0",
+    "supabase": "^3.2.0",
     "tailwindcss": "^3.4.19",
     "vite": "^8.3.8",
     "wrangler": "^4.135.0"
