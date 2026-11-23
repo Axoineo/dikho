@@ -2,6 +2,16 @@
   "schema": 1,
   "appId": "in.dikho.crm",
   "channels": {
-    "stable": null
-  }
+    "stable": {
+      "version": "1.1.1",
+      "versionCode": 3,
+      "minSupportedVersionCode": 2,
+      "releaseNotes": "Shows when you are offline and when you are back online. Smoother lists and chats. Security and privacy improvements.",
+      "apkUrl": "/releases/dikho-crm-v1.1.1.apk",
+      "sha256": "d2e59a99635246935ef7133ce1a4934c28a75c9e2de4d0a0ea081051cead6707",
+      "sizeBytes": 17425586,
+      "publishedAt": "2026-11-23T06:54:59Z"
+    }
+  },
+  "signingCertSha256": "bb8b9e5d38ad6b7d9697c4a94095fba0e08d5cf579560f7083dae13740a42648"
 }
