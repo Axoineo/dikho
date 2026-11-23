@@ -18,7 +18,8 @@ class MediaRepository {
   final Directory _dir;
   final HttpClient _http;
 
-  static const _ticketLife = Duration(hours: 5);
+  /// Tickets last an hour (the API's MEDIA_TICKET_TTL_SECONDS); a new one is fetched before that.
+  static const _ticketLife = Duration(minutes: 45);
   static const _maxFileBytes = 100 * 1024 * 1024;
   static const _maxCacheBytes = 200 * 1024 * 1024;
 

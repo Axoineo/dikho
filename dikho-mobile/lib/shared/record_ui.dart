@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../features/inbox/chat_theme.dart';
@@ -204,4 +206,132 @@ String formatDisplayDate(String? value) {
 double recordRowExtent(BuildContext context) {
   final scaled = MediaQuery.textScalerOf(context).scale(44) + 20;
   return scaled > 72 ? scaled : 72;
+}
+
+/// True once a list is within about a screen and a half of its end. That is when the
+/// next page is asked for, so it has usually arrived before anyone reaches it and a
+/// fling carries on instead of stopping at a spinner. Only scrolling asks, so a list
+/// nobody scrolls never reads a second page.
+bool nearListEnd(ScrollPosition position) => position.extentAfter < position.viewportDimension * 1.5;
+
+/// The line under a list's search box. While a search, a filter or a return to the
+/// screen reloads a list that is already showing, it becomes a thin progress bar, so
+/// the old rows never pass for the new result. It is the same height either way, so
+/// the rows below never move.
+class ListProgressLine extends StatelessWidget {
+  const ListProgressLine({super.key, required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 2,
+    child: active
+        ? const LinearProgressIndicator(minHeight: 2, semanticsLabel: 'Updating the list')
+        : const Align(alignment: Alignment.topCenter, child: Divider()),
+  );
+}
+
+/// Grey rows in the list's own shape while its first page loads, so the screen has
+/// its final layout at once and nothing jumps when the rows arrive. They pulse
+/// gently, and hold still when the phone is set to remove animations.
+class LoadingRows extends StatefulWidget {
+  const LoadingRows({super.key, this.extent});
+
+  /// Each row's height: the record list's own unless given.
+  final double? extent;
+
+  @override
+  State<LoadingRows> createState() => _LoadingRowsState();
+}
+
+class _LoadingRowsState extends State<LoadingRows> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+  late final Animation<double> _opacity = _pulse.drive(Tween<double>(begin: 1, end: 0.5).chain(CurveTween(curve: Curves.easeInOut)));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      // Setting the value also stops it.
+      _pulse.value = 0;
+    } else if (!_pulse.isAnimating) {
+      unawaited(_pulse.repeat(reverse: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final extent = widget.extent ?? recordRowExtent(context);
+    final ground = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Semantics(
+      container: true,
+      label: 'Loading',
+      child: ExcludeSemantics(
+        // One faded layer for the whole block: the rows themselves are never rebuilt.
+        child: FadeTransition(
+          opacity: _opacity,
+          child: LayoutBuilder(
+            builder: (context, constraints) => ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemExtent: extent,
+              itemCount: constraints.maxHeight.isFinite ? (constraints.maxHeight / extent).ceil() : 8,
+              itemBuilder: (_, index) => _PlaceholderRow(ground: ground, width: _placeholderWidths[index % _placeholderWidths.length]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How much of the line each placeholder's first bar takes, so the rows don't look stamped out.
+const _placeholderWidths = [0.72, 0.5, 0.64, 0.42, 0.58];
+
+class _PlaceholderRow extends StatelessWidget {
+  const _PlaceholderRow({required this.ground, required this.width});
+
+  final Color ground;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final bar = BoxDecoration(color: ground, borderRadius: BorderRadius.circular(4));
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Gap.m),
+      child: Row(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(color: ground, shape: BoxShape.circle),
+            child: const SizedBox.square(dimension: 44),
+          ),
+          const SizedBox(width: Gap.m),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FractionallySizedBox(
+                  widthFactor: width,
+                  child: DecoratedBox(decoration: bar, child: const SizedBox(height: 12)),
+                ),
+                const SizedBox(height: Gap.s),
+                FractionallySizedBox(
+                  widthFactor: width * 0.6,
+                  child: DecoratedBox(decoration: bar, child: const SizedBox(height: 10)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

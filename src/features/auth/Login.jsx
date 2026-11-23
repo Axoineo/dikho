@@ -16,13 +16,14 @@ function toE164(input) {
   return null
 }
 
-// Supabase returns a generic error when shouldCreateUser is false and the phone
-// isn't a known user; make that human instead of leaking the raw code.
-function friendlyError(method, message) {
-  if (method === 'whatsapp' && /signups? not allowed|otp_disabled|not found/i.test(message || '')) {
-    return "This number isn't authorized. Contact an admin to get access."
-  }
-  return message
+// Supabase answers with an error when shouldCreateUser is false and the email or
+// number was never added. That answer is not passed on: someone not added sees the
+// same code screen as staff, so this page cannot be used to find out who works here
+// (pre-launch audit 2.3). Their code simply never arrives.
+const UNKNOWN_ACCOUNT = /signups? not allowed|otp_disabled|user[_ ]not[_ ]found|not found/i
+
+function friendlyError(message) {
+  return UNKNOWN_ACCOUNT.test(message || '') ? null : message
 }
 
 // Official WhatsApp glyph (filled). Uses currentColor so it stays subtle on an
@@ -90,14 +91,14 @@ export default function Login({ onLogin }) {
         phone: e164,
         options: { shouldCreateUser: false },
       })
-      return { error: authError ? friendlyError('whatsapp', authError.message) : null }
+      return { error: authError ? friendlyError(authError.message) : null }
     }
 
     const { error: authError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: { shouldCreateUser: false },
     })
-    return { error: authError ? friendlyError('email', authError.message) : null }
+    return { error: authError ? friendlyError(authError.message) : null }
   }
 
   async function handleSendOtp(e) {
@@ -199,7 +200,7 @@ export default function Login({ onLogin }) {
 
             <h1>{method === 'whatsapp' ? 'Check WhatsApp' : 'Check your email'}</h1>
             <p className="login-subtitle">
-              Enter the 6-digit code sent to <strong>{sentTo}</strong>
+              If <strong>{sentTo}</strong> has access to Dikho CRM, a 6-digit code is on its way. No code? Ask an admin to add you.
             </p>
 
             <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtpValues(otp) }}>
@@ -337,6 +338,9 @@ export default function Login({ onLogin }) {
               {loading ? 'Sending…' : 'Send code'}
             </button>
           </form>
+          <p className="login-legal">
+            <a href="/privacy" target="_blank" rel="noopener">Privacy and terms</a>
+          </p>
         </div>
       </div>
     </div>

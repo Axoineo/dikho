@@ -104,6 +104,12 @@
     // the Android app's Device Contacts (migrations/0013_android_inbox.sql). Must
     // be positive: absent, invalid or 0 refuses those sends.
     "WHATSAPP_DIRECT_TEMPLATE_DAILY_CAP": "200",
+    // Daily ceiling, across all staff, on WhatsApp campaign messages
+    // (migrations/0014_campaign_send_budget.sql, services/whatsapp/campaignBudget.js).
+    // Two full 2,000-recipient campaigns plus retries; raise it to match the
+    // number's Meta messaging tier if real campaigns stop with "Today's limit".
+    // Must be positive: absent, invalid or 0 stops every campaign send.
+    "WHATSAPP_CAMPAIGN_DAILY_CAP": "5000",
     // Hard ceiling on GSTIN lookups sent to API Setu per UTC day, counted in D1
     // (migrations/0007_gstn_lookup_budget.sql). This — not the per-IP rate limit
     // below — is what actually protects the subscription, because it is the only
@@ -144,6 +150,20 @@
       "name": "GSTIN_RATE_LIMITER",
       "namespace_id": "2001",
       "simple": { "limit": 12, "period": 60 }
+    },
+    // Per-person ceilings for signed-in requests (src/api/middleware/requireAuth.js,
+    // pre-launch audit 6.1). Keyed by user id. Far above normal use: they stop a
+    // runaway loop or a script before it reaches D1, Supabase or Meta.
+    {
+      "name": "USER_RATE_LIMITER",
+      "namespace_id": "2002",
+      "simple": { "limit": 240, "period": 60 }
+    },
+    // Stricter, on sends, uploads and imports (limitSends).
+    {
+      "name": "SEND_RATE_LIMITER",
+      "namespace_id": "2003",
+      "simple": { "limit": 30, "period": 60 }
     }
   ],
   // The API code reads this as `c.env.DB`, so the binding name must stay "DB".

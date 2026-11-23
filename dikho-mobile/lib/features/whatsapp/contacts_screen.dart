@@ -15,8 +15,6 @@ import 'contact_import_screen.dart';
 import 'contacts_controller.dart';
 import 'contacts_models.dart';
 
-const _loadMoreWithin = 200.0;
-
 /// What this person may do here; the API checks each again.
 class ContactAbilities {
   const ContactAbilities({this.delete = false, this.import = false, this.sendTemplates = false});
@@ -62,7 +60,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     _search.text = _contacts.query;
     _scroll.addListener(() {
       final position = _scroll.position;
-      if (position.maxScrollExtent - position.pixels < _loadMoreWithin) unawaited(_contacts.loadMore());
+      if (nearListEnd(position)) unawaited(_contacts.loadMore());
     });
     if (_contacts.contacts.isEmpty && !_contacts.loading) {
       unawaited(_contacts.start());
@@ -234,7 +232,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                   ],
                 ),
               ),
-              const Divider(),
+              ListProgressLine(active: _contacts.refreshing),
               Expanded(child: _body(context)),
             ],
           ),
@@ -246,7 +244,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Widget _body(BuildContext context) {
     final contacts = _contacts.contacts;
     if (contacts.isEmpty) {
-      if (_contacts.loading) return const Center(child: CircularProgressIndicator());
+      if (_contacts.loading) return const LoadingRows();
       if (_contacts.error != null) {
         return EmptyMessage(
           title: "Couldn't load contacts",
@@ -266,7 +264,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
     final footer = _contacts.hasMore ? 1 : 0;
     return RefreshIndicator(
-      onRefresh: _contacts.refresh,
+      onRefresh: _contacts.pullToRefresh,
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

@@ -1,6 +1,8 @@
 # Task: Close the 2026-10 security audit findings
 
-Status: active (code complete in the working tree; nothing deployed)
+Status: deployed. Checked 2026-11-20: migrations `20261006143107_staff_membership` and
+`20261006160000_vendor_document_storage` are applied in production, and the production
+auth settings report `disable_signup: true` (email and phone sign-in only).
 
 > 2026-10-06: the role list this brief introduced is replaced by User
 > Management ([ADR 0007](../decisions/0007-user-management-and-permissions.md)),

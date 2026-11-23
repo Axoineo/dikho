@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { verifyMediaTicket } from '../../services/whatsapp/mediaTicket.js'
+import { holderIsLive, mediaTicketSecret, verifyMediaTicket } from '../../services/whatsapp/mediaTicket.js'
 
 const media = new Hono()
 
@@ -31,8 +31,9 @@ function contentHeaders(obj) {
 // send an Authorization header). Supports HTTP Range so video/large files stream
 // and seek instead of being buffered whole. `{.+}` allows slashes in the key.
 media.get('/:key{.+}', async (c) => {
-  const ok = await verifyMediaTicket(c.env.WHATSAPP_APP_SECRET, c.req.query('t'))
-  if (!ok) return c.text('Unauthorized', 401)
+  // The ticket's own signature and expiry, then whether its session is still live.
+  const holder = await verifyMediaTicket(mediaTicketSecret(c.env), c.req.query('t'))
+  if (!holder || !(await holderIsLive(c.env, holder))) return c.text('Unauthorized', 401)
 
   const key = c.req.param('key')
   const rangeHeader = c.req.header('Range')

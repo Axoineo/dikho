@@ -38,10 +38,25 @@ abstract class PagedRows<T> extends ChangeNotifier {
 
   bool _hasMore = false;
   bool _disposed = false;
+  bool _pulled = false;
   int _request = 0;
   Timer? _searchTimer;
 
   bool get hasMore => _hasMore;
+
+  /// A search, a filter or a return to the screen is reloading rows that are still on
+  /// screen. A pull to refresh shows its own spinner, so it is left out.
+  bool get refreshing => loading && rows.isNotEmpty && !_pulled;
+
+  /// The reload behind a pull to refresh.
+  Future<void> pullToRefresh() async {
+    _pulled = true;
+    try {
+      await reload();
+    } finally {
+      _pulled = false;
+    }
+  }
 
   /// One row from the table.
   T parse(Map<String, dynamic> row);

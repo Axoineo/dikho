@@ -37,11 +37,15 @@ class FakeTable {
         return;
       }
       if (request.uri.path == '/rest/v1/rpc/get_settings') {
-        response.write(jsonEncode({'lists': [
-          {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
-          {'list_key': 'registration', 'value': 'Hidden one', 'hidden': true},
-          {'list_key': 'other', 'value': 'Nope'},
-        ]}));
+        response.write(
+          jsonEncode({
+            'lists': [
+              {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
+              {'list_key': 'registration', 'value': 'Hidden one', 'hidden': true},
+              {'list_key': 'other', 'value': 'Nope'},
+            ],
+          }),
+        );
         return response.close();
       }
       if (request.method == 'POST') {
@@ -149,10 +153,12 @@ void main() {
 
     test('registration lists follow the organization\'s settings, keeping a hidden current value', () {
       expect(registrationOptions(null, ''), defaultRegistrations);
-      final settings = {'lists': [
-        {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
-        {'list_key': 'registration', 'value': 'Gone', 'hidden': true},
-      ]};
+      final settings = {
+        'lists': [
+          {'list_key': 'registration', 'value': 'Registered', 'hidden': false},
+          {'list_key': 'registration', 'value': 'Gone', 'hidden': true},
+        ],
+      };
       expect(registrationOptions(settings, ''), ['Registered']);
       expect(registrationOptions(settings, 'Gone'), ['Registered', 'Gone']);
     });
@@ -180,6 +186,21 @@ void main() {
       await clients.reload();
       expect(clients.rows.map((c) => c.id), ['2', '1']);
       expect(table.sent.single.$2, contains('order=id.desc'));
+    });
+
+    test('reloading rows already on screen counts as refreshing; a first load or a pull to refresh does not', () async {
+      final seen = <bool>[];
+      clients.addListener(() => seen.add(clients.refreshing));
+      await clients.reload();
+      expect(seen, [false, false], reason: 'nothing on screen to keep yet');
+      seen.clear();
+      await clients.reload();
+      expect(seen, [true, false]);
+      seen.clear();
+      await clients.pullToRefresh();
+      expect(seen, [false, false], reason: 'the pull shows its own spinner');
+      expect(clients.loading, isFalse);
+      expect(table.sent, hasLength(3));
     });
 
     test('a new client is inserted once, returned as stored, and shown at the top', () async {

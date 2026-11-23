@@ -741,7 +741,7 @@ for (const module of MODULES) {
   }
 }
 for (const key of ['leads.view', 'users.view', 'inbox.view', 'campaigns.view', 'wa_contacts.view', 'wa_templates.view']) permissions[key] = 'all'
-for (const key of ['campaigns.send', 'wa_contacts.import', 'wa_contacts.delete']) permissions[key] = VIEW_ONLY ? 'none' : 'all'
+for (const key of ['campaigns.send', 'wa_contacts.import', 'wa_contacts.delete', 'inbox.delete']) permissions[key] = VIEW_ONLY ? 'none' : 'all'
 permissions['settings.manage'] = VIEW_ONLY ? 'none' : 'all'
 for (const key of ['users.create', 'users.edit', 'users.roles', 'users.permissions', 'users.suspend', 'users.sessions', 'audit_logs.view', 'templates.manage', 'departments.manage', 'live_assist.use']) permissions[key] = VIEW_ONLY ? 'none' : 'all'
 

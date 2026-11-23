@@ -291,12 +291,12 @@ class SignInScreenState extends State<SignInScreen> {
       Text.rich(
         TextSpan(
           children: [
-            const TextSpan(text: 'We sent a 6-digit code to '),
+            const TextSpan(text: 'If '),
             TextSpan(
               text: _sentTo,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            const TextSpan(text: '.'),
+            const TextSpan(text: ' has access to Dikho CRM, a 6-digit code is on its way. No code? Ask an admin to add you.'),
           ],
         ),
         textAlign: TextAlign.center,

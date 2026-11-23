@@ -320,6 +320,7 @@
 .em-compose:not(.is-floating) .em-editor { min-height: 120px; }
 .em-editor:empty::before { content: attr(data-placeholder); color: var(--muted); }
 .em-editor blockquote { margin: 8px 0 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.em-editor .em-plain { white-space: pre-wrap; }
 .em-compose-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
 .em-compose-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line-soft); }
 .em-compose-foot .em-status { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

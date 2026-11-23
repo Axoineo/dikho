@@ -43,4 +43,7 @@ class LeadsController extends PagedRows<Lead> {
   }
 
   Future<void> refresh() => Future.wait([reload(), loadStatuses()]);
+
+  @override
+  Future<void> pullToRefresh() => Future.wait([super.pullToRefresh(), loadStatuses()]);
 }

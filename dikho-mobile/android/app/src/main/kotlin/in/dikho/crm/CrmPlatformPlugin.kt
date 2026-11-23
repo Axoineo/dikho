@@ -74,7 +74,7 @@ class CrmPlatformPlugin :
         bridge = WebViewBridge(context, fileTransfers, ::emit)
         installer = ApkInstaller(context, ::emit) { activity }
         InstallResultReceiver.handler = installer
-        network = NetworkWatcher(context) { emit(mapOf("type" to "network")) }.also { it.start() }
+        network = NetworkWatcher(context) { online -> emit(mapOf("type" to "network", "online" to online)) }.also { it.start() }
         device = DeviceFeatures(context)
         recorder = VoiceRecorder(context)
         audio = VoicePlayer(::emit)
@@ -160,6 +160,7 @@ class CrmPlatformPlugin :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "getAppInfo" -> result.success(appInfo())
+            "isOnline" -> result.success(network?.online ?: true)
             "getInitialLink" -> {
                 // Once per launch, so a rotation cannot replay the link.
                 val link = if (initialLinkRead) null else viewLink(activity?.intent)

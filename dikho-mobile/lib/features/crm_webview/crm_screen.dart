@@ -1075,7 +1075,7 @@ class _CrmScreenState extends State<CrmScreen> with WidgetsBindingObserver {
         _audio?.onEvent(event);
       case 'network':
         // Connectivity came back while the failure screen was up.
-        if (_state == _LoadState.failed) _retry();
+        if (event['online'] != false && _state == _LoadState.failed) _retry();
       case 'chrome':
         final top = event['top'];
         final bottom = event['bottom'];

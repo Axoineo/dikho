@@ -41,6 +41,22 @@ class ContactsController extends ChangeNotifier {
   /// Reloads in place: the rows stay on screen until the new first page arrives.
   Future<void> refresh() => reload();
 
+  bool _pulled = false;
+
+  /// A search or a return to the screen is reloading rows that are still on screen.
+  /// A pull to refresh shows its own spinner, so it is left out.
+  bool get refreshing => loading && contacts.isNotEmpty && !_pulled;
+
+  /// The reload behind a pull to refresh.
+  Future<void> pullToRefresh() async {
+    _pulled = true;
+    try {
+      await reload();
+    } finally {
+      _pulled = false;
+    }
+  }
+
   void setQuery(String value) {
     final next = value.trim();
     if (next == query) return;

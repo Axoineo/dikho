@@ -12,8 +12,6 @@ import 'purchase_order_form_screen.dart';
 import 'purchase_orders_controller.dart';
 import 'purchase_orders_models.dart';
 
-const _loadMoreWithin = 200.0;
-
 /// What this person may do here; RLS checks each write again. Purchase order rights
 /// are all or nothing: no 'own' scope.
 class PurchaseOrderAbilities {
@@ -62,7 +60,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     _search.text = _orders.query;
     _scroll.addListener(() {
       final position = _scroll.position;
-      if (position.maxScrollExtent - position.pixels < _loadMoreWithin) unawaited(_orders.loadMore());
+      if (nearListEnd(position)) unawaited(_orders.loadMore());
     });
     if (_orders.rows.isEmpty && !_orders.loading) {
       unawaited(_orders.start());
@@ -162,7 +160,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                 ],
               ),
             ),
-            const Divider(),
+            ListProgressLine(active: _orders.refreshing),
             Expanded(child: _body(context)),
           ],
         ),
@@ -173,7 +171,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
   Widget _body(BuildContext context) {
     final orders = _orders.rows;
     if (orders.isEmpty) {
-      if (_orders.loading) return const Center(child: CircularProgressIndicator());
+      if (_orders.loading) return const LoadingRows();
       if (_orders.error != null) {
         return EmptyMessage(
           title: "Couldn't load purchase orders",
@@ -194,7 +192,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     }
     final footer = _orders.hasMore ? 1 : 0;
     return RefreshIndicator(
-      onRefresh: _orders.reload,
+      onRefresh: _orders.pullToRefresh,
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

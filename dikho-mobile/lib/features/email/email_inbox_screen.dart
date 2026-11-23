@@ -38,6 +38,7 @@ class _EmailInboxScreenState extends State<EmailInboxScreen> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   Timer? _typing;
+  late final AppLifecycleListener _lifecycle;
 
   EmailInboxController get _c => widget.controller;
 
@@ -46,15 +47,25 @@ class _EmailInboxScreenState extends State<EmailInboxScreen> {
     super.initState();
     _search.text = _c.search;
     _c.watch();
+    // Nothing refreshes behind another app; coming back catches up at once.
+    _lifecycle = AppLifecycleListener(onHide: _c.unwatch, onShow: _catchUp);
     if (_c.mailboxes == null) unawaited(_c.start());
     _scroll.addListener(() {
-      if (_scroll.position.extentAfter < 600 && _c.hasMore && !_c.loading) unawaited(_c.load(more: true));
+      if (nearListEnd(_scroll.position) && _c.hasMore && !_c.loading) unawaited(_c.load(more: true));
     });
+  }
+
+  void _catchUp() {
+    _c.watch();
+    if (_c.providerResults) return;
+    unawaited(_c.load(quiet: true));
+    unawaited(_c.loadMailboxes());
   }
 
   @override
   void dispose() {
     _typing?.cancel();
+    _lifecycle.dispose();
     _c.unwatch();
     _search.dispose();
     _scroll.dispose();

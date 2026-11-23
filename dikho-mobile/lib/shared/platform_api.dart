@@ -102,6 +102,19 @@ class PlatformApi implements UpdaterPlatform {
 
   Future<String?> initialLink() => _methods.invokeMethod<String>('getInitialLink');
 
+  /// Whether the phone has validated internet right now. True when it cannot tell.
+  Future<bool> isOnline() async {
+    try {
+      return await _methods.invokeMethod<bool>('isOnline') ?? true;
+    } on MissingPluginException {
+      return true;
+    }
+  }
+
+  /// Each change of [isOnline], as it happens.
+  Stream<bool> get onlineChanges =>
+      events.where((event) => event['type'] == 'network' && event['online'] is bool).map((event) => event['online']! as bool);
+
   /// False when the WebView lacks the features the bridge is built on.
   Future<bool> attachWebView(int id, String origin, {bool forceSaveDialog = false}) async =>
       await _methods.invokeMethod<bool>('attachWebView', {'id': id, 'origin': origin, 'forceSaveDialog': forceSaveDialog}) ?? false;

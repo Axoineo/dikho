@@ -12,8 +12,6 @@ import 'vendor_form_screen.dart';
 import 'vendors_controller.dart';
 import 'vendors_models.dart';
 
-const _loadMoreWithin = 200.0;
-
 /// What this person may do here; RLS checks each write again.
 class VendorAbilities {
   const VendorAbilities({this.create = false, this.edit = false, this.newPurchaseOrder = false});
@@ -60,7 +58,7 @@ class _VendorsScreenState extends State<VendorsScreen> {
     _search.text = _vendors.query;
     _scroll.addListener(() {
       final position = _scroll.position;
-      if (position.maxScrollExtent - position.pixels < _loadMoreWithin) unawaited(_vendors.loadMore());
+      if (nearListEnd(position)) unawaited(_vendors.loadMore());
     });
     if (_vendors.rows.isEmpty && !_vendors.loading) {
       unawaited(_vendors.start());
@@ -177,7 +175,7 @@ class _VendorsScreenState extends State<VendorsScreen> {
                 ],
               ),
             ),
-            const Divider(),
+            ListProgressLine(active: _vendors.refreshing),
             Expanded(child: _body(context)),
           ],
         ),
@@ -188,7 +186,7 @@ class _VendorsScreenState extends State<VendorsScreen> {
   Widget _body(BuildContext context) {
     final vendors = _vendors.rows;
     if (vendors.isEmpty) {
-      if (_vendors.loading) return const Center(child: CircularProgressIndicator());
+      if (_vendors.loading) return const LoadingRows();
       if (_vendors.error != null) {
         return EmptyMessage(title: "Couldn't load vendors", body: _vendors.error!, action: 'Try again', onAction: () => unawaited(_vendors.reload()));
       }
@@ -200,7 +198,7 @@ class _VendorsScreenState extends State<VendorsScreen> {
     }
     final footer = _vendors.hasMore ? 1 : 0;
     return RefreshIndicator(
-      onRefresh: _vendors.reload,
+      onRefresh: _vendors.pullToRefresh,
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

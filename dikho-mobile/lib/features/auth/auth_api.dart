@@ -95,7 +95,12 @@ class AuthApi {
   Future<void> sendCode({String? email, String? phone}) async {
     final (status, body) = await _post('/auth/v1/otp', {'email': ?email, 'phone': ?phone, 'create_user': false});
     if (status >= 200 && status < 300) return;
-    throw _failure(status, body, sending: true, phone: phone != null);
+    final failure = _failure(status, body, sending: true, phone: phone != null);
+    // Someone who was never added gets the same answer as someone who was, so the
+    // sign-in screen cannot be used to find out who works here (pre-launch audit 2.3).
+    // Their code simply never arrives.
+    if (failure.kind == AuthProblem.notAllowed) return;
+    throw failure;
   }
 
   Future<AuthSession> verify({String? email, String? phone, required String code}) async {

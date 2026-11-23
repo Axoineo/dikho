@@ -30,8 +30,11 @@ class ThreadScreen extends StatefulWidget {
 }
 
 class _ThreadScreenState extends State<ThreadScreen> {
-  static const _loadOlderAt = 300.0;
   static const _bottomSlack = 80.0;
+
+  /// After older messages failed to load, scrolling waits this long before asking
+  /// again, instead of sending a request (and showing a notice) per scroll event.
+  static const _olderRetryAfter = Duration(seconds: 5);
 
   final _scroll = ScrollController();
   final _centerKey = GlobalKey();
@@ -146,14 +149,23 @@ class _ThreadScreenState extends State<ThreadScreen> {
         if (atBottom) _unseen = 0;
       });
     }
-    if (position.pixels - position.minScrollExtent < _loadOlderAt && !_searching) unawaited(_loadOlder());
+    // About a screen and a half ahead, so older messages are usually there before
+    // anyone scrolls up to them. New rows grow above the anchor, so nothing moves.
+    if (position.extentBefore < position.viewportDimension * 1.5 && !_searching) unawaited(_loadOlder(fromScroll: true));
   }
 
   bool get _searching => _starredOnly || (_search && _searchField.text.trim().isNotEmpty);
 
-  Future<void> _loadOlder() async {
+  DateTime? _olderFailedAt;
+
+  Future<void> _loadOlder({bool fromScroll = false}) async {
+    if (_thread.loadingOlder) return;
+    final failedAt = _olderFailedAt;
+    if (fromScroll && failedAt != null && DateTime.now().difference(failedAt) < _olderRetryAfter) return;
     final problem = await _thread.loadOlder();
-    if (problem != null && mounted) showNotice(context, problem);
+    if (!mounted) return;
+    _olderFailedAt = problem == null ? null : DateTime.now();
+    if (problem != null) showNotice(context, problem);
   }
 
   void _prepareRows() {

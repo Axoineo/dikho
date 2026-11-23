@@ -14,7 +14,7 @@ import { safeDisplayName, sniffType } from '../../utils/fileType.js'
 import { logEvent, logError } from '../../utils/logger.js'
 import { KEYSET_CURSOR, likeTerm } from '../../utils/paging.js'
 import { normalisePhone } from '../../utils/phone.js'
-import { requirePermission } from '../../middleware/requireAuth.js'
+import { limitSends, requirePermission } from '../../middleware/requireAuth.js'
 
 // Most recent inbound message id — the one Meta read-receipts and typing
 // indicators must reference (they attach to a received message). None for a
@@ -315,7 +315,7 @@ async function recordOutbound(c, conv, { metaMessageId, type, body, mediaUrl, me
 
 /* ── POST /api/whatsapp/conversations/:id/messages — text reply ────────────
    `replyTo` (a message id in this chat) sends it as a reply quoting that one. */
-conversations.post('/:id/messages', requirePermission('inbox.reply'), async (c) => {
+conversations.post('/:id/messages', requirePermission('inbox.reply'), limitSends, async (c) => {
   const id = Number(c.req.param('id'))
   const { body, replyTo } = (await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, {})) ?? {}
   if (typeof body !== 'string' || !body.trim()) throw new HTTPException(400, { message: 'Message body is required' })
@@ -337,7 +337,7 @@ conversations.post('/:id/messages', requirePermission('inbox.reply'), async (c) 
 })
 
 /* ── POST /api/whatsapp/conversations/:id/media — media reply ────────────── */
-conversations.post('/:id/media', requirePermission('inbox.reply'), async (c) => {
+conversations.post('/:id/media', requirePermission('inbox.reply'), limitSends, async (c) => {
   const id = Number(c.req.param('id'))
   const conv = await c.env.DB.prepare('SELECT * FROM conversations WHERE id = ?').bind(id).first()
   if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
@@ -597,11 +597,11 @@ function structuredRoute(build, type) {
 }
 
 /* POST /:id/location  { latitude, longitude, name?, address? } */
-conversations.post('/:id/location', requirePermission('inbox.reply'), structuredRoute(buildLocation, 'location'))
+conversations.post('/:id/location', requirePermission('inbox.reply'), limitSends, structuredRoute(buildLocation, 'location'))
 /* POST /:id/contact   { name, phone, email?, company? } */
-conversations.post('/:id/contact', requirePermission('inbox.reply'), structuredRoute(buildContact, 'contacts'))
+conversations.post('/:id/contact', requirePermission('inbox.reply'), limitSends, structuredRoute(buildContact, 'contacts'))
 /* POST /:id/interactive { kind: buttons | list | cta_url | location_request | address, ... } */
-conversations.post('/:id/interactive', requirePermission('inbox.reply'), structuredRoute(buildInteractive, 'interactive'))
+conversations.post('/:id/interactive', requirePermission('inbox.reply'), limitSends, structuredRoute(buildInteractive, 'interactive'))
 
 /* ── POST /api/whatsapp/conversations/:id/template: approved template ─────
    The one thing that may go out after the 24-hour window, which is why it is
@@ -668,7 +668,7 @@ function recordTemplate(c, conv, { name, language }, { template, map }, messageI
   })
 }
 
-conversations.post('/:id/template', requirePermission('campaigns.send'), async (c) => {
+conversations.post('/:id/template', requirePermission('campaigns.send'), limitSends, async (c) => {
   const choice = readTemplateChoice(await readJsonOr(c, 16 * 1024, {}))
   const conv = await findConversation(c)
   if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
@@ -721,7 +721,7 @@ async function consumeDirectTemplateBudget(env) {
   }
 }
 
-conversations.post('/template', requirePermission('campaigns.send'), async (c) => {
+conversations.post('/template', requirePermission('campaigns.send'), limitSends, async (c) => {
   const input = await readJsonOr(c, 16 * 1024, {})
   const choice = readTemplateChoice(input)
   const phone = typeof input?.phone === 'string' ? normalisePhone(input.phone.slice(0, 40)) : null
@@ -886,7 +886,7 @@ const MEDIA_PREFIX = '/whatsapp/media/'
    message: the Cloud API has no forwarding, so the customer sees no
    "Forwarded" label. Media goes from our R2 copy back through Meta's upload,
    and the new row reuses that copy rather than storing it twice. */
-conversations.post('/:id/forward', requirePermission('inbox.reply'), async (c) => {
+conversations.post('/:id/forward', requirePermission('inbox.reply'), limitSends, async (c) => {
   const conv = await findConversation(c)
   if (!conv) return fail(c, 'NOT_FOUND', 'Conversation not found', 404)
   if (conv.blocked_at) return fail(c, 'BLOCKED', BLOCKED_MESSAGE, 409)

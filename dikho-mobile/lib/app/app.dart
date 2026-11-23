@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../features/connectivity/connection_banner.dart';
 import '../features/connectivity/load_failure_view.dart';
 import '../features/auth/auth_api.dart';
 import '../features/auth/auth_controller.dart';
@@ -74,8 +75,11 @@ class _DikhoAppState extends State<DikhoApp> {
       // The page's own light or dark choice, so native screens match it.
       themeMode: _shell.themeMode,
       // Around every route and dialog: what Live Assist shares, and its marks over it.
-      builder: (context, child) =>
-          AssistLayer(host: _assist, captureKey: _captureKey, navigatorKey: _navigatorKey, child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => ConnectionBanner(
+        isOnline: widget.platform.isOnline,
+        changes: widget.platform.onlineChanges,
+        child: AssistLayer(host: _assist, captureKey: _captureKey, navigatorKey: _navigatorKey, child: child ?? const SizedBox.shrink()),
+      ),
       home: problems.isNotEmpty
           ? const LoadFailureView(
               title: 'This build is misconfigured',

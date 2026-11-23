@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/Icon'
 import { apiDelete, apiGet } from '../../lib/api'
 import { ContactImportReview } from './ContactImport'
+import ErasePerson from './ErasePerson'
 import { importSummary } from './labels'
 import { useAccess } from '../../lib/access'
 import { ResultCount, SearchField } from '../../components/crm/CrmUi'
 import {
-  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Table, Td, Th,
+  Alert, Avatar, Badge, EmptyState, PageHeader, Panel, Spinner, Table, Td, Th,
 } from './ui'
 
 // A page at a time: lists run to thousands, and all of them in the document at
@@ -211,6 +212,19 @@ export default function WhatsAppContacts() {
         />
         <ResultCount total={total} shown={total} noun="contact" filtered={!!search.trim()} />
       </div>
+
+      {can('wa_contacts.delete') && can('inbox.delete') && (
+        <ErasePerson
+          onDone={(counts) => {
+            setNotice({
+              tone: 'success',
+              text: `Erased: ${counts.messagesDeleted} messages, ${counts.mediaDeleted} files, ${counts.conversations} chats, `
+                + `${counts.contactsDeleted} contacts and ${counts.leadsDeleted} enquiries; ${counts.campaignMessagesAnonymised} campaign messages kept without the number.`,
+            })
+            load(search)
+          }}
+        />
+      )}
 
       <Panel>
 

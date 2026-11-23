@@ -1,5 +1,5 @@
 import { HTTPException } from 'hono/http-exception'
-import { logEvent } from '../utils/logger.js'
+import { logError, logEvent } from '../utils/logger.js'
 
 // The dashboard already authenticates with Supabase, so the API trusts the
 // same session: the browser sends its Supabase access token and the Worker
@@ -74,6 +74,41 @@ export async function requireAuth(c, next) {
     developerLevel: access.developer_level ?? null,
     permissions,
   })
+  if (!(await withinLimit(c, 'USER_RATE_LIMITER', access.user_id, 'requests'))) {
+    throw new HTTPException(429, { message: 'Too many requests from your account. Wait a minute, then try again.' })
+  }
+  await next()
+}
+
+// Per-person ceilings (pre-launch audit 6.1, 2026-11-22), in Cloudflare's rate-limit
+// bindings (wrangler.api.jsonc), keyed by the verified user id. USER_RATE_LIMITER
+// covers every signed-in request, far above what the dashboard or the app does, so
+// it only stops a runaway loop or a script before it reaches D1, Supabase or Meta.
+// SEND_RATE_LIMITER is stricter, on the routes that send messages, upload or import.
+// Fails open when a binding is missing (local development) or the limiter errors:
+// these protect quotas, they are not what decides who may do something.
+async function withinLimit(c, binding, key, label) {
+  const limiter = c.env?.[binding]
+  if (!limiter) {
+    logEvent('api.rate_limiter_missing', { binding })
+    return true
+  }
+  try {
+    const { success } = await limiter.limit({ key })
+    if (!success) logEvent('api.rate_limited', { limiter: label, user_id: key })
+    return success
+  } catch (err) {
+    logError('api.rate_limiter_failed', err)
+    return true
+  }
+}
+
+/** Route guard after requireAuth: the stricter per-person ceiling for sends, uploads and imports. */
+export async function limitSends(c, next) {
+  const user = c.get('user')
+  if (!(await withinLimit(c, 'SEND_RATE_LIMITER', user?.id ?? 'unknown', 'sends'))) {
+    throw new HTTPException(429, { message: 'You are sending very quickly. Wait a minute, then try again.' })
+  }
   await next()
 }
 

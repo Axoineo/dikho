@@ -38,7 +38,7 @@ Changing these values requires rebuilding and redeploying the SPA.
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | [Supabase client](../src/lib/supabase.js) | Required public publishable key; access is constrained by RLS, never replace with a service-role key |
 | `VITE_API_BASE` | [API client](../src/lib/api.js) | API origin without a trailing slash or `/api`; set explicitly because code currently falls back to the existing Dikho API origin ([apiBase.js](../src/lib/apiBase.js)) when unset |
 | `VITE_EMAIL_HUB` | [Navigation and routes](../src/lib/access.js) | `true` builds the Email Hub's navigation and routes; anything else leaves them out of the bundle. Navigation only, not a security boundary: the API enforces `EMAIL_HUB_ENABLED` and every permission and mailbox membership |
-| `CSP_MODE` | [Build config](../vite.config.js) (build-time only, never in the bundle) | Unset: the generated `dist/_headers` sends `Content-Security-Policy-Report-Only`. `enforce`: sends the enforcing header. The policy's Supabase and API origins come from `VITE_SUPABASE_URL` and `VITE_API_BASE` |
+| `CSP_MODE` | [Build config](../vite.config.js) (build-time only, never in the bundle) | Unset: the generated `dist/_headers` sends the enforcing `Content-Security-Policy`. `report-only`: sends `Content-Security-Policy-Report-Only` instead, the rollback switch. The policy's Supabase and API origins come from `VITE_SUPABASE_URL` and `VITE_API_BASE` |
 
 The public Turnstile site key is currently a source constant in
 [vendor registration](../src/features/public/PublicVendorForm.jsx) and
@@ -74,7 +74,8 @@ and [permissions](PERMISSIONS.md) remain separate requirements.
 | Name | Class | Consumer / requirement |
 | --- | --- | --- |
 | `WHATSAPP_ACCESS_TOKEN` | Secret | [Graph client](../src/api/services/whatsapp/graph.js) and media integration; required for provider requests |
-| `WHATSAPP_APP_SECRET` | Secret | [Webhook signature verifier](../src/api/services/whatsapp/verifyMetaSignature.js) and [media tickets](../src/api/services/whatsapp/mediaTicket.js); rotation affects both |
+| `WHATSAPP_APP_SECRET` | Secret | [Webhook signature verifier](../src/api/services/whatsapp/verifyMetaSignature.js), and [media tickets](../src/api/services/whatsapp/mediaTicket.js) until `MEDIA_TICKET_SECRET` is set |
+| `MEDIA_TICKET_SECRET` | Secret | Signs [media tickets](../src/api/services/whatsapp/mediaTicket.js) (one person's session, one hour). At least 32 random bytes. Changing it only makes open inboxes fetch a new ticket |
 | `WHATSAPP_VERIFY_TOKEN` | Secret | [Webhook verification handshake](../src/api/routes/whatsapp/webhook.js); must match provider setup |
 | `WHATSAPP_PHONE_NUMBER_ID` | Server-side provider identifier | Graph message/media requests; use this instance's provider resource; do not copy an existing installation's value |
 | `WHATSAPP_WABA_ID` | Server-side provider identifier | Approved template lookup for this organization's business account |
@@ -90,6 +91,7 @@ and [permissions](PERMISSIONS.md) remain separate requirements.
 | `WHATSAPP_CG_LEAD_DELAY_MINUTES` | Server setting | Non-negative minutes before confirmation; code defaults to 7 for absent/invalid values and rounds down; an empty string becomes 0 |
 | `WHATSAPP_CG_LEAD_DAILY_CAP` | Cost-control setting | Positive daily send ceiling in UTC; absent/invalid values prevent sends; the explicit string `0` disables the ceiling rather than disabling the feature |
 | `WHATSAPP_DIRECT_TEMPLATE_DAILY_CAP` | Cost-control setting | Positive daily ceiling in UTC, across all staff, on templates sent to a phone number from the Android app; absent, invalid or `0` refuses those sends |
+| `WHATSAPP_CAMPAIGN_DAILY_CAP` | Cost-control setting | Positive daily ceiling in UTC, across all staff, on WhatsApp campaign messages ([campaignBudget.js](../src/api/services/whatsapp/campaignBudget.js), D1 migration 0014). A campaign that reaches it stops with a reason and can be resumed the next day; absent, invalid or `0` stops every campaign send |
 | `ANALYTICS_UTC_OFFSET_MINUTES` | Optional | Minutes from UTC for the WhatsApp dashboard's days. Default `330`, India. A day starts at local midnight. |
 | `CAMPAIGN_BATCH_LIMIT` | Resource setting | [Campaign sender](../src/api/routes/campaigns/index.js); numeric value with fallback 40; no complete range validation exists |
 | `CAMPAIGN_CONCURRENCY` | Resource setting | Campaign send lanes; numeric value with fallback 5; no complete range validation exists |
@@ -198,6 +200,8 @@ and within its limit.
 | `DB` | API Worker | D1 contacts, campaigns, conversations, events, budgets and outbox; requires the ordered [D1 migrations](../migrations/) |
 | `MEDIA` | API Worker | Private R2 storage for WhatsApp media and publicly readable avatar objects through restricted routes |
 | `GSTIN_RATE_LIMITER` | API Worker | Edge rate-limit binding used by public GST lookup |
+| `USER_RATE_LIMITER` | API Worker | Per-person ceiling on every signed-in request (240 a minute), in [requireAuth](../src/api/middleware/requireAuth.js) |
+| `SEND_RATE_LIMITER` | API Worker | Stricter per-person ceiling (30 a minute) on sends, uploads and imports (`limitSends`) |
 | `ASSETS` | Standalone SPA Worker | [`src/worker.js`](../src/worker.js) uses it for asset fallback, but [`wrangler.jsonc`](../wrangler.jsonc) does not declare it. Production serves the SPA from Cloudflare Pages and does not use this Worker |
 | `triggers.crons` | API Worker | Scheduled outbox dispatch, receipt reconciliation and (when the Email Hub is on) the next campaign batch; registered, but not firing on the current plan (see below), so the API also performs this work on ordinary requests |
 

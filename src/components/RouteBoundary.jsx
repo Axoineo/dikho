@@ -6,10 +6,24 @@ import { Component } from 'react'
  * means the chunk is genuinely unreachable; the only honest recovery is a fresh
  * load, so offer it rather than leaving the visitor on an empty screen. */
 export default class RouteBoundary extends Component {
-  state = { failed: false }
+  state = { failed: false, offline: false }
 
   static getDerivedStateFromError() {
-    return { failed: true }
+    return { failed: true, offline: typeof navigator !== 'undefined' && navigator.onLine === false }
+  }
+
+  componentDidMount() {
+    window.addEventListener('online', this.reloadWhenOnline)
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('online', this.reloadWhenOnline)
+  }
+
+  // A page that failed because the connection dropped loads again by itself once
+  // it is back. A fresh load is needed: React keeps a failed page chunk for good.
+  reloadWhenOnline = () => {
+    if (this.state.failed && this.state.offline) window.location.reload()
   }
 
   // One page failing must not take every other page with it. Moving to another page
@@ -28,6 +42,18 @@ export default class RouteBoundary extends Component {
 
   render() {
     if (!this.state.failed) return this.props.children
+
+    if (this.state.offline) {
+      return (
+        <div className="route-boundary" role="alert">
+          <strong>You&rsquo;re offline</strong>
+          <p>This page needs an internet connection. It will load by itself when you&rsquo;re back online.</p>
+          <button type="button" className="primary-button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
+      )
+    }
 
     return (
       <div className="route-boundary" role="alert">

@@ -22,7 +22,9 @@ const AUTOSAVE_MS = 3500
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 
 function quoteBlock(source, mode) {
-  const body = source.html ? cleanHtml(source.html) : `<div style="white-space:pre-wrap">${escapeHtml(source.text)}</div>`
+  // The class keeps the line breaks on screen, where the enforced CSP ignores inline
+  // style attributes; the attribute is for the recipient's mail app.
+  const body = source.html ? cleanHtml(source.html) : `<div class="em-plain" style="white-space:pre-wrap">${escapeHtml(source.text)}</div>`
   if (mode === 'forward') {
     return `<br><br><div>---------- Forwarded message ---------<br>From: ${escapeHtml(personName(source.from))} &lt;${escapeHtml(source.from?.email)}&gt;<br>`
       + `Date: ${escapeHtml(fullTime(source.date))}<br>Subject: ${escapeHtml(source.subject)}<br>To: ${escapeHtml(addressList(source.to))}</div><br>${body}`

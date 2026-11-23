@@ -946,7 +946,7 @@ export default function PublicVendorForm() {
                 </div>
 
                 <div className="pvf-disclaimer">
-                  By submitting, you agree your information will be used for vendor onboarding. Your registration will be reviewed before activation.
+                  By submitting, you agree your information will be used for vendor onboarding, as our <a href="/privacy" target="_blank" rel="noopener">privacy notice and terms</a> explain. Your registration will be reviewed before activation.
                 </div>
               </div>
             )}

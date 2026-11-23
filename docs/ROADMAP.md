@@ -45,8 +45,8 @@ deployed; the rollout is in
 ## Then: browser and operational hardening
 
 - [ ] Refactor inline HTML script/style/event requirements *(code ready)*.
-- [ ] Roll out Content Security Policy in report-only mode *(code ready)*, then
-      enforce it with `CSP_MODE=enforce`.
+- [x] Roll out Content Security Policy in report-only mode, then enforce it
+      (enforced by default from 2026-11-22; `CSP_MODE=report-only` rolls back).
 - [ ] Add HSTS, nosniff, Referrer-Policy and Permissions-Policy *(code ready)*.
 - [ ] Minimize PII in logs *(code ready)* and document retention/access.
 - [ ] Write and exercise backup/restore procedures.

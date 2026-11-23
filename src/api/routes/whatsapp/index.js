@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { requireAuth, requirePermission } from '../../middleware/requireAuth.js'
 import { ok } from '../../utils/response.js'
-import { signMediaTicket } from '../../services/whatsapp/mediaTicket.js'
+import { MEDIA_TICKET_TTL_SECONDS, mediaTicketSecret, signMediaTicket } from '../../services/whatsapp/mediaTicket.js'
 import { reconcileInbound, reconcileStatuses } from '../../services/whatsapp/reconcile.js'
 import { RANGES, buildAnalytics, campaignPerformance } from '../../services/whatsapp/analytics.js'
 import webhook from './webhook.js'
@@ -21,8 +21,10 @@ whatsapp.route('/media', media)
 
 // Issues a media ticket to a logged-in agent. Requires a valid session.
 whatsapp.get('/media-ticket', requireAuth, requirePermission('inbox.view'), async (c) => {
-  const ticket = await signMediaTicket(c.env.WHATSAPP_APP_SECRET)
-  return ok(c, { ticket })
+  const user = c.get('user')
+  if (!user?.sessionId) throw new HTTPException(401, { message: 'Your session could not be identified. Please sign in again.' })
+  const ticket = await signMediaTicket(mediaTicketSecret(c.env), { userId: user.id, sessionId: user.sessionId })
+  return ok(c, { ticket, expiresIn: MEDIA_TICKET_TTL_SECONDS })
 })
 
 // Drains delivery receipts the webhook could not attach to a row at the time

@@ -181,10 +181,11 @@ from being locked out; the staff migration refuses to run without them.
 ## Browser security headers
 
 `npm run build` writes `dist/_headers`, which Cloudflare Pages applies to every
-response. The CSP starts in report-only mode. To enforce it, set the Pages
-environment variable `CSP_MODE=enforce` and redeploy, after a pass through the
-signed-in screens shows no CSP reports in the browser console. Check what is
-live with:
+response. The CSP is enforced (it ran report-only until 2026-11-22). If a
+release breaks something because of it, set the Pages environment variable
+`CSP_MODE=report-only` and redeploy to stop blocking while the cause is fixed;
+blocked loads show in the browser console as "violates the following Content
+Security Policy directive". Check what is live with:
 
 ```bash
 curl -sI https://manage.dikho.in/ | grep -i -E "content-security|x-frame|strict-transport"
@@ -215,8 +216,8 @@ style and event-handler requirements. Then deploy and test:
 - a conservative `Referrer-Policy`;
 - a minimal `Permissions-Policy`.
 
-Roll out CSP in report-only mode first, examine violations without collecting
-sensitive URL/query data, then enforce.
+Change the CSP the same way it was rolled out: report-only first, examine
+violations without collecting sensitive URL/query data, then enforce.
 
 ## Production smoke tests
 
