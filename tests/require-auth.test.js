@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
-import { requireAuth, requirePermission } from '../src/api/middleware/requireAuth.js'
+import { limitSends, requireAuth, requirePermission } from '../src/api/middleware/requireAuth.js'
 
 beforeEach((t) => {
   t.mock.method(globalThis, 'fetch', async () => {
@@ -144,5 +144,40 @@ test('requirePermission passes on any listed permission and refuses otherwise', 
     await assert.rejects(guard(withUser(permissions), next), { status: 403 })
   }
   await assert.rejects(guard({ get: () => undefined, req: { url: 'https://x.invalid/' } }, next), { status: 403 })
+  assert.equal(next.mock.callCount(), 1)
+})
+
+// Per-person ceilings (pre-launch audit 6.1).
+function liveAccess(t) {
+  fetch.mock.mockImplementation(async () => Response.json({ status: 'active', user_id: 'u-1', session_id: 's-1', permissions: {} }))
+}
+const limiter = (allow) => ({ calls: [], async limit(input) { this.calls.push(input); return { success: allow } } })
+
+test('a signed-in request counts against its own per-person ceiling', async (t) => {
+  liveAccess(t)
+  const USER_RATE_LIMITER = limiter(true)
+  const next = t.mock.fn()
+  await requireAuth(context('Bearer synthetic', { SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_ANON_KEY: 'k', USER_RATE_LIMITER }), next)
+  assert.deepEqual(USER_RATE_LIMITER.calls, [{ key: 'u-1' }])
+  assert.equal(next.mock.callCount(), 1)
+})
+
+test('over the ceiling the request is refused with 429 before the handler runs', async (t) => {
+  liveAccess(t)
+  t.mock.method(console, 'log', () => {})
+  const next = t.mock.fn()
+  await assert.rejects(
+    requireAuth(context('Bearer synthetic', { SUPABASE_URL: 'https://auth.example.invalid', SUPABASE_ANON_KEY: 'k', USER_RATE_LIMITER: limiter(false) }), next),
+    { status: 429 },
+  )
+  assert.equal(next.mock.callCount(), 0)
+})
+
+test('sends have their own stricter ceiling, and a missing limiter does not block work', async (t) => {
+  t.mock.method(console, 'log', () => {})
+  const ctx = (env) => ({ env, get: () => ({ id: 'u-1' }) })
+  const next = t.mock.fn()
+  await assert.rejects(limitSends(ctx({ SEND_RATE_LIMITER: limiter(false) }), next), { status: 429 })
+  await limitSends(ctx({}), next)
   assert.equal(next.mock.callCount(), 1)
 })

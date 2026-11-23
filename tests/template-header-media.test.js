@@ -100,6 +100,9 @@ function fakeDb() {
         return typeof hit === 'function' ? hit(args) : hit ?? null
       },
       all: async () => {
+        // The day's campaign ceiling: nothing used yet, so every reservation is granted.
+        if (/SELECT sent FROM campaign_send_budget/.test(sql)) return { results: [{ sent: 0 }] }
+        if (/UPDATE campaign_send_budget SET sent = MIN/.test(sql)) return { results: [{ sent: args[1] }] }
         if (/FROM contacts/.test(sql)) return { results: CONTACTS }
         if (/RETURNING contact_id/.test(sql)) return { results: [{ contact_id: args[1] }] }
         if (/status = 'failed'/.test(sql)) return { results: [] }
@@ -120,7 +123,7 @@ function request(path, body) {
   app.use('*', async (c, next) => { c.set('user', SENDER); await next() })
   app.route('/campaigns', campaigns)
   return app.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, {
-    DB: fakeDb(), WHATSAPP_ACCESS_TOKEN: 'synthetic', WHATSAPP_PHONE_NUMBER_ID: '1', WHATSAPP_WABA_ID: '2',
+    DB: fakeDb(), WHATSAPP_ACCESS_TOKEN: 'synthetic', WHATSAPP_PHONE_NUMBER_ID: '1', WHATSAPP_WABA_ID: '2', WHATSAPP_CAMPAIGN_DAILY_CAP: '100000',
   }, { waitUntil() {}, passThroughOnException() {} })
 }
 

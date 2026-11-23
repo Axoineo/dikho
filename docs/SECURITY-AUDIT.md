@@ -120,15 +120,16 @@ unknown) is forced to download in a CSP sandbox.
 
 ### P2: defense in depth
 
-#### Browser security headers (fixed in code; CSP report-only)
+#### Browser security headers (fixed in code; CSP enforced from 2026-11-22)
 
 The build writes `dist/_headers` for Pages: a hash-based CSP without
 `unsafe-inline` (inline handlers were removed from `index.html`),
 `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`
 (every listed feature off, except the microphone for the CRM's own origin, which
 inbox voice notes need; a cross-origin frame cannot get it even through `allow=`),
-HSTS and COOP. The CSP starts as `Content-Security-Policy-Report-Only`; set
-`CSP_MODE=enforce` after a clean pass through the signed-in screens. API
+HSTS and COOP. The CSP ran report-only first and is enforced by default since
+2026-11-22, after the public pages and every preview harness screen showed no
+violations; `CSP_MODE=report-only` is the rollback. API
 responses carry `nosniff` and `Referrer-Policy: no-referrer`.
 
 #### Personal data in logs (fixed in code)
@@ -208,7 +209,7 @@ the exact content shown in the preview.
 - [ ] All upload and import paths enforce byte and type limits.
 - [ ] API endpoints have an authorization matrix and corresponding tests.
 - [ ] Browser security headers are present on production responses.
-- [ ] The CSP is enforced (not report-only).
+- [x] The CSP is enforced (not report-only); live once the 2026-11-22 change deploys.
 - [ ] Log samples contain no tokens, OTPs, message bodies or unnecessary PII.
 - [x] `npm audit --omit=dev` reports no unaccepted production advisory
       (0 on 2026-10-05; now also a CI job).

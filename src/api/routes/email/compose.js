@@ -8,6 +8,7 @@ import { sanitizeHtml, htmlToText } from '../../services/email/sanitizeHtml.js'
 import { fromBase64url } from '../../services/email/crypto.js'
 import { inBackground, syncMailbox } from '../../services/email/sync.js'
 import { logError, logEvent } from '../../utils/logger.js'
+import { limitSends } from '../../middleware/requireAuth.js'
 import { requireCapability, providerOf } from '../../services/email/providers.js'
 import { sendRequest, sendMessage, downloadAttachment } from '../../services/email/hostingerMail.js'
 import { HostingerUncertainError } from '../../services/email/hostinger.js'
@@ -202,7 +203,7 @@ async function sendThroughHostinger(c, account, draft, finish) {
   return ok(c, { status: 'sent', message_id: null, gmail_thread_id: null })
 }
 
-compose.post('/accounts/:id/send', async (c) => {
+compose.post('/accounts/:id/send', limitSends, async (c) => {
   const id = uuidParam(c)
   const draft = await readDraft(c, { requireRecipient: true })
   const { sendId, draftId } = draft

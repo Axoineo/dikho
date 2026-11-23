@@ -10,7 +10,8 @@ import {
 import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
 import { safeDisplayName, sniffType } from '../../utils/fileType.js'
 import { logEvent } from '../../utils/logger.js'
-import { requirePermission } from '../../middleware/requireAuth.js'
+import { limitSends, requirePermission } from '../../middleware/requireAuth.js'
+import { BUDGET_UNAVAILABLE_HALT, DAILY_LIMIT_HALT, releaseCampaignSends, reserveCampaignSends } from '../../services/whatsapp/campaignBudget.js'
 
 const campaigns = new Hono()
 
@@ -195,6 +196,24 @@ async function sendToRecipients(env, { recipients, templateName, templateLanguag
 }
 
 const NOTHING_SENT = { outcomes: [], skipped: [], halt: null }
+
+// Sends to claimed recipients within the day's campaign ceiling
+// (services/whatsapp/campaignBudget.js). Those the ceiling cannot cover are not
+// sent: they join the batch's skipped recipients, finishBatch puts them back to
+// "never attempted", and the campaign stops the way a Meta block stops it, with
+// a reason the wizard and the app show and a Resume for the next day. Places
+// reserved for people a Meta halt then skipped are given back.
+async function sendWithinDailyCap(env, claimed, sendArgs) {
+  if (claimed.length === 0) return NOTHING_SENT
+  const granted = await reserveCampaignSends(env, claimed.length)
+  if (granted === null) return { outcomes: [], skipped: claimed, halt: BUDGET_UNAVAILABLE_HALT }
+  const allowed = claimed.slice(0, granted)
+  const over = claimed.slice(granted)
+  const run = allowed.length > 0 ? await sendToRecipients(env, { ...sendArgs, recipients: allowed }) : NOTHING_SENT
+  if (run.skipped.length > 0) await releaseCampaignSends(env, run.skipped.length)
+  if (over.length === 0) return run
+  return { outcomes: run.outcomes, skipped: [...run.skipped, ...over], halt: run.halt ?? DAILY_LIMIT_HALT }
+}
 
 // A stopped batch's unattempted recipients go back to "never attempted": their
 // claim is removed, so they show in the campaign's unsent list for later.
@@ -451,7 +470,7 @@ campaigns.get('/', requirePermission('campaigns.view', 'campaigns.send'), async 
 // Creates the campaign row AND sends the first batch (up to BATCH_LIMIT).
 // For audiences > BATCH_LIMIT, the frontend follows up with /send-batch.
 
-campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
+campaigns.post('/send', requirePermission('campaigns.send'), limitSends, async (c) => {
   const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
@@ -520,9 +539,7 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
   if (!campaignId) throw new HTTPException(500, { message: 'The campaign could not be created' })
 
   const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
-  const run = claimed.length > 0
-    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, withComponents, variableMap })
-    : NOTHING_SENT
+  const run = await sendWithinDailyCap(c.env, claimed, { templateName, templateLanguage, template, withComponents, variableMap })
   const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
 
   // The first attempt's outcomes went with the lost response: report the campaign's
@@ -541,7 +558,7 @@ campaigns.post('/send', requirePermission('campaigns.send'), async (c) => {
 // Continues an in-progress campaign: sends the next chunk and returns any
 // remaining IDs. The frontend loops until `remaining` is empty or absent.
 
-campaigns.post('/send-batch', requirePermission('campaigns.send'), async (c) => {
+campaigns.post('/send-batch', requirePermission('campaigns.send'), limitSends, async (c) => {
   const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })
 
@@ -574,9 +591,7 @@ campaigns.post('/send-batch', requirePermission('campaigns.send'), async (c) => 
 
   const recipients = await loadRecipients(c.env.DB, batchIds)
   const claimed = await claimRecipients(c.env.DB, campaignId, recipients)
-  const run = claimed.length > 0
-    ? await sendToRecipients(c.env, { recipients: claimed, templateName, templateLanguage, template, withComponents, variableMap })
-    : NOTHING_SENT
+  const run = await sendWithinDailyCap(c.env, claimed, { templateName, templateLanguage, template, withComponents, variableMap })
   const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
 
   // More to go: the frontend calls again with `remaining`.
@@ -632,7 +647,7 @@ campaigns.get('/:id/unsent', requirePermission('campaigns.view', 'campaigns.send
 // + /send-batch. Safe to call again after a round still leaves failures — the
 // outstanding set is recomputed each time, so it only ever shrinks.
 
-campaigns.post('/:id/retry', requirePermission('campaigns.send'), async (c) => {
+campaigns.post('/:id/retry', requirePermission('campaigns.send'), limitSends, async (c) => {
   const campaignId = Number(c.req.param('id'))
   if (!Number.isInteger(campaignId)) throw new HTTPException(400, { message: 'Invalid campaign id' })
 
@@ -690,16 +705,13 @@ campaigns.post('/:id/retry', requirePermission('campaigns.send'), async (c) => {
   ])
   const recipients = [...reclaimed, ...freshlyClaimed]
 
-  const run = recipients.length > 0
-    ? await sendToRecipients(c.env, {
-      recipients,
-      templateName: campaign.template_name,
-      templateLanguage: campaign.template_language,
-      template,
-      withComponents,
-      variableMap,
-    })
-    : NOTHING_SENT
+  const run = await sendWithinDailyCap(c.env, recipients, {
+    templateName: campaign.template_name,
+    templateLanguage: campaign.template_language,
+    template,
+    withComponents,
+    variableMap,
+  })
   const next = await finishBatch(c.env.DB, campaignId, run, remainingIds)
 
   return ok(c, { campaignId, total: recipients.length, ...next })
@@ -725,7 +737,7 @@ const HEADER_MEDIA_RULES = {
   DOCUMENT: { types: ['application/pdf'], maxBytes: 16 * MB, matches: (bytes, mime) => sniffType(bytes) === mime },
 }
 
-campaigns.post('/header-media', requirePermission('campaigns.send'), async (c) => {
+campaigns.post('/header-media', requirePermission('campaigns.send'), limitSends, async (c) => {
   const format = String(c.req.query('format') || '').toUpperCase()
   const rule = HEADER_MEDIA_RULES[format]
   if (!rule) throw new HTTPException(400, { message: 'Unknown header type' })

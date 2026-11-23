@@ -19,6 +19,13 @@ let queries
 let db
 let meta
 
+// Answers the campaign budget's read and update as if no campaign had gone out today.
+function budgetRows(sql, args) {
+  if (/SELECT sent FROM campaign_send_budget/.test(sql)) return [{ sent: 0 }]
+  if (/UPDATE campaign_send_budget SET sent = MIN/.test(sql)) return [{ sent: args[1] }]
+  return null
+}
+
 function fakeDb() {
   const answer = (sql, args) => {
     queries.push({ sql, args })
@@ -28,7 +35,8 @@ function fakeDb() {
     }
     return {
       first: async () => pick(db.first) ?? null,
-      all: async () => ({ results: pick(db.all) ?? [] }),
+      // The day's campaign ceiling (services/whatsapp/campaignBudget.js): nothing used yet.
+      all: async () => ({ results: budgetRows(sql, args) ?? pick(db.all) ?? [] }),
       run: async () => ({ meta: { changes: 1 } }),
     }
   }
@@ -51,7 +59,7 @@ function app(user = SENDER) {
   return root
 }
 
-const ENV = { WHATSAPP_ACCESS_TOKEN: 'synthetic', WHATSAPP_PHONE_NUMBER_ID: '1', WHATSAPP_APP_SECRET: 'synthetic-app-secret' }
+const ENV = { WHATSAPP_ACCESS_TOKEN: 'synthetic', WHATSAPP_PHONE_NUMBER_ID: '1', WHATSAPP_APP_SECRET: 'synthetic-app-secret', WHATSAPP_CAMPAIGN_DAILY_CAP: '100000' }
 const CTX = { waitUntil() {}, passThroughOnException() {} }
 const post = (path, body, user) => app(user).request(path, {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

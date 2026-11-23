@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import auth from '../src/api/routes/auth/index.js'
 import media from '../src/api/routes/whatsapp/media.js'
 import { errorHandler } from '../src/api/middleware/errorHandler.js'
-import { signMediaTicket } from '../src/api/services/whatsapp/mediaTicket.js'
+import { forgetLiveHolders, signMediaTicket } from '../src/api/services/whatsapp/mediaTicket.js'
 
 // Ephemeral keys, generated in memory and never printed or persisted.
 const hookKey = randomBytes(32)
@@ -110,8 +110,21 @@ function bucket(objects) {
   }
 }
 
+// A signed-in staff member's session, and a stand-in for the staff lookup the media
+// route makes to check that session is still live.
+const HOLDER = { userId: '11111111-1111-4111-8111-111111111111', sessionId: '22222222-2222-4222-8222-222222222222' }
+function liveStaff(t) {
+  forgetLiveHolders()
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (/\/rest\/v1\/staff_members\?/.test(String(url))) return Response.json([{ status: 'active', staff_sessions: [] }])
+    throw new Error(`Unexpected request in isolated test: ${url}`)
+  })
+}
+
 const mediaEnv = {
   WHATSAPP_APP_SECRET: appSecret,
+  SUPABASE_URL: 'https://synthetic.supabase.test',
+  SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service-key',
   MEDIA: bucket({
     'day/photo': { type: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3, 4, 5]) },
     'day/page': { type: 'text/html', bytes: new TextEncoder().encode('<script>alert(1)</script>') },
@@ -119,8 +132,9 @@ const mediaEnv = {
   }),
 }
 
-test('media that a browser would execute is forced to download inside a sandbox', async () => {
-  const t = encodeURIComponent(await signMediaTicket(appSecret))
+test('media that a browser would execute is forced to download inside a sandbox', async (ctx) => {
+  liveStaff(ctx)
+  const t = encodeURIComponent(await signMediaTicket(appSecret, HOLDER))
   for (const key of ['day/page', 'day/vector']) {
     const res = await app.request(`/media/${key}?t=${t}`, {}, mediaEnv)
     assert.equal(res.status, 200)
@@ -133,9 +147,10 @@ test('media that a browser would execute is forced to download inside a sandbox'
   assert.equal(photo.headers.get('X-Content-Type-Options'), 'nosniff')
 })
 
-test('media requires a ticket, and bad ranges are unsatisfiable rather than errors', async () => {
+test('media requires a ticket, and bad ranges are unsatisfiable rather than errors', async (ctx) => {
+  liveStaff(ctx)
   assert.equal((await app.request('/media/day/photo', {}, mediaEnv)).status, 401)
-  const t = encodeURIComponent(await signMediaTicket(appSecret))
+  const t = encodeURIComponent(await signMediaTicket(appSecret, HOLDER))
   const ranged = await app.request(`/media/day/photo?t=${t}`, { headers: { Range: 'bytes=2-100' } }, mediaEnv)
   assert.equal(ranged.status, 206)
   assert.equal(ranged.headers.get('Content-Range'), 'bytes 2-7/8')
