@@ -54,6 +54,7 @@ class UsersScreen extends StatefulWidget {
 
 class _UsersScreenState extends State<UsersScreen> {
   final _search = TextEditingController();
+  late final AppLifecycleListener _lifecycle;
 
   UsersController get _c => widget.controller;
 
@@ -62,10 +63,13 @@ class _UsersScreenState extends State<UsersScreen> {
     super.initState();
     _search.text = _c.query;
     _c.watch();
+    // Nothing refreshes behind another app; watching again reloads at once.
+    _lifecycle = AppLifecycleListener(onHide: _c.unwatch, onShow: _c.watch);
   }
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _c.unwatch();
     _search.dispose();
     super.dispose();

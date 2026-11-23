@@ -44,6 +44,10 @@ class InboxController extends ChangeNotifier {
 
   bool get hasLoaded => _loadedOnce;
 
+  /// A new search or filter is loading while the last result is still on screen. A
+  /// refresh keeps its rows and never sets [loading], so it is not counted.
+  bool get refreshing => loading && conversations.isNotEmpty;
+
   /// Only while a list is on screen: nothing polls behind another page.
   void setVisible(bool visible) {
     if (_visible == visible) return;

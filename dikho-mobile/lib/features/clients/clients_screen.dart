@@ -10,8 +10,6 @@ import 'client_form_screen.dart';
 import 'clients_controller.dart';
 import 'clients_models.dart';
 
-const _loadMoreWithin = 200.0;
-
 /// What a person may do here, from the permissions the page reported. The database
 /// checks the same permissions on every save: this only decides what to offer.
 class ClientAbilities {
@@ -57,7 +55,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     _search.text = _clients.query;
     _scroll.addListener(() {
       final position = _scroll.position;
-      if (position.maxScrollExtent - position.pixels < _loadMoreWithin) {
+      if (nearListEnd(position)) {
         unawaited(_clients.loadMore());
       }
     });
@@ -143,7 +141,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 ),
               ),
             ),
-            const Divider(),
+            ListProgressLine(active: _clients.refreshing),
             Expanded(child: _body(context)),
           ],
         ),
@@ -154,7 +152,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
   Widget _body(BuildContext context) {
     final clients = _clients.rows;
     if (clients.isEmpty) {
-      if (_clients.loading) return const Center(child: CircularProgressIndicator());
+      if (_clients.loading) return const LoadingRows();
       if (_clients.error != null) {
         return EmptyMessage(title: "Couldn't load clients", body: _clients.error!, action: 'Try again', onAction: () => unawaited(_clients.reload()));
       }
@@ -167,7 +165,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
     }
     final footer = _clients.hasMore ? 1 : 0;
     return RefreshIndicator(
-      onRefresh: _clients.reload,
+      onRefresh: _clients.pullToRefresh,
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

@@ -70,7 +70,7 @@ permissions on every request.
 | `dikho-mobile/lib/features/live_assist/` | Live Assist: the web's messages, the WebRTC link and its setup channel, pictures of Dikho's screens, the layer over the app while being helped, and the helper's viewer |
 | `dikho-mobile/lib/features/settings/` | Settings: profile, preferences (theme, start page), devices, and for `settings.manage` the company's invoice details, display formats, dropdown lists and media |
 | `dikho-mobile/lib/features/whatsapp/` | WhatsApp dashboard with hand-drawn charts, a screen per campaign, contacts, and templates with previews |
-| `dikho-mobile/lib/shared/paged_rows.dart`, `record_ui.dart` | What every native record screen shares: paging, search, rows, details cards |
+| `dikho-mobile/lib/shared/paged_rows.dart`, `record_ui.dart` | What every native record screen shares: paging (the next page is asked for about a screen and a half before the end), search (a thin line under the box shows a new search loading while the old rows stay), placeholder rows on a first load, rows, details cards |
 | `dikho-mobile/lib/shared/supabase_rest.dart` | Reads and writes tables through Supabase REST with the person's own session, so RLS decides |
 | `dikho-mobile/lib/features/device_contacts/` | Phone contacts: calling and template sends |
 | `dikho-mobile/lib/features/splash/` | The logo animation, drawn from compiled-in paths |

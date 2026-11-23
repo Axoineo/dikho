@@ -4,7 +4,7 @@ publish_to: none
 
 # versionName+versionCode. The code after the + must rise with every release:
 # it is what the updater compares, and Android refuses to install a lower one.
-version: 1.1.0+2
+version: 1.1.1+3
 
 environment:
   sdk: ^3.13.7

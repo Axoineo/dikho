@@ -9,8 +9,6 @@ import '../inbox/chat_theme.dart';
 import 'leads_controller.dart';
 import 'leads_models.dart';
 
-const _loadMoreWithin = 200.0;
-
 /// Everyone who sent an intake form, newest first, a page at a time.
 class LeadsScreen extends StatefulWidget {
   const LeadsScreen({super.key, required this.controller, required this.platform, required this.onOpenDrawer});
@@ -35,7 +33,7 @@ class _LeadsScreenState extends State<LeadsScreen> {
     _search.text = _leads.query;
     _scroll.addListener(() {
       final position = _scroll.position;
-      if (position.maxScrollExtent - position.pixels < _loadMoreWithin) {
+      if (nearListEnd(position)) {
         unawaited(_leads.loadMore());
       }
     });
@@ -112,7 +110,7 @@ class _LeadsScreenState extends State<LeadsScreen> {
                 ],
               ),
             ),
-            const Divider(),
+            ListProgressLine(active: _leads.refreshing),
             Expanded(child: _body(context, theme)),
           ],
         ),
@@ -123,9 +121,7 @@ class _LeadsScreenState extends State<LeadsScreen> {
   Widget _body(BuildContext context, ThemeData theme) {
     final leads = _leads.leads;
     if (leads.isEmpty) {
-      if (_leads.loading) {
-        return const Center(child: CircularProgressIndicator());
-      }
+      if (_leads.loading) return const LoadingRows();
       if (_leads.error != null) {
         return EmptyMessage(title: "Couldn't load leads", body: _leads.error!, action: 'Try again', onAction: () => unawaited(_leads.reload()));
       }
@@ -138,7 +134,7 @@ class _LeadsScreenState extends State<LeadsScreen> {
     }
     final footer = _leads.hasMore ? 1 : 0;
     return RefreshIndicator(
-      onRefresh: _leads.refresh,
+      onRefresh: _leads.pullToRefresh,
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),

@@ -6,6 +6,7 @@ import 'package:dikho_crm/features/vendors/vendors_controller.dart';
 import 'package:dikho_crm/features/vendors/vendors_models.dart';
 import 'package:dikho_crm/features/vendors/vendors_screen.dart';
 import 'package:dikho_crm/shared/platform_api.dart';
+import 'package:dikho_crm/shared/record_ui.dart';
 import 'package:dikho_crm/shared/supabase_rest.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -406,6 +407,38 @@ void main() {
       await tester.scrollUntilVisible(find.text('New PO'), -300, scrollable: find.byType(Scrollable).first);
       await tester.tap(find.text('New PO'));
       expect(orders, ['30']);
+    });
+
+    screenTest('placeholder rows until the first page arrives, then the next page is asked for well before the end', (tester) async {
+      final controller = VendorsController(rest: backend.rest, searchDelay: const Duration(milliseconds: 5));
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VendorsScreen(
+            controller: controller,
+            platform: PlatformApi(),
+            abilities: const VendorAbilities(),
+            onOpenDrawer: () {},
+            onNewPurchaseOrder: (_) {},
+          ),
+        ),
+      );
+      expect(find.byType(LoadingRows), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await settle(tester);
+      expect(find.byType(LoadingRows), findsNothing);
+      expect(controller.rows, hasLength(25));
+      int pagesAsked() => backend.log.where((l) => l.startsWith('GET /rest/v1/vendors')).length;
+      final asked = pagesAsked();
+
+      final list = tester.widget<ListView>(find.byWidgetPredicate((w) => w is ListView && w.controller != null)).controller!;
+      final position = list.position;
+      // Further from the end than the old 200 px trigger, inside a screen and a half.
+      list.jumpTo(position.maxScrollExtent - position.viewportDimension * 1.4);
+      expect(position.extentAfter, greaterThan(200));
+      await settle(tester);
+      expect(pagesAsked(), asked + 1);
+      expect(controller.rows, hasLength(30));
     });
 
     screenTest('without permission: no New vendor, no Edit, no New PO', (tester) async {

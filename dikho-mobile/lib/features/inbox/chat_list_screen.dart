@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../shared/record_ui.dart' show ListProgressLine, LoadingRows, nearListEnd;
 import 'chat_theme.dart';
 import 'inbox_format.dart';
 import 'inbox_models.dart';
@@ -11,7 +12,6 @@ import 'inbox_widgets.dart';
 import 'thread_screen.dart';
 
 const _rowHeight = 72.0;
-const _loadMoreWithin = 200.0;
 
 /// Grows with the phone's font size, so large text is never cut off, while staying a
 /// fixed height that the list can use without measuring each row.
@@ -59,7 +59,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   void _onScroll() {
     final position = _scroll.position;
-    if (position.maxScrollExtent - position.pixels < _loadMoreWithin) {
+    if (nearListEnd(position)) {
       unawaited(_scope!.inbox.loadMore());
     }
   }
@@ -124,7 +124,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ],
                 ),
               ),
-              const Divider(),
+              ListProgressLine(active: inbox.refreshing),
               Expanded(child: _body(context, theme)),
             ],
           );
@@ -137,7 +137,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final inbox = InboxScope.of(context).inbox;
     final conversations = inbox.conversations;
     if (conversations.isEmpty) {
-      if (inbox.loading) return const Center(child: CircularProgressIndicator());
+      if (inbox.loading) return LoadingRows(extent: chatRowExtent(context));
       // A failed load is not an empty inbox, and must not read like one.
       if (inbox.error != null) {
         return _Message(title: "Couldn't load conversations", body: inbox.error!, action: 'Try again', onAction: () => unawaited(inbox.reload()));
