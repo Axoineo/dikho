@@ -846,7 +846,8 @@ export default function PublicClientWelcome() {
             <p className="cg-assurance">
               🔒 <strong>Corporate Privacy Assured</strong><br />
               At Dikho, we value your time and confidentiality. Your information is strictly
-              used for official communication only.
+              used for official communication only.{' '}
+              <a href="/privacy" target="_blank" rel="noopener">Privacy and terms</a>
             </p>
 
           </div>

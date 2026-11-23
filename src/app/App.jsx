@@ -18,6 +18,7 @@ import {
   UserProfilePage,
   PublicVendorForm,
   PublicClientWelcome,
+  PrivacyPage,
   WhatsAppInbox,
   WhatsAppDashboard,
   WhatsAppContacts,
@@ -71,6 +72,8 @@ export default function App() {
           <Route path="/vendor/register" element={<PublicVendorForm />} />
           <Route path="/corporategifting" element={<PublicClientWelcome />} />
           <Route path="/Corporategifting" element={<PublicClientWelcome />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<PrivacyPage />} />
         </Route>
 
         {/* Authenticated routes — login required */}

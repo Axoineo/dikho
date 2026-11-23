@@ -1,12 +1,14 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { ok } from '../../utils/response.js'
+import { logError } from '../../utils/logger.js'
 import { KEYSET_CURSOR, likeTerm } from '../../utils/paging.js'
 import { parseContactFile } from '../../utils/parseSheet.js'
 import { MAX_DASHBOARD_JSON_BYTES, formFile, readBoundedFormData, readJsonOr } from '../../utils/body.js'
 import { normalisePhone } from '../../utils/phone.js'
 import { normalizeKey } from '../../../lib/templateVars.js'
-import { requirePermission } from '../../middleware/requireAuth.js'
+import { can, limitSends, requirePermission } from '../../middleware/requireAuth.js'
+import { erasePerson, logErasure } from '../../services/privacy/erase.js'
 
 const contacts = new Hono()
 
@@ -139,7 +141,7 @@ function safeParse(text) {
 
 /* ── POST /api/contacts/import ─────────────────────────────────────────── */
 
-contacts.post('/import', requirePermission('wa_contacts.import'), async (c) => {
+contacts.post('/import', requirePermission('wa_contacts.import'), limitSends, async (c) => {
   const form = await readBoundedFormData(c, MAX_IMPORT_BYTES)
   const file = formFile(form, 'file')
   if (!file) {
@@ -263,7 +265,7 @@ function boundedAttributes(value) {
   return Object.keys(out).length ? JSON.stringify(out) : null
 }
 
-contacts.post('/import-rows', requirePermission('wa_contacts.import'), async (c) => {
+contacts.post('/import-rows', requirePermission('wa_contacts.import'), limitSends, async (c) => {
   const body = await readJsonOr(c, MAX_IMPORT_JSON_BYTES, null)
   const list = body?.contacts
   if (!Array.isArray(list) || list.length === 0) throw new HTTPException(400, { message: 'No contacts to import' })
@@ -346,6 +348,31 @@ contacts.post('/import-rows', requirePermission('wa_contacts.import'), async (c)
 // to wipe the entire contacts pool. Conversations/messages keep their history
 // (contact_id is SET NULL by the FK, but we also do it explicitly here for
 // safety in case the FK isn't enforced).
+/* ── POST /api/contacts/erase ─────────────────────────────────────────────
+   Erases one person by phone number: their chats, messages, files, contact and
+   gifting leads (services/privacy/erase.js). For a person's request under India's
+   DPDP Act. Needs both wa_contacts.delete and inbox.delete, and the number typed
+   twice, because nothing erased here can be brought back. */
+contacts.post('/erase', requirePermission('wa_contacts.delete'), async (c) => {
+  const user = c.get('user')
+  if (!can(user, 'inbox.delete')) throw new HTTPException(403, { message: 'Erasing a person needs permission to delete contacts and chats.' })
+  const body = await readJsonOr(c, 4 * 1024, null)
+  const phone = normalisePhone(typeof body?.phone === 'string' ? body.phone : '')
+  if (!phone) throw new HTTPException(400, { message: 'Enter the phone number to erase, with its country code.' })
+  if (normalisePhone(typeof body?.confirm === 'string' ? body.confirm : '') !== phone) {
+    throw new HTTPException(400, { message: 'Type the same number again to confirm.' })
+  }
+  let counts
+  try {
+    counts = await erasePerson(c.env, phone)
+  } catch (err) {
+    logError('privacy.erase.failed', err)
+    throw new HTTPException(502, { message: 'Erasing did not finish. Try again: it carries on from where it stopped.' })
+  }
+  logErasure(user.id, counts)
+  return ok(c, counts)
+})
+
 contacts.delete('/', requirePermission('wa_contacts.delete'), async (c) => {
   const body = await readJsonOr(c, MAX_DASHBOARD_JSON_BYTES, null)
   if (!body) throw new HTTPException(400, { message: 'Invalid JSON body' })

@@ -34,6 +34,7 @@ export const EmailAnalytics = lazyWithRetry(() => import('./features/email/Email
 /* ── Public routes (lazy-loaded, no auth required) ─────────────────────── */
 export const PublicVendorForm = lazyWithRetry(() => import('./features/public/PublicVendorForm'))
 export const PublicClientWelcome = lazyWithRetry(() => import('./features/public/PublicClientWelcome'))
+export const PrivacyPage = lazyWithRetry(() => import('./features/legal/PrivacyPage'))
 
 /* ── Ahead-of-time chunk loading ───────────────────────────────────────── */
 
