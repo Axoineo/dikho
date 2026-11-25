@@ -3305,6 +3305,127 @@ html[data-shell='android'] .app-shell .app-main {
 .login-legal { margin: 18px 0 0; text-align: center; font-size: 13px; }
 .login-legal a { color: var(--muted); }
 
+/* ---------- Sign-in: Android app card ----------
+   Beside the sign-in box on wide screens, under it on narrow ones. Motion is
+   calm on purpose: one entrance (fade, rise, unblur) on a critically damped
+   curve, then nothing moves unless the pointer asks. No loops. */
+.login-pair {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 616px;
+}
+.login-pair > .login-box { flex: 1 1 360px; min-width: 0; }
+.login-app-card {
+  flex: 0 0 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 24px;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+  animation: login-app-in 720ms cubic-bezier(0.22, 1, 0.36, 1) 140ms backwards;
+}
+.login-app-card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 500; letter-spacing: -0.1px; color: var(--text); }
+.login-app-text { margin: 0 0 20px; max-width: 190px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.login-app-qr {
+  position: relative;
+  width: 164px;
+  height: 164px;
+  margin-bottom: 20px;
+  display: grid;
+  place-items: center;
+}
+.login-app-qr img {
+  display: block;
+  width: 140px;
+  height: 140px;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: login-app-qr-in 640ms cubic-bezier(0.22, 1, 0.36, 1) 300ms backwards;
+}
+/* Camera-viewfinder corners. They settle in after the code appears and draw
+   in a little when the pointer rests on the code, as if focusing on it. */
+.login-app-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 0 solid #c4c9d0;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease;
+  animation: login-app-corner-in 720ms cubic-bezier(0.22, 1, 0.36, 1) 420ms backwards;
+}
+.login-app-corner.tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 8px; --corner-out: translate(-6px, -6px); }
+.login-app-corner.tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 8px; --corner-out: translate(6px, -6px); }
+.login-app-corner.bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; border-bottom-left-radius: 8px; --corner-out: translate(-6px, 6px); }
+.login-app-corner.br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 8px; --corner-out: translate(6px, 6px); }
+.login-app-qr:hover img { transform: scale(1.02); }
+.login-app-qr:hover .login-app-corner { border-color: var(--brand-ink); }
+.login-app-qr:hover .tl { transform: translate(3px, 3px); }
+.login-app-qr:hover .tr { transform: translate(-3px, 3px); }
+.login-app-qr:hover .bl { transform: translate(3px, -3px); }
+.login-app-qr:hover .br { transform: translate(-3px, -3px); }
+.login-app-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 200ms ease, border-color 200ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.login-app-button:hover { background: #f5f6f7; border-color: #d5d8dc; }
+/* Feedback on press, not on release. */
+.login-app-button:active { transform: scale(0.97); transition-duration: 100ms; }
+.login-app-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.login-app-button-icon { display: inline-flex; transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1); }
+/* The arrow leans the way the file is going. */
+.login-app-button:hover .login-app-button-icon { transform: translateY(2px); }
+
+@keyframes login-app-in {
+  from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes login-app-qr-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes login-app-corner-in {
+  from { opacity: 0; transform: var(--corner-out); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 680px) {
+  .login-pair { flex-direction: column; align-items: center; max-width: 360px; }
+  .login-pair > .login-box { flex: none; }
+  .login-app-card { flex: none; width: 100%; padding: 24px 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-app-card,
+  .login-app-qr img,
+  .login-app-corner { animation: login-app-fade 300ms ease backwards; }
+  .login-app-qr img,
+  .login-app-corner,
+  .login-app-button,
+  .login-app-button-icon { transition: background-color 200ms ease, border-color 200ms ease; }
+  .login-app-qr:hover img,
+  .login-app-qr:hover .login-app-corner,
+  .login-app-button:active,
+  .login-app-button:hover .login-app-button-icon { transform: none; }
+}
+@keyframes login-app-fade { from { opacity: 0; } to { opacity: 1; } }
+
 /* ---------- Erase a person (WhatsApp Contacts) ---------- */
 .erase-person-open { margin: 0 0 12px; padding: 0; border: 0; background: none; color: var(--danger); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 .erase-person { display: grid; gap: 10px; max-width: 460px; margin: 0 0 14px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 13.5px; color: var(--text); }

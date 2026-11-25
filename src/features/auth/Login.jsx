@@ -4,6 +4,10 @@ import { Icon } from '../../components/Icon'
 
 const DEFAULT_COUNTRY_CODE = '91'
 
+// The update Worker's stable download link (docs/ANDROID.md). The QR image in
+// public/android-app-qr.svg encodes this same URL; regenerate it if this changes.
+const ANDROID_APP_URL = 'https://dikho-updates.fineeurox.workers.dev/download'
+
 // Normalises user input to E.164 with a leading "+", which is what Supabase
 // phone auth expects. Mirrors the Worker's src/api/utils/phone.js rules so a
 // number entered here matches the one stored on the Supabase user.
@@ -33,6 +37,28 @@ function WhatsAppMark({ size = 17 }) {
     <svg className="wa-mark" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.885-9.885 9.885M20.52 3.449C18.24 1.245 15.24 0 12.045 0 5.463 0 .104 5.359.101 11.892c0 2.096.549 4.14 1.595 5.945L0 24l6.335-1.652a11.9 11.9 0 0 0 5.71 1.454h.006c6.585 0 11.946-5.359 11.949-11.945a11.86 11.86 0 0 0-3.48-8.404z" />
     </svg>
+  )
+}
+
+// Sits beside the sign-in box on the first screen: a QR for someone on a
+// computer, and a plain link for someone already on their phone.
+function AndroidAppCard() {
+  return (
+    <aside className="login-app-card" aria-labelledby="login-app-title">
+      <h2 id="login-app-title">Dikho on your phone</h2>
+      <p className="login-app-text">Scan with your phone camera to get the Android app.</p>
+      <div className="login-app-qr">
+        <img src="/android-app-qr.svg" alt="QR code for the Dikho Android app download" width="140" height="140" />
+        <span className="login-app-corner tl" aria-hidden="true" />
+        <span className="login-app-corner tr" aria-hidden="true" />
+        <span className="login-app-corner bl" aria-hidden="true" />
+        <span className="login-app-corner br" aria-hidden="true" />
+      </div>
+      <a className="login-app-button" href={ANDROID_APP_URL} rel="noopener">
+        <span className="login-app-button-icon"><Icon name="download" size={16} /></span>
+        Download for Android
+      </a>
+    </aside>
   )
 }
 
@@ -268,79 +294,82 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-page">
       <div className="login-left">
-        <div className="login-box">
-          <img src="/dikho-logo.svg" alt="Dikho" className="login-logo" />
+        <div className="login-pair">
+          <div className="login-box">
+            <img src="/dikho-logo.svg" alt="Dikho" className="login-logo" />
 
-          <h1>Sign in to your account</h1>
-          <p className="login-subtitle">We'll send a 6-digit code.</p>
+            <h1>Sign in to your account</h1>
+            <p className="login-subtitle">We'll send a 6-digit code.</p>
 
-          {notice && <p className="login-notice" role="status">{notice}</p>}
+            {notice && <p className="login-notice" role="status">{notice}</p>}
 
-          <div className="login-method-toggle" role="tablist" aria-label="Sign-in method">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={method === 'email'}
-              className={`login-method-btn${method === 'email' ? ' active' : ''}`}
-              onClick={() => switchMethod('email')}
-            >
-              <Icon name="mail" size={16} /> Email
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={method === 'whatsapp'}
-              className={`login-method-btn${method === 'whatsapp' ? ' active' : ''}`}
-              onClick={() => switchMethod('whatsapp')}
-            >
-              <WhatsAppMark size={17} /> WhatsApp
-            </button>
-          </div>
+            <div className="login-method-toggle" role="tablist" aria-label="Sign-in method">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={method === 'email'}
+                className={`login-method-btn${method === 'email' ? ' active' : ''}`}
+                onClick={() => switchMethod('email')}
+              >
+                <Icon name="mail" size={16} /> Email
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={method === 'whatsapp'}
+                className={`login-method-btn${method === 'whatsapp' ? ' active' : ''}`}
+                onClick={() => switchMethod('whatsapp')}
+              >
+                <WhatsAppMark size={17} /> WhatsApp
+              </button>
+            </div>
 
-          <form onSubmit={handleSendOtp}>
-            {method === 'whatsapp' ? (
-              <>
-                <label htmlFor="login-phone">WhatsApp number</label>
-                <input
-                  id="login-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoComplete="tel"
-                  required
-                />
-              </>
-            ) : (
-              <>
-                <label htmlFor="login-email">Email</label>
-                <input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                />
-              </>
-            )}
+            <form onSubmit={handleSendOtp}>
+              {method === 'whatsapp' ? (
+                <>
+                  <label htmlFor="login-phone">WhatsApp number</label>
+                  <input
+                    id="login-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
+                    required
+                  />
+                </>
+              ) : (
+                <>
+                  <label htmlFor="login-email">Email</label>
+                  <input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    required
+                  />
+                </>
+              )}
 
-            {error && (
-              <div className="auth-error" role="alert">
-                <span className="auth-error-icon"><Icon name="alert" size={17} /></span>
-                <div>
-                  <strong>Unable to send code</strong>
-                  <p>{error}</p>
+              {error && (
+                <div className="auth-error" role="alert">
+                  <span className="auth-error-icon"><Icon name="alert" size={17} /></span>
+                  <div>
+                    <strong>Unable to send code</strong>
+                    <p>{error}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <button className="primary-button login-button" disabled={loading}>
-              {loading ? 'Sending…' : 'Send code'}
-            </button>
-          </form>
-          <p className="login-legal">
-            <a href="/privacy" target="_blank" rel="noopener">Privacy and terms</a>
-          </p>
+              <button className="primary-button login-button" disabled={loading}>
+                {loading ? 'Sending…' : 'Send code'}
+              </button>
+            </form>
+            <p className="login-legal">
+              <a href="/privacy" target="_blank" rel="noopener">Privacy and terms</a>
+            </p>
+          </div>
+          <AndroidAppCard />
         </div>
       </div>
     </div>
