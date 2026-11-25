@@ -24,7 +24,7 @@
     "hono": "^4.13.19",
     "libphonenumber-js": "^1.13.15",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.3.289",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4",
